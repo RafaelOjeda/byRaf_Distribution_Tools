@@ -11,6 +11,8 @@ Walmart Marketplace has no built-in way to enter what you paid for an item, so t
 
 Walmart-only for V1. Amazon (which has a native cost field) is out of scope and may become a second data source later.
 
+**You fulfill both ways — WFS and self-fulfilled — and that matters for accuracy, not just scope.** For WFS orders, Walmart's fees cover the whole fulfillment cost, so the recon report alone gives a true margin. For self-fulfilled orders it's true too, but only because you buy shipping labels *through Walmart* (confirmed below) — that label cost lands on the settlement report as a fee, same as WFS. If that ever changes (an external carrier account, a label tool like ShipStation), self-fulfilled margins would start reading too high with no warning, since nothing would flag the missing cost. Worth remembering if the label-buying habit changes.
+
 ---
 
 ## Stack Decisions
@@ -129,13 +131,21 @@ sync_runs                   -- observability + prevents overlapping syncs
 
 No `skus` table — the SKU list derives from `SELECT DISTINCT partner_item_id FROM walmart_recon_rows`. One less thing to keep in sync.
 
+### Fulfillment Channel (WFS vs. Self)
+
+Walmart's row-level fields (confirmed in the docs) don't include an explicit "fulfillment channel" flag. Rather than guess, **channel is derived from which fee types show up on a line**: if any row in the group has a WFS-specific `Amount Type`/`Transaction Type` (e.g. a WFS fulfillment or pick-and-pack fee — exact strings confirmed in Phase 3 against a real report), the line is `wfs`; otherwise `self`. This is computed in the margin query, not stored — a line's channel is a property of its fee rows, not something we assign upfront.
+
+**WFS storage fees are account-level, not order-level**, and will arrive with no `Purchase Order #` at all — they're billed monthly per SKU held in inventory, not per sale. Grouping by `(purchase_order_no, purchase_order_line)` would either drop these rows or dump them into one meaningless null-group. V1 handles this explicitly: rows with a null `purchase_order_no` are excluded from the per-line margin query and rolled up separately into a monthly **per-SKU storage cost** view — visible, but not allocated into any single order's margin. Folding storage cost into per-unit margin is a real V2 improvement (e.g. amortized across that SKU's units sold that month) but adds a second allocation model V1 doesn't need yet.
+
 ### Margin Calculation
 
 A **derived query, not a stored table.** Refunds and adjustments for a sale routinely land in a *later* settlement period, so any stored margin would go stale the moment a refund arrives. Computing on read means late-arriving rows are automatically reflected.
 
-Group by `(purchase_order_no, purchase_order_line)`:
+Group by `(purchase_order_no, purchase_order_line)` where `purchase_order_no is not null`:
 
 ```
+fulfillment_channel = 'wfs' if any row's amount_type/transaction_type is WFS-specific, else 'self'
+
 net_settlement = SUM(amount)                       -- every row for the line, all periods
 gross_revenue  = SUM(amount) WHERE amount_type IN (<revenue types>)
 total_fees     = net_settlement − gross_revenue
@@ -145,9 +155,9 @@ profit         = net_settlement − (unit_cost × ship_qty)
 margin         = profit / gross_revenue
 ```
 
-One useful property falls out of this: because `net_settlement` sums *everything*, **profit is correct even if we misclassify a fee type.** Only the margin *percentage* depends on classification, since it needs a revenue denominator. So profit works from day one and margin % gets refined as we learn the real `Amount Type` taxonomy.
+One useful property falls out of this: because `net_settlement` sums *everything*, **profit is correct even if we misclassify a fee type** — including getting `fulfillment_channel` wrong. Only the margin *percentage* and the channel label depend on classification; the dollar profit doesn't. So profit works from day one and both get refined as we learn the real `Amount Type` taxonomy.
 
-Order lines with **no matching cost row are flagged**, never shown as 100% margin.
+Order lines with **no matching cost row are flagged**, never shown as 100% margin. `fulfillment_channel` is shown as its own column so you can sanity-check WFS vs. self-fulfilled margins separately — since only self-fulfilled margins currently depend on the "labels bought through Walmart" assumption above.
 
 ---
 
@@ -193,13 +203,13 @@ Ordered so that each phase de-risks the next, and so the riskiest unknown is con
 
 **Phase 2 — Prove connectivity.** Token fetch + `availableReconFiles`, surfaced as a list of dates in the UI. This is the smallest possible real API call; it validates credentials, headers, and correlation IDs in isolation. **Hard gate on Walmart keys** — everything before this runs without them.
 
-**Phase 3 — Ingest raw, then look.** Pull one period, follow `nextOffset`, write to `walmart_recon_rows`. Then **inspect the actual distinct `Amount Type` and `Transaction Type` values.** No classification logic is written before this point — writing it first means guessing at a taxonomy we can simply read.
+**Phase 3 — Ingest raw, then look.** Pull one period, follow `nextOffset`, write to `walmart_recon_rows`. Then **inspect the actual distinct `Amount Type` and `Transaction Type` values** — including which ones are WFS-specific (for channel detection) and confirming storage fees really do arrive with a null `Purchase Order #` as expected. No classification logic is written before this point — writing it first means guessing at a taxonomy we can simply read.
 
-**Phase 4 — Classify + margin query.** Now informed by real values: revenue/fee classification in `margin.ts`, margin query in `queries.ts`. Unit-test the calc against a hand-checked order line.
+**Phase 4 — Classify + margin query.** Now informed by real values: revenue/fee classification and WFS-vs-self detection in `margin.ts`, margin query (incl. the separate account-level storage-fee rollup) in `queries.ts`. Unit-test the calc against one hand-checked WFS line and one hand-checked self-fulfilled line.
 
 **Phase 5 — Costs UI.** Editable table (Server Actions) + CSV import with a preview-before-commit step and per-row validation.
 
-**Phase 6 — Margins UI.** Date filter, sort by profit/margin, visible "missing cost" flag, CSV export.
+**Phase 6 — Margins UI.** Date filter, sort by profit/margin, `fulfillment_channel` shown as a column and filter, visible "missing cost" flag, a small separate panel for monthly WFS storage fees, CSV export.
 
 **Phase 7 — Automate.** Backfill all available periods. Daily cron in `vercel.ts`. `sync_runs` guard against overlapping runs.
 
@@ -219,15 +229,16 @@ Phases 0–2 are a short evening. Phase 3 is where real information arrives.
 
 **Cost-to-line matching by `Partner Item Id`.** Assumes one cost per SKU per effective date. Multi-pack SKUs priced per unit will need a units-per-pack field; flagged if it comes up.
 
+**Mixed fulfillment (WFS + self).** Channel is *inferred* from fee-type presence per line, not asserted by Walmart directly — confirmed against real data in Phase 3, but worth re-checking if a margin's channel label looks wrong. Self-fulfilled margin accuracy is contingent on labels staying purchased through Walmart, per the note above; if that changes, self-fulfilled numbers will silently read high until a shipping-cost input is added. WFS storage fees are tracked but not yet allocated into any order's per-unit margin (V1 shows them separately, see above).
+
 ---
 
 ## Open Questions
 
-1. **Do you use WFS (Walmart Fulfillment Services)?** Changes which fee types appear in the report and whether we need to handle WFS storage/fulfillment fees as non-line-level costs.
-2. **How far back should the initial backfill go?** All available periods, or a fiscal cutoff?
-3. **Any non-US marketplaces?** Plan assumes US only, single currency.
+1. **How far back should the initial backfill go?** All available periods, or a fiscal cutoff?
+2. **Any non-US marketplaces?** Plan assumes US only, single currency.
 
-None of these block Phases 0–3.
+Neither blocks Phases 0–3.
 
 ---
 
