@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SyncButton } from "./_components/sync-button";
 
 export default function DashboardLayout({ children }: LayoutProps<"/">) {
   return (
@@ -12,6 +13,7 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
           <Link href="/costs" className="text-sm hover:underline">
             Costs
           </Link>
+          <SyncButton />
         </nav>
       </header>
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-8">
