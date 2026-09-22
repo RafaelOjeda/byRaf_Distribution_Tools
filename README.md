@@ -8,4 +8,4 @@ Internal tools for BYRAF Distribution.
 
 ## Stack
 
-FastAPI, Next.js, SQLite (V1), AWS.
+Next.js (App Router) on Vercel, Neon Postgres via the Vercel Marketplace, Drizzle ORM.
