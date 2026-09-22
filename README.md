@@ -9,3 +9,12 @@ Internal tools for BYRAF Distribution.
 ## Stack
 
 Next.js (App Router) on Vercel, Neon Postgres via the Vercel Marketplace, Drizzle ORM.
+
+## Getting Started
+
+```bash
+npm install
+npm run dev
+```
+
+The app builds and runs without a database or Walmart API keys — `/margins` and `/costs` are stubbed pending Phase 2+. Once Neon is provisioned (`vercel integration add neon` + `vercel env pull`), run `npm run db:push` to apply the schema in [lib/db/schema.ts](lib/db/schema.ts).
