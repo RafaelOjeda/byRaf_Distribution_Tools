@@ -211,7 +211,7 @@ Ordered so that each phase de-risks the next, and so the riskiest unknown is con
 
 **Phase 6 — Margins UI.** Date filter, sort by profit/margin, `fulfillment_channel` shown as a column and filter, visible "missing cost" flag, a small separate panel for monthly WFS storage fees, CSV export.
 
-**Phase 7 — Automate.** Backfill all available periods. Daily cron in `vercel.ts`. `sync_runs` guard against overlapping runs.
+**Phase 7 — Automate.** Backfill **every period `availableReconFiles` returns** — full history, no cutoff. Loop period-by-period, writing a `sync_runs` row per period so a failed or interrupted backfill resumes from the last completed period instead of restarting. Then daily cron in `vercel.ts`. `sync_runs` also guards against overlapping runs.
 
 Phases 0–2 are a short evening. Phase 3 is where real information arrives.
 
@@ -225,7 +225,9 @@ Phases 0–2 are a short evening. Phase 3 is where real information arrives.
 
 **Late-arriving refunds.** Handled by design: append-only rows, margin computed on read.
 
-**Function duration.** The 300s default is ample for a two-week period at your volume. If a full backfill ever exceeds it, the escape hatch is Vercel Workflow (durable, resumable steps) — not a bigger timeout.
+**Function duration.** The 300s default is ample for *one* settlement period at your volume — but "backfill to the beginning" means looping over however many periods `availableReconFiles` has, which could be years of them. Phase 7's per-period `sync_runs` checkpointing exists specifically so this loop can run as repeated short invocations instead of one long one. If a single period ever grows large enough to threaten the timeout on its own, the escape hatch is Vercel Workflow (durable, resumable steps) — not a bigger timeout.
+
+**Report retention is unverified.** Nothing in the docs states how far back `availableReconFiles` actually goes — Walmart may not retain reconciliation reports indefinitely. "The beginning" means whatever that endpoint returns; Phase 2 (the first real API call) will reveal the actual retention window. If it's shorter than your full sales history, older periods are simply unrecoverable from this API — worth knowing early rather than assuming.
 
 **Cost-to-line matching by `Partner Item Id`.** Assumes one cost per SKU per effective date. Multi-pack SKUs priced per unit will need a units-per-pack field; flagged if it comes up.
 
@@ -233,13 +235,10 @@ Phases 0–2 are a short evening. Phase 3 is where real information arrives.
 
 ---
 
-## Open Questions
+## Scope, Confirmed
 
-1. **How far back should the initial backfill go?** All available periods, or a fiscal cutoff?
-
-Confirmed: US only, single currency — no other markets to account for.
-
-This doesn't block Phases 0–3.
+- **Backfill: full history.** Every period `availableReconFiles` returns, no fiscal cutoff — see Phase 7 and the retention-window risk above.
+- **US only, single currency.** No other markets to account for.
 
 ---
 
