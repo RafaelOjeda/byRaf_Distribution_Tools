@@ -236,9 +236,10 @@ Phases 0–2 are a short evening. Phase 3 is where real information arrives.
 ## Open Questions
 
 1. **How far back should the initial backfill go?** All available periods, or a fiscal cutoff?
-2. **Any non-US marketplaces?** Plan assumes US only, single currency.
 
-Neither blocks Phases 0–3.
+Confirmed: US only, single currency — no other markets to account for.
+
+This doesn't block Phases 0–3.
 
 ---
 
