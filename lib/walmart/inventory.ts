@@ -47,39 +47,48 @@ function toItems(data: InventoriesResponse): InventoryItem[] {
  * nodes. Returns every SKU you stock, including ones that have never
  * sold, which the settlement reports alone would never reveal.
  *
- * Follows meta.nextCursor the same way the Orders API does (cursor is a
- * query string appended to the base URL). That form is unverified here -
- * this account has fewer SKUs than one page - so a failed follow-up page
- * returns what was collected rather than throwing. Partial inventory is
- * more useful than none, and inventory is advisory in the UI anyway.
+ * Pagination, confirmed live 2026-09-24 by forcing limit=3 against a
+ * 10-SKU account: meta.nextCursor is an opaque token passed back as the
+ * `nextCursor` query param - NOT appended to the URL like the Orders
+ * API cursor (that 404s), and NOT named `cursor` (silently ignored, so
+ * it returns page 1 again). Every page must repeat the same `limit`,
+ * or Walmart rejects the cursor as invalid or expired.
+ *
+ * pageSize is a parameter only so tests can force multiple pages.
  */
-export async function fetchInventory(token: string): Promise<InventoryItem[]> {
+export async function fetchInventory(
+  token: string,
+  pageSize = PAGE_SIZE
+): Promise<InventoryItem[]> {
   const headers = {
     Accept: "application/json",
     "WM_SEC.ACCESS_TOKEN": token,
     ...walmartBaseHeaders(),
   };
 
-  const first = await fetch(`${BASE}?limit=${PAGE_SIZE}`, { headers });
-  if (!first.ok) {
-    throw new Error(
-      `inventories failed: ${first.status} ${first.statusText} - ${await first.text()}`
-    );
+  const items: InventoryItem[] = [];
+  let cursor: string | null | undefined;
+  let url = `${BASE}?limit=${pageSize}`;
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const res = await fetch(url, { headers });
+    // Throw rather than return partial data: silently truncated
+    // inventory would read as "SKU not stocked" in the UI.
+    if (!res.ok) {
+      throw new Error(
+        `inventories failed (page ${page + 1}): ${res.status} ${res.statusText} - ${await res.text()}`
+      );
+    }
+
+    const data: InventoriesResponse = await res.json();
+    items.push(...toItems(data));
+
+    cursor = data.meta?.nextCursor;
+    if (!cursor) return items;
+    url = `${BASE}?limit=${pageSize}&nextCursor=${encodeURIComponent(cursor)}`;
   }
 
-  const data: InventoriesResponse = await first.json();
-  const items = toItems(data);
-  let cursor = data.meta?.nextCursor;
-
-  for (let page = 0; cursor && page < MAX_PAGES; page++) {
-    const res = await fetch(`${BASE}${cursor}`, { headers });
-    if (!res.ok) break;
-    const next: InventoriesResponse = await res.json();
-    const batch = toItems(next);
-    if (batch.length === 0) break;
-    items.push(...batch);
-    cursor = next.meta?.nextCursor;
-  }
-
-  return items;
+  throw new Error(
+    `inventories exceeded ${MAX_PAGES} pages - refusing to loop further`
+  );
 }
