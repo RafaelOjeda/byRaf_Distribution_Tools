@@ -495,7 +495,7 @@ export default function MarginsPage() {
                       <td className="py-1 pr-3 text-right">
                         {inv ? (
                           <span
-                            title={`${inv.availToSell} available to sell, ${inv.reserved} reserved`}
+                            title={`${inv.availToSell} available to sell + ${inv.reserved} ordered but not shipped. The quantity last set on the listing is ${inv.fedQty}, but that number doesn't drop as units ship.`}
                           >
                             {inv.onHand}
                           </span>

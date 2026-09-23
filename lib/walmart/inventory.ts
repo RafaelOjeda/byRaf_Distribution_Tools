@@ -2,9 +2,20 @@ import { walmartBaseHeaders } from "./auth";
 
 export interface InventoryItem {
   sku: string;
-  onHand: number; // inputQty - everything physically counted
+  /**
+   * availToSell + reserved: what Walmart says is still in your hands
+   * (buyable now, plus ordered but not yet shipped). Deliberately NOT
+   * inputQty - see fedQty.
+   */
+  onHand: number;
   availToSell: number;
   reserved: number;
+  /**
+   * inputQty: the quantity you last told Walmart you have. Not a count.
+   * It doesn't drop when units ship, so it goes stale: the Barbie read 1
+   * here while availToSell was 0 and the catalog said out of stock.
+   */
+  fedQty: number;
 }
 
 interface InventoriesResponse {
@@ -33,11 +44,15 @@ function toItems(data: InventoriesResponse): InventoryItem[] {
     const sum = (pick: (n: (typeof nodes)[number]) => number | undefined) =>
       nodes.reduce((total, n) => total + (pick(n) ?? 0), 0);
 
+    const availToSell = sum((n) => n.availToSellQty?.amount);
+    const reserved = sum((n) => n.reservedQty?.amount);
+
     return {
       sku: inv.sku,
-      onHand: sum((n) => n.inputQty?.amount),
-      availToSell: sum((n) => n.availToSellQty?.amount),
-      reserved: sum((n) => n.reservedQty?.amount),
+      onHand: availToSell + reserved,
+      availToSell,
+      reserved,
+      fedQty: sum((n) => n.inputQty?.amount),
     };
   });
 }
