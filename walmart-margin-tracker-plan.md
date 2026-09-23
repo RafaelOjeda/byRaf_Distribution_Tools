@@ -18,6 +18,10 @@ At your request, the live app currently has **no login and no database use at al
 - No refund/adjustment reconciliation across time the way the persisted design handles it — a session only ever sees whatever `availableReconFiles` returns at that moment.
 - The app itself (not the data) is now public to anyone with the link, gated only by whether they have real Walmart credentials to type in.
 
+**Deliberately deferred until the app becomes stateful** (decided 2026-09-24 — persistence is coming soon, so these aren't worth building for the MVP):
+- **WFS storage fee rollup — a correctness gap, not a nice-to-have.** `groupReconRows` in `lib/margin.ts` skips rows with no `Purchase Order #`, and WFS storage fees arrive that way. Once WFS activity shows up in a report, those costs silently disappear from the dashboard. Current data is all Seller Fulfilled, so nothing is wrong *yet*.
+- **CSV import for SKU costs and box dimensions.** Skipped because it mainly works around costs not being saved; still wanted afterward for bulk entry.
+
 **What was learned building this, now true for the real plan too:**
 - `reconFileJson` needed params never documented by Walmart, discovered from the API's own error messages: `reportDate` (MMDDYYYY), `offset` (0-based), `noOfRecords` (page size). Pagination ends when the response's `nextOffset` is `-1`.
 - There's a real `Fulfillment Type` field directly on each row (`"Seller Fulfilled"` seen so far) — **no need to infer WFS-vs-self from fee-type presence**, as originally planned. Simpler than expected.
