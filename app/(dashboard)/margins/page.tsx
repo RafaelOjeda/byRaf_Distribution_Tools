@@ -1,23 +1,29 @@
 "use client";
 
-import { type FormEvent, useMemo, useState } from "react";
+import { Fragment, type FormEvent, useMemo, useState } from "react";
 import {
   DIM_DIVISOR,
   SHIPPING_PCT_ALERT,
   SHIPPING_PCT_WARN,
+  averageUnitCost,
   computeMargins,
   cubicInches,
   dimWeight,
   groupReconRows,
+  normalizeSku,
+  reconcileStock,
   sumMargins,
   summarizeBySku,
+  type CostLot,
   type OrderLineSummary,
   type SkuInputs,
   type SkuSummary,
 } from "@/lib/margin";
+import type { InventoryItem } from "@/lib/walmart/inventory";
 import type { ReconRow } from "@/lib/walmart/recon";
 import {
   listAvailableReports,
+  loadInventory,
   loadUnsettledOrders,
   loadWalmartData,
 } from "./actions";
@@ -36,15 +42,17 @@ function formatReportDate(d: string): string {
   );
 }
 
-type SkuField = keyof SkuInputs;
+type SkuField = Exclude<keyof SkuInputs, "lots">;
 
-const SKU_FIELDS: { key: SkuField; label: string; step: string }[] = [
-  { key: "unitCost", label: "Unit cost", step: "0.01" },
+const BOX_FIELDS: { key: SkuField; label: string; step: string }[] = [
   { key: "boxCost", label: "Box cost", step: "0.01" },
   { key: "boxLength", label: "L (in)", step: "0.1" },
   { key: "boxWidth", label: "W (in)", step: "0.1" },
   { key: "boxHeight", label: "H (in)", step: "0.1" },
 ];
+
+/** A purchase batch as typed, before parsing. */
+type LotDraft = { qty: string; unitCost: string };
 
 type Step = "credentials" | "reports" | "data";
 
@@ -57,10 +65,13 @@ export default function MarginsPage() {
   const [rows, setRows] = useState<ReconRow[] | null>(null);
   const [unsettled, setUnsettled] = useState<OrderLineSummary[]>([]);
   const [unsettledError, setUnsettledError] = useState<string | null>(null);
-  // Raw strings keyed by SKU then field, so a half-typed "1." doesn't fight the input.
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  // Raw strings keyed by normalized SKU, so a half-typed "1." doesn't fight the input.
   const [inputs, setInputs] = useState<
     Record<string, Partial<Record<SkuField, string>>>
   >({});
+  const [lotDrafts, setLotDrafts] = useState<Record<string, LotDraft[]>>({});
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,6 +80,44 @@ export default function MarginsPage() {
       ...prev,
       [sku]: { ...prev[sku], [field]: value },
     }));
+  }
+
+  function addLot(sku: string) {
+    setLotDrafts((prev) => ({
+      ...prev,
+      [sku]: [...(prev[sku] ?? []), { qty: "", unitCost: "" }],
+    }));
+    setExpanded((prev) => new Set(prev).add(sku));
+  }
+
+  function updateLot(
+    sku: string,
+    index: number,
+    field: keyof LotDraft,
+    value: string
+  ) {
+    setLotDrafts((prev) => ({
+      ...prev,
+      [sku]: (prev[sku] ?? []).map((lot, i) =>
+        i === index ? { ...lot, [field]: value } : lot
+      ),
+    }));
+  }
+
+  function removeLot(sku: string, index: number) {
+    setLotDrafts((prev) => ({
+      ...prev,
+      [sku]: (prev[sku] ?? []).filter((_, i) => i !== index),
+    }));
+  }
+
+  function toggleExpanded(sku: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(sku)) next.delete(sku);
+      else next.add(sku);
+      return next;
+    });
   }
 
   function toggleDate(date: string) {
@@ -105,22 +154,25 @@ export default function MarginsPage() {
     setLoading(true);
     setError(null);
     setUnsettledError(null);
-    const [result, recent] = await Promise.all([
+    const [result, recent, stock] = await Promise.all([
       loadWalmartData(clientId, clientSecret, [...selectedDates]),
       loadUnsettledOrders(clientId, clientSecret),
+      loadInventory(clientId, clientSecret),
     ]);
     setLoading(false);
     if ("error" in result) {
       setError(result.error);
       return;
     }
-    // Recent orders are a bonus - if they fail, still show settled data.
+    // Recent orders and inventory are extras - if either fails, still
+    // show settled data rather than blocking the whole page.
     if ("error" in recent) {
       setUnsettledError(recent.error);
       setUnsettled([]);
     } else {
       setUnsettled(recent.lines);
     }
+    setInventory("error" in stock ? [] : stock.inventory);
     setRows(result.rows);
     setStep("data");
   }
@@ -129,7 +181,10 @@ export default function MarginsPage() {
     setRows(null);
     setUnsettled([]);
     setUnsettledError(null);
+    setInventory([]);
     setInputs({});
+    setLotDrafts({});
+    setExpanded(new Set());
     setError(null);
   }
 
@@ -151,26 +206,51 @@ export default function MarginsPage() {
     const out: Record<string, SkuInputs> = {};
     for (const [sku, fields] of Object.entries(inputs)) {
       const parsed: SkuInputs = {};
-      for (const { key } of SKU_FIELDS) {
+      for (const { key } of BOX_FIELDS) {
         const n = parseFloat(fields[key] ?? "");
         if (!Number.isNaN(n)) parsed[key] = n;
       }
       out[sku] = parsed;
     }
+    for (const [sku, drafts] of Object.entries(lotDrafts)) {
+      const lots: CostLot[] = drafts
+        .map((d) => ({
+          qty: parseFloat(d.qty),
+          unitCost: parseFloat(d.unitCost),
+        }))
+        .filter((l) => !Number.isNaN(l.qty) && !Number.isNaN(l.unitCost));
+      out[sku] = { ...out[sku], lots };
+    }
     return out;
-  }, [inputs]);
+  }, [inputs, lotDrafts]);
 
   const margins = useMemo(
     () => computeMargins(lines, parsedInputs),
     [lines, parsedInputs]
   );
 
-  const skus = useMemo(
-    () => [...new Set(lines.map((l) => l.sku))].filter(Boolean).sort(),
-    [lines]
-  );
+  const inventoryBySku = useMemo(() => {
+    const m = new Map<string, InventoryItem>();
+    for (const item of inventory) m.set(normalizeSku(item.sku), item);
+    return m;
+  }, [inventory]);
+
+  // Every SKU you stock, not just ones that have sold - inventory
+  // surfaces products the settlement reports never mention.
+  const skus = useMemo(() => {
+    const set = new Set<string>();
+    for (const l of lines) if (l.sku) set.add(normalizeSku(l.sku));
+    for (const item of inventory) set.add(normalizeSku(item.sku));
+    return [...set].sort();
+  }, [lines, inventory]);
 
   const skuSummaries = useMemo(() => summarizeBySku(margins), [margins]);
+
+  const soldBySku = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of skuSummaries) m.set(s.sku, s.units);
+    return m;
+  }, [skuSummaries]);
 
   // Settled and estimated totals are kept apart so exact numbers never
   // get blended with projections; no-estimate lines are left out entirely.
@@ -335,17 +415,30 @@ export default function MarginsPage() {
       </div>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">1. Enter your costs and box per SKU</h2>
+        <h2 className="font-medium">1. Inventory and costs</h2>
         <p className="text-sm text-black/60 dark:text-white/60">
-          Not saved — re-enter each session. Box cost counts once per
-          shipment; unit cost is multiplied by quantity.
+          Not saved — re-enter each session. Add a batch for each price you
+          bought an item at, including units already sold; cost per unit is
+          the quantity-weighted average across batches. &ldquo;Left&rdquo;
+          is purchased − sold and should match Walmart&apos;s on-hand
+          count.
         </p>
         <div className="overflow-x-auto">
           <table className="text-sm whitespace-nowrap">
             <thead>
               <tr className="border-b border-black/10 text-left dark:border-white/10">
                 <th className="py-1 pr-3">SKU</th>
-                {SKU_FIELDS.map((f) => (
+                <th className="py-1 pr-3 text-right">On hand</th>
+                <th className="py-1 pr-3 text-right">Sold</th>
+                <th className="py-1 pr-3 text-right">Bought</th>
+                <th
+                  className="py-1 pr-3 text-right"
+                  title="Purchased − sold. Amber when it disagrees with Walmart's on-hand count."
+                >
+                  Left
+                </th>
+                <th className="py-1 pr-3 text-right">Avg cost</th>
+                {BOX_FIELDS.map((f) => (
                   <th key={f.key} className="py-1 pr-3 text-right">
                     {f.label}
                   </th>
@@ -364,41 +457,132 @@ export default function MarginsPage() {
                 const parsed = parsedInputs[sku] ?? {};
                 const cu = cubicInches(parsed);
                 const dim = dimWeight(parsed);
+                const drafts = lotDrafts[sku] ?? [];
+                const inv = inventoryBySku.get(sku);
+                const stock = reconcileStock(
+                  parsed.lots,
+                  soldBySku.get(sku) ?? 0,
+                  inv ? inv.onHand : null
+                );
+                const avg = averageUnitCost(parsed.lots);
+                const isOpen = expanded.has(sku);
+
                 return (
-                  <tr
-                    key={sku}
-                    className="border-b border-black/5 dark:border-white/5"
-                  >
-                    <td className="py-1 pr-3">{sku}</td>
-                    {SKU_FIELDS.map((f) => (
-                      <td key={f.key} className="py-1 pr-3">
-                        <input
-                          type="number"
-                          step={f.step}
-                          min="0"
-                          placeholder="—"
-                          aria-label={`${f.label} for ${sku}`}
-                          value={inputs[sku]?.[f.key] ?? ""}
-                          onChange={(e) =>
-                            setField(sku, f.key, e.target.value)
+                  <Fragment key={sku}>
+                    <tr className="border-b border-black/5 dark:border-white/5">
+                      <td className="py-1 pr-3">
+                        <button
+                          onClick={() => toggleExpanded(sku)}
+                          className="text-left hover:underline"
+                          title={
+                            drafts.length > 0
+                              ? `${drafts.length} batch${drafts.length === 1 ? "" : "es"}`
+                              : "Add a purchase batch"
                           }
-                          className="w-24 rounded border border-black/15 px-2 py-1 text-right dark:border-white/20"
-                        />
+                        >
+                          <span className="text-black/40 dark:text-white/40">
+                            {isOpen ? "▾ " : "▸ "}
+                          </span>
+                          {sku}
+                          {drafts.length > 0 && (
+                            <span className="text-black/40 dark:text-white/40">
+                              {" "}
+                              ({drafts.length})
+                            </span>
+                          )}
+                        </button>
                       </td>
-                    ))}
-                    <td className="py-1 pr-3 text-right text-black/60 dark:text-white/60">
-                      {cu === null ? "—" : cu.toFixed(0)}
-                    </td>
-                    <td className="py-1 pr-3 text-right text-black/60 dark:text-white/60">
-                      {dim === null ? "—" : `${dim.toFixed(1)} lb`}
-                    </td>
-                  </tr>
+                      <td className="py-1 pr-3 text-right">
+                        {inv ? (
+                          <span
+                            title={`${inv.availToSell} available to sell, ${inv.reserved} reserved`}
+                          >
+                            {inv.onHand}
+                          </span>
+                        ) : (
+                          <span className="text-black/40 dark:text-white/40">
+                            —
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-1 pr-3 text-right">
+                        {soldBySku.get(sku) ?? 0}
+                      </td>
+                      <td className="py-1 pr-3 text-right">
+                        {stock.purchased || (
+                          <span className="text-black/40 dark:text-white/40">
+                            —
+                          </span>
+                        )}
+                      </td>
+                      <td
+                        className={`py-1 pr-3 text-right ${stock.discrepancy ? "text-amber-600" : ""}`}
+                        title={
+                          stock.discrepancy
+                            ? `Your batches imply ${stock.impliedOnHand} left, Walmart says ${stock.onHand}. Off by ${stock.discrepancy > 0 ? "+" : ""}${stock.discrepancy} — likely a missing or mistyped batch.`
+                            : undefined
+                        }
+                      >
+                        {stock.purchased === 0 ? (
+                          <span className="text-black/40 dark:text-white/40">
+                            —
+                          </span>
+                        ) : (
+                          stock.impliedOnHand
+                        )}
+                      </td>
+                      <td className="py-1 pr-3 text-right font-medium">
+                        {avg === null ? (
+                          <span className="text-amber-600">—</span>
+                        ) : (
+                          money(avg)
+                        )}
+                      </td>
+                      {BOX_FIELDS.map((f) => (
+                        <td key={f.key} className="py-1 pr-3">
+                          <input
+                            type="number"
+                            step={f.step}
+                            min="0"
+                            placeholder="—"
+                            aria-label={`${f.label} for ${sku}`}
+                            value={inputs[sku]?.[f.key] ?? ""}
+                            onChange={(e) =>
+                              setField(sku, f.key, e.target.value)
+                            }
+                            className="w-24 rounded border border-black/15 px-2 py-1 text-right dark:border-white/20"
+                          />
+                        </td>
+                      ))}
+                      <td className="py-1 pr-3 text-right text-black/60 dark:text-white/60">
+                        {cu === null ? "—" : cu.toFixed(0)}
+                      </td>
+                      <td className="py-1 pr-3 text-right text-black/60 dark:text-white/60">
+                        {dim === null ? "—" : `${dim.toFixed(1)} lb`}
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr className="border-b border-black/5 bg-black/[0.02] dark:border-white/5 dark:bg-white/[0.03]">
+                        <td colSpan={BOX_FIELDS.length + 8} className="px-3 py-3">
+                          <CostLotsEditor
+                            sku={sku}
+                            drafts={drafts}
+                            onAdd={() => addLot(sku)}
+                            onUpdate={(i, field, value) =>
+                              updateLot(sku, i, field, value)
+                            }
+                            onRemove={(i) => removeLot(sku, i)}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })}
               {skus.length === 0 && (
                 <tr>
                   <td
-                    colSpan={SKU_FIELDS.length + 3}
+                    colSpan={BOX_FIELDS.length + 8}
                     className="py-3 text-black/60 dark:text-white/60"
                   >
                     No SKUs found in the returned data.
@@ -570,6 +754,86 @@ export default function MarginsPage() {
           </table>
         </div>
       </section>
+    </div>
+  );
+}
+
+function CostLotsEditor({
+  sku,
+  drafts,
+  onAdd,
+  onUpdate,
+  onRemove,
+}: {
+  sku: string;
+  drafts: LotDraft[];
+  onAdd: () => void;
+  onUpdate: (index: number, field: keyof LotDraft, value: string) => void;
+  onRemove: (index: number) => void;
+}) {
+  const parsed: CostLot[] = drafts
+    .map((d) => ({ qty: parseFloat(d.qty), unitCost: parseFloat(d.unitCost) }))
+    .filter((l) => !Number.isNaN(l.qty) && !Number.isNaN(l.unitCost));
+  const avg = averageUnitCost(parsed);
+  const units = parsed.reduce((n, l) => n + l.qty, 0);
+  const spent = parsed.reduce((n, l) => n + l.qty * l.unitCost, 0);
+
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <span className="text-xs text-black/60 dark:text-white/60">
+        Purchase batches for {sku}
+      </span>
+
+      {drafts.map((lot, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <input
+            type="number"
+            min="0"
+            step="1"
+            placeholder="Qty"
+            aria-label={`Batch ${i + 1} quantity for ${sku}`}
+            value={lot.qty}
+            onChange={(e) => onUpdate(i, "qty", e.target.value)}
+            className="w-20 rounded border border-black/15 px-2 py-1 text-right dark:border-white/20"
+          />
+          <span className="text-black/40 dark:text-white/40">×</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="Price each"
+            aria-label={`Batch ${i + 1} unit cost for ${sku}`}
+            value={lot.unitCost}
+            onChange={(e) => onUpdate(i, "unitCost", e.target.value)}
+            className="w-28 rounded border border-black/15 px-2 py-1 text-right dark:border-white/20"
+          />
+          <span className="w-24 text-right text-black/60 dark:text-white/60">
+            {!Number.isNaN(parseFloat(lot.qty)) &&
+            !Number.isNaN(parseFloat(lot.unitCost))
+              ? money(parseFloat(lot.qty) * parseFloat(lot.unitCost))
+              : ""}
+          </span>
+          <button
+            onClick={() => onRemove(i)}
+            className="text-black/40 hover:text-red-600 dark:text-white/40"
+            aria-label={`Remove batch ${i + 1} for ${sku}`}
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+
+      <div className="flex items-center gap-4">
+        <button onClick={onAdd} className="text-sm underline">
+          + Add batch
+        </button>
+        {units > 0 && (
+          <span className="text-sm text-black/60 dark:text-white/60">
+            {units} unit{units === 1 ? "" : "s"} · {money(spent)} spent ·
+            avg {avg === null ? "—" : money(avg)} each
+          </span>
+        )}
+      </div>
     </div>
   );
 }

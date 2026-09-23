@@ -32,6 +32,16 @@ export interface OrderLineSummary {
   netAmount: number;
 }
 
+/**
+ * Walmart's own APIs disagree on SKU casing - the inventory API returns
+ * "Jurassic-World-001" where the settlement report says
+ * "JURASSIC-WORLD-001". Every SKU-keyed lookup goes through this so the
+ * same product doesn't silently split in two.
+ */
+export function normalizeSku(sku: string): string {
+  return sku.trim().toUpperCase();
+}
+
 type Component = "revenue" | "commission" | "shipping" | "tax" | "otherFees";
 
 /**
@@ -122,7 +132,8 @@ export function buildSkuHistory(
   > = {};
   for (const line of settled) {
     if (!line.sku || line.revenue === 0) continue;
-    const a = (acc[line.sku] ??= { revenue: 0, commission: 0, shipping: 0, n: 0 });
+    const key = normalizeSku(line.sku);
+    const a = (acc[key] ??= { revenue: 0, commission: 0, shipping: 0, n: 0 });
     a.revenue += line.revenue;
     a.commission += line.commission;
     a.shipping += line.shipping;
@@ -153,7 +164,7 @@ const SHIP_NODE_LABELS: Record<string, string> = {
  * settle in different periods would count as settled once either does.
  */
 export function settlementKey(purchaseOrderNo: string, sku: string): string {
-  return `${purchaseOrderNo}::${sku}`;
+  return `${purchaseOrderNo}::${normalizeSku(sku)}`;
 }
 
 /**
@@ -195,7 +206,7 @@ export function estimateUnsettled(
         else otherFees += amount;
       }
 
-      const h = history[sku];
+      const h = history[normalizeSku(sku)];
       const commission = h ? -revenue * h.commissionRate : 0;
       const shipping = h ? h.avgShipping : 0;
 
@@ -229,13 +240,78 @@ export function estimateUnsettled(
   return out;
 }
 
+/**
+ * One purchase batch: how many units, at what price each. The same item
+ * gets bought at different prices over time, so cost per SKU is the
+ * quantity-weighted average across batches rather than a single number.
+ */
+export interface CostLot {
+  qty: number;
+  unitCost: number;
+}
+
 /** What you enter per SKU. All optional - the math degrades gracefully. */
 export interface SkuInputs {
-  unitCost?: number;
+  lots?: CostLot[];
   boxCost?: number;
   boxLength?: number;
   boxWidth?: number;
   boxHeight?: number;
+}
+
+function validLots(lots: CostLot[] | undefined): CostLot[] {
+  return (lots ?? []).filter(
+    (l) =>
+      Number.isFinite(l.qty) &&
+      l.qty > 0 &&
+      Number.isFinite(l.unitCost) &&
+      l.unitCost >= 0
+  );
+}
+
+/** Total units purchased across every batch. */
+export function totalPurchased(lots: CostLot[] | undefined): number {
+  return validLots(lots).reduce((n, l) => n + l.qty, 0);
+}
+
+/** Quantity-weighted average cost, or null when nothing usable is entered. */
+export function averageUnitCost(lots: CostLot[] | undefined): number | null {
+  const valid = validLots(lots);
+  const units = valid.reduce((n, l) => n + l.qty, 0);
+  if (units === 0) return null;
+  return valid.reduce((sum, l) => sum + l.qty * l.unitCost, 0) / units;
+}
+
+export interface SkuStock {
+  purchased: number; // from the cost lots you entered
+  sold: number; // units on settled + estimated order lines
+  onHand: number | null; // Walmart's count, null if inventory wasn't loaded
+  /** purchased - sold: what your own records imply is left. */
+  impliedOnHand: number;
+  /**
+   * Your implied stock minus Walmart's. Non-zero means the two disagree
+   * - usually a missing or mistyped lot. Null when either side is
+   * unknown. Deliberately advisory: real drift happens (damage,
+   * returns, stock held but not listed), so this never blocks entry.
+   */
+  discrepancy: number | null;
+}
+
+export function reconcileStock(
+  lots: CostLot[] | undefined,
+  sold: number,
+  onHand: number | null
+): SkuStock {
+  const purchased = totalPurchased(lots);
+  const impliedOnHand = purchased - sold;
+  return {
+    purchased,
+    sold,
+    onHand,
+    impliedOnHand,
+    discrepancy:
+      onHand === null || purchased === 0 ? null : impliedOnHand - onHand,
+  };
 }
 
 /**
@@ -278,8 +354,9 @@ export function computeMargins(
   inputs: Record<string, SkuInputs>
 ): MarginRow[] {
   return lines.map((line) => {
-    const { unitCost, boxCost } = inputs[line.sku] ?? {};
-    const hasCost = typeof unitCost === "number" && !Number.isNaN(unitCost);
+    const { lots, boxCost } = inputs[normalizeSku(line.sku)] ?? {};
+    const unitCost = averageUnitCost(lots);
+    const hasCost = unitCost !== null;
 
     const itemCostTotal = hasCost ? unitCost * line.qty : 0;
     const boxCostTotal =
@@ -337,9 +414,10 @@ export function summarizeBySku(rows: MarginRow[]): SkuSummary[] {
   const bySku = new Map<string, MarginRow[]>();
   for (const row of rows) {
     if (!row.sku) continue;
-    const group = bySku.get(row.sku);
+    const key = normalizeSku(row.sku);
+    const group = bySku.get(key);
     if (group) group.push(row);
-    else bySku.set(row.sku, [row]);
+    else bySku.set(key, [row]);
   }
 
   const summaries: SkuSummary[] = [];

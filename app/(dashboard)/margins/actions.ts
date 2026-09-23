@@ -8,6 +8,7 @@ import {
   type OrderLineSummary,
 } from "@/lib/margin";
 import { fetchWalmartToken } from "@/lib/walmart/auth";
+import { fetchInventory, type InventoryItem } from "@/lib/walmart/inventory";
 import { fetchOrdersSince } from "@/lib/walmart/orders";
 import {
   fetchAllAvailableRows,
@@ -71,6 +72,19 @@ export async function loadWalmartData(
   }
   return withToken(clientId, clientSecret, async (token) => ({
     rows: await fetchRowsForDates(token, reportDates),
+  }));
+}
+
+/**
+ * Current stock per SKU. Includes SKUs that have never sold, which the
+ * settlement reports alone would never surface.
+ */
+export async function loadInventory(
+  clientId: string,
+  clientSecret: string
+): Promise<Result<{ inventory: InventoryItem[] }>> {
+  return withToken(clientId, clientSecret, async (token) => ({
+    inventory: await fetchInventory(token),
   }));
 }
 
