@@ -31,6 +31,8 @@ The Walmart Marketplace API uses `grant_type=client_credentials` — machine-to-
 
 That leaves the app itself ungated, and the sensitive dataset here is **your supplier cost per SKU** — the one thing not already on Walmart's side. Vercel Authentication restricts the deployment to your Vercel account: zero code, zero cost, one toggle, swappable for Clerk if teammates ever need in.
 
+✅ **Enabled, 2026-09-23** (`vercel project protection enable --sso`), scope `prod_deployment_urls_and_all_previews`. **Known platform limitation to remember:** Vercel Authentication never protects a custom domain, only `*.vercel.app` URLs. No custom domain is attached today, so protection is currently complete — but if one is ever added (e.g. a `margins.byrafdistribution.com`), that domain would be open to the internet unless a separate protection layer is added at that time.
+
 **This repo is public.** Secrets live only in Vercel env vars. Nothing credential-shaped is ever committed — `.env*` is already gitignored.
 
 **No Redis.** Walmart tokens expire in ~15 minutes, but a sync run finishes well inside that, so the token is fetched once per run and held in a local variable. Nothing to provision.
@@ -198,6 +200,8 @@ Two implementation notes that will otherwise cost an afternoon each:
 Ordered so that each phase de-risks the next, and so the riskiest unknown is confronted early with real data.
 
 **Phase 0 — Provision.** Install the Vercel CLI (`npm i -g vercel`, not currently installed). `vercel link`. `vercel integration add neon`. Enable Vercel Authentication. Add `WALMART_CLIENT_ID` / `WALMART_CLIENT_SECRET`. `vercel env pull`.
+
+✅ **Done, 2026-09-23.** Linked to `by-raf-distribution-tools`; Neon connected and schema pushed (all 3 tables live); `DATABASE_URL` + both Walmart vars set consistently across Development/Preview/Production; Vercel Authentication enabled. Global install of the CLI hit an EACCES permissions error on the system Node install — used `npx vercel` throughout instead of fighting it. Only remaining item: first deploy.
 
 **Phase 1 — Skeleton.** Next.js + TypeScript + Tailwind, Drizzle schema, first migration, both pages stubbed. Deploy. Confirms the whole pipeline works before any Walmart logic exists.
 
