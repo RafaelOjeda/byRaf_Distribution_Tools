@@ -3,13 +3,17 @@
 import { type FormEvent, useMemo, useState } from "react";
 import {
   DIM_DIVISOR,
+  SHIPPING_PCT_ALERT,
+  SHIPPING_PCT_WARN,
   computeMargins,
   cubicInches,
   dimWeight,
   groupReconRows,
   sumMargins,
+  summarizeBySku,
   type OrderLineSummary,
   type SkuInputs,
+  type SkuSummary,
 } from "@/lib/margin";
 import type { ReconRow } from "@/lib/walmart/recon";
 import {
@@ -165,6 +169,8 @@ export default function MarginsPage() {
     () => [...new Set(lines.map((l) => l.sku))].filter(Boolean).sort(),
     [lines]
   );
+
+  const skuSummaries = useMemo(() => summarizeBySku(margins), [margins]);
 
   // Settled and estimated totals are kept apart so exact numbers never
   // get blended with projections; no-estimate lines are left out entirely.
@@ -405,7 +411,17 @@ export default function MarginsPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">2. Margins</h2>
+        <h2 className="font-medium">2. By SKU</h2>
+        <p className="text-sm text-black/60 dark:text-white/60">
+          Settled and estimated order lines rolled up per product. A SKU
+          with no settled history yet can&apos;t have its fees estimated,
+          so its money columns show — rather than a misleading $0.00.
+        </p>
+        <SkuSummaryTable summaries={skuSummaries} />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-medium">3. Order lines</h2>
         <p className="text-sm text-black/60 dark:text-white/60">
           Revenue − commission − shipping − other − your cost = profit. Fee
           columns are shown as Walmart reports them (negative = money out).
@@ -554,6 +570,151 @@ export default function MarginsPage() {
           </table>
         </div>
       </section>
+    </div>
+  );
+}
+
+function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
+  const dash = <span className="text-black/40 dark:text-white/40">—</span>;
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm whitespace-nowrap">
+        <thead>
+          <tr className="border-b border-black/10 text-left dark:border-white/10">
+            <th className="py-1 pr-3">SKU</th>
+            <th className="py-1 pr-3">Item</th>
+            <th className="py-1 pr-3 text-right">Units</th>
+            <th className="py-1 pr-3 text-right">Lines</th>
+            <th className="py-1 pr-3 text-right">Avg price</th>
+            <th className="py-1 pr-3 text-right">Revenue</th>
+            <th className="py-1 pr-3 text-right">Commission</th>
+            <th className="py-1 pr-3 text-right">Shipping</th>
+            <th
+              className="py-1 pr-3 text-right"
+              title={`Shipping as a share of revenue. Amber above ${SHIPPING_PCT_WARN * 100}%, red above ${SHIPPING_PCT_ALERT * 100}%.`}
+            >
+              Ship %
+            </th>
+            <th className="py-1 pr-3 text-right">Net</th>
+            <th className="py-1 pr-3 text-right">Cost</th>
+            <th className="py-1 pr-3 text-right">Profit</th>
+            <th className="py-1 pr-3 text-right">Margin</th>
+          </tr>
+        </thead>
+        <tbody>
+          {summaries.map((s) => {
+            const t = s.totals;
+            const pct = s.shippingPct;
+            const pctClass =
+              pct === null
+                ? ""
+                : pct > SHIPPING_PCT_ALERT
+                  ? "text-red-600 dark:text-red-400 font-medium"
+                  : pct > SHIPPING_PCT_WARN
+                    ? "text-amber-600"
+                    : "";
+            const noMoneyTitle = s.hasMoney
+              ? undefined
+              : "No settled history for this SKU yet, so its fees can't be estimated";
+
+            return (
+              <tr
+                key={s.sku}
+                className="border-b border-black/5 dark:border-white/5"
+              >
+                <td className="py-1 pr-3">{s.sku}</td>
+                <td
+                  className="max-w-[16rem] truncate py-1 pr-3"
+                  title={s.itemName}
+                >
+                  {s.itemName}
+                </td>
+                <td className="py-1 pr-3 text-right">{s.units}</td>
+                <td
+                  className="py-1 pr-3 text-right"
+                  title={`${s.settledLines} settled, ${s.estimatedLines} estimated${s.noEstimateLines > 0 ? `, ${s.noEstimateLines} not estimable` : ""}`}
+                >
+                  {s.lines}
+                  {s.estimatedLines > 0 && (
+                    <span className="text-black/40 dark:text-white/40">
+                      {" "}
+                      ({s.estimatedLines} est.)
+                    </span>
+                  )}
+                </td>
+                <td className="py-1 pr-3 text-right" title={noMoneyTitle}>
+                  {s.avgPrice === null ? dash : money(s.avgPrice)}
+                </td>
+                <td className="py-1 pr-3 text-right" title={noMoneyTitle}>
+                  {s.hasMoney ? money(t.revenue) : dash}
+                </td>
+                <td
+                  className="py-1 pr-3 text-right text-red-600 dark:text-red-400"
+                  title={noMoneyTitle}
+                >
+                  {s.hasMoney ? money(t.commission) : dash}
+                </td>
+                <td
+                  className="py-1 pr-3 text-right text-red-600 dark:text-red-400"
+                  title={noMoneyTitle}
+                >
+                  {s.hasMoney ? money(t.shipping) : dash}
+                </td>
+                <td
+                  className={`py-1 pr-3 text-right ${pctClass}`}
+                  title={noMoneyTitle}
+                >
+                  {pct === null ? dash : `${(pct * 100).toFixed(1)}%`}
+                </td>
+                <td className="py-1 pr-3 text-right" title={noMoneyTitle}>
+                  {s.hasMoney ? money(t.netAmount) : dash}
+                </td>
+                <td
+                  className="py-1 pr-3 text-right"
+                  title={
+                    s.hasMoney
+                      ? `Item ${money(t.itemCostTotal)} + box ${money(t.boxCostTotal)}`
+                      : noMoneyTitle
+                  }
+                >
+                  {!s.hasMoney ? (
+                    dash
+                  ) : s.missingCost ? (
+                    <span className="text-amber-600">—</span>
+                  ) : (
+                    money(-t.costTotal)
+                  )}
+                </td>
+                <td
+                  className="py-1 pr-3 text-right font-medium"
+                  title={noMoneyTitle}
+                >
+                  {s.hasMoney ? money(t.profit) : dash}
+                </td>
+                <td className="py-1 pr-3 text-right" title={noMoneyTitle}>
+                  {!s.hasMoney ? (
+                    dash
+                  ) : s.missingCost ? (
+                    <span className="text-amber-600">no cost</span>
+                  ) : s.margin === null ? (
+                    dash
+                  ) : (
+                    `${(s.margin * 100).toFixed(1)}%`
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+          {summaries.length === 0 && (
+            <tr>
+              <td colSpan={13} className="py-3 text-black/60 dark:text-white/60">
+                No SKUs found.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }

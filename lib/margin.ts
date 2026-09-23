@@ -300,6 +300,81 @@ export function computeMargins(
   });
 }
 
+/** Shipping cost as a share of revenue, past which a SKU gets flagged. */
+export const SHIPPING_PCT_WARN = 0.15;
+export const SHIPPING_PCT_ALERT = 0.25;
+
+export interface SkuSummary {
+  sku: string;
+  itemName: string;
+  units: number; // every line, including non-estimable ones
+  lines: number;
+  settledLines: number;
+  estimatedLines: number;
+  noEstimateLines: number;
+  /** false => every money column must render "—", never $0.00. */
+  hasMoney: boolean;
+  unitsCounted: number; // units behind the money figures
+  avgPrice: number | null;
+  shippingPct: number | null;
+  margin: number | null;
+  missingCost: boolean;
+  totals: ReturnType<typeof sumMargins>;
+}
+
+/**
+ * One row per SKU, for "how is this product actually doing" rather than
+ * per-order detail.
+ *
+ * Lines flagged noEstimate carry real revenue but placeholder zeros for
+ * commission/shipping/net, so every money figure and ratio here comes
+ * from the same filtered basis. Mixing an all-rows revenue with a
+ * filtered profit would silently corrupt the margin. Unit and line
+ * counts still cover everything, so a SKU's real activity stays visible
+ * even when its fees can't be estimated.
+ */
+export function summarizeBySku(rows: MarginRow[]): SkuSummary[] {
+  const bySku = new Map<string, MarginRow[]>();
+  for (const row of rows) {
+    if (!row.sku) continue;
+    const group = bySku.get(row.sku);
+    if (group) group.push(row);
+    else bySku.set(row.sku, [row]);
+  }
+
+  const summaries: SkuSummary[] = [];
+  for (const [sku, group] of bySku) {
+    const counted = group.filter((r) => !r.noEstimate);
+    const totals = sumMargins(counted);
+    const unitsCounted = counted.reduce((n, r) => n + r.qty, 0);
+    const hasMoney = counted.length > 0;
+
+    summaries.push({
+      sku,
+      itemName: group.find((r) => r.itemName)?.itemName ?? "",
+      units: group.reduce((n, r) => n + r.qty, 0),
+      lines: group.length,
+      settledLines: group.filter((r) => r.status === "settled").length,
+      estimatedLines: group.filter(
+        (r) => r.status === "estimated" && !r.noEstimate
+      ).length,
+      noEstimateLines: group.length - counted.length,
+      hasMoney,
+      unitsCounted,
+      avgPrice: unitsCounted > 0 ? totals.revenue / unitsCounted : null,
+      shippingPct:
+        totals.revenue !== 0 ? -totals.shipping / totals.revenue : null,
+      margin: totals.revenue !== 0 ? totals.profit / totals.revenue : null,
+      missingCost: counted.some((r) => !r.hasCost),
+      totals,
+    });
+  }
+
+  // Revenue descending. Not profit: unentered costs inflate profit, so
+  // that ordering would shuffle as costs get typed in.
+  return summaries.sort((a, b) => b.totals.revenue - a.totals.revenue);
+}
+
 export function sumMargins(rows: MarginRow[]) {
   return rows.reduce(
     (acc, r) => ({
