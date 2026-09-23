@@ -1,13 +1,13 @@
-import { getWalmartToken, walmartBaseHeaders } from "./auth";
+import { walmartBaseHeaders } from "./auth";
 
 const BASE_URL = "https://marketplace.walmartapis.com/v3/report/reconreport";
 
-async function walmartHeaders() {
+function walmartHeaders(token: string) {
   return {
     Accept: "application/json",
     // Walmart's regular API calls authenticate via this custom header,
     // not a standard `Authorization: Bearer` header.
-    "WM_SEC.ACCESS_TOKEN": await getWalmartToken(),
+    "WM_SEC.ACCESS_TOKEN": token,
     ...walmartBaseHeaders(),
   };
 }
@@ -19,9 +19,11 @@ export interface AvailableReconFiles {
 }
 
 /** GET /v3/report/reconreport/availableReconFiles?reportVersion=v1 */
-export async function listAvailableReconFiles(): Promise<AvailableReconFiles> {
+export async function listAvailableReconFiles(
+  token: string
+): Promise<AvailableReconFiles> {
   const res = await fetch(`${BASE_URL}/availableReconFiles?reportVersion=v1`, {
-    headers: await walmartHeaders(),
+    headers: walmartHeaders(token),
   });
 
   if (!res.ok) {
@@ -33,12 +35,79 @@ export async function listAvailableReconFiles(): Promise<AvailableReconFiles> {
   return res.json();
 }
 
+/** One money-line row, exactly as Walmart names its fields. */
+export type ReconRow = Record<string, string> & {
+  "Transaction Key": string;
+  "Transaction Type": string;
+  "Amount Type": string;
+  Amount: string;
+  "Purchase Order #": string;
+  "Purchase Order line #": string;
+  "Partner Item Id": string;
+  "Partner Item Name": string;
+  "Ship Qty": string;
+  "Fulfillment Type": string;
+};
+
+interface ReconFileJsonResponse {
+  reportData: ReconRow[];
+  nextOffset: number;
+  totalRecords: number;
+  description: string;
+}
+
+const PAGE_SIZE = 1000;
+
 /**
  * GET /v3/report/reconreport/reconFileJson
  *
- * NOT YET IMPLEMENTED. Walmart's public docs don't specify the exact
- * query params (report date format, pagination param name for the
- * response's `nextOffset`). Per the plan (Phase 3), this gets built
- * against a real response from listAvailableReconFiles + one manual
- * call, rather than guessed.
+ * Required params confirmed live 2026-09-23 (Walmart's docs state none
+ * of this - discovered from the API's own "required param missing"
+ * error messages): reportDate (MMDDYYYY, matches availableReconFiles'
+ * format), offset (starts at 0), noOfRecords (page size). Pagination
+ * ends when the response's nextOffset is -1.
  */
+export async function fetchReconFileJsonPage(
+  token: string,
+  reportDate: string,
+  offset: number
+): Promise<ReconFileJsonResponse> {
+  const url = `${BASE_URL}/reconFileJson?reportDate=${reportDate}&offset=${offset}&noOfRecords=${PAGE_SIZE}`;
+  const res = await fetch(url, { headers: walmartHeaders(token) });
+
+  if (!res.ok) {
+    throw new Error(
+      `reconFileJson failed (reportDate=${reportDate}, offset=${offset}): ${res.status} ${res.statusText} - ${await res.text()}`
+    );
+  }
+
+  return res.json();
+}
+
+/** Follows nextOffset until exhausted (-1), returning every row for one settlement period. */
+export async function fetchAllRowsForDate(
+  token: string,
+  reportDate: string
+): Promise<ReconRow[]> {
+  const rows: ReconRow[] = [];
+  let offset = 0;
+
+  while (offset !== -1) {
+    const page = await fetchReconFileJsonPage(token, reportDate, offset);
+    rows.push(...page.reportData);
+    offset = page.nextOffset;
+  }
+
+  return rows;
+}
+
+/** Pulls every available settlement period's rows in one shot. */
+export async function fetchAllAvailableRows(token: string): Promise<ReconRow[]> {
+  const { availableApReportDates } = await listAvailableReconFiles(token);
+
+  const rows: ReconRow[] = [];
+  for (const reportDate of availableApReportDates) {
+    rows.push(...(await fetchAllRowsForDate(token, reportDate)));
+  }
+  return rows;
+}

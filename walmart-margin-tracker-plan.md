@@ -1,5 +1,31 @@
 # Walmart Seller Margin Tracker — V1 Plan
 
+## Current Build: Stateless MVP (2026-09-23)
+
+**What's actually deployed right now deliberately deviates from the plan below** — this section documents that deviation; the rest of the document is the original persisted-architecture design, still the intended direction later.
+
+At your request, the live app currently has **no login and no database use at all**:
+
+- No Vercel Authentication — anyone with the URL can open the app (removed 2026-09-23; it was enabled, then explicitly turned back off for this).
+- A single page (`/margins`) with a form for Walmart Client ID + Client Secret, pasted fresh every visit — kept only in React state, never `localStorage`/`sessionStorage`, never sent anywhere but this one request.
+- A Server Action (`app/(dashboard)/margins/actions.ts`) uses those credentials to pull **every available settlement period live**, on every page load. Nothing is written to Neon — the `sku_costs`/`walmart_recon_rows`/`sync_runs` tables and their schema still exist (Phase 0/1 work, kept for later) but this flow never touches them.
+- SKU costs are typed in on the same page, held in React state only. Refresh, and both the pulled data and the entered costs are gone. **This was a deliberate, explicit choice** — the alternative (costs persisted, only Walmart data ephemeral) was offered and declined in favor of true statelessness for this MVP pass.
+- Explicitly designed to be usable by **any Walmart seller**, not just BYRAF — whoever's Client ID/Secret gets pasted in, that's whose data displays. The key itself is the access control now, not a login.
+
+**Real trade-offs this accepts, worth remembering:**
+- Every page load re-fetches and re-parses the *entire* available settlement history (currently small — 31 rows, 1 period — but this will not stay cheap or fast as history grows, and has no pagination/backfill checkpointing to fall back on).
+- Costs must be re-typed every single session — there is no bulk import in this build.
+- No refund/adjustment reconciliation across time the way the persisted design handles it — a session only ever sees whatever `availableReconFiles` returns at that moment.
+- The app itself (not the data) is now public to anyone with the link, gated only by whether they have real Walmart credentials to type in.
+
+**What was learned building this, now true for the real plan too:**
+- `reconFileJson` needed params never documented by Walmart, discovered from the API's own error messages: `reportDate` (MMDDYYYY), `offset` (0-based), `noOfRecords` (page size). Pagination ends when the response's `nextOffset` is `-1`.
+- There's a real `Fulfillment Type` field directly on each row (`"Seller Fulfilled"` seen so far) — **no need to infer WFS-vs-self from fee-type presence**, as originally planned. Simpler than expected.
+- Real `Amount Type` values seen: `Product Price` (revenue), `Product tax`, `Product tax withheld`, `Commission on Product`, `Fee/Reimbursement`. Real `Transaction Type` values: `Sale`, `Adjustment`, `PaymentSummary`.
+- A `Transaction Description: "Walmart Shipping Label Service Charge"` row (an `Adjustment` / `Fee/Reimbursement`) confirmed the plan's assumption that self-fulfilled label costs bought through Walmart do land on the recon report as a fee.
+
+---
+
 ## What We're Trying to Build
 
 Walmart Marketplace has no built-in way to enter what you paid for an item, so there's no native profit margin view — you only see your selling price and fees separately. This tool closes that gap for BYRAF Distribution's Walmart sales.
