@@ -87,30 +87,74 @@ export function groupReconRows(rows: ReconRow[]): OrderLineSummary[] {
   return [...groups.values()];
 }
 
+/** What you enter per SKU. All optional - the math degrades gracefully. */
+export interface SkuInputs {
+  unitCost?: number;
+  boxCost?: number;
+  boxLength?: number;
+  boxWidth?: number;
+  boxHeight?: number;
+}
+
+/**
+ * The divisor carriers use to turn box volume into billable "dimensional
+ * weight" - 139 is the common domestic ground figure. Shown so an
+ * oversized box's shipping charge is explainable rather than mysterious;
+ * it is an estimate, not what Walmart actually billed.
+ */
+export const DIM_DIVISOR = 139;
+
+export function cubicInches(i: SkuInputs): number | null {
+  if (!i.boxLength || !i.boxWidth || !i.boxHeight) return null;
+  return i.boxLength * i.boxWidth * i.boxHeight;
+}
+
+export function dimWeight(i: SkuInputs): number | null {
+  const cu = cubicInches(i);
+  return cu === null ? null : cu / DIM_DIVISOR;
+}
+
 export interface MarginRow extends OrderLineSummary {
   hasCost: boolean;
+  itemCostTotal: number;
+  boxCostTotal: number;
   costTotal: number;
   profit: number;
   margin: number | null;
 }
 
 /**
- * profit is correct even for a SKU with no cost entered yet (falls back
- * to cost=0) or an unrecognized Amount Type, since netAmount already
+ * profit is correct even for a SKU with nothing entered yet (costs fall
+ * back to 0) or an unrecognized Amount Type, since netAmount already
  * sums every row for the line regardless of category. Only the margin
  * percentage needs the revenue split.
+ *
+ * Item cost scales with qty; box cost does not - one shipment, one box.
  */
 export function computeMargins(
   lines: OrderLineSummary[],
-  costs: Record<string, number>
+  inputs: Record<string, SkuInputs>
 ): MarginRow[] {
   return lines.map((line) => {
-    const unitCost = costs[line.sku];
+    const { unitCost, boxCost } = inputs[line.sku] ?? {};
     const hasCost = typeof unitCost === "number" && !Number.isNaN(unitCost);
-    const costTotal = hasCost ? unitCost * line.qty : 0;
+
+    const itemCostTotal = hasCost ? unitCost * line.qty : 0;
+    const boxCostTotal =
+      typeof boxCost === "number" && !Number.isNaN(boxCost) ? boxCost : 0;
+    const costTotal = itemCostTotal + boxCostTotal;
+
     const profit = line.netAmount - costTotal;
     const margin = line.revenue !== 0 ? profit / line.revenue : null;
-    return { ...line, hasCost, costTotal, profit, margin };
+    return {
+      ...line,
+      hasCost,
+      itemCostTotal,
+      boxCostTotal,
+      costTotal,
+      profit,
+      margin,
+    };
   });
 }
 
@@ -123,6 +167,8 @@ export function sumMargins(rows: MarginRow[]) {
       tax: acc.tax + r.tax,
       otherFees: acc.otherFees + r.otherFees,
       netAmount: acc.netAmount + r.netAmount,
+      itemCostTotal: acc.itemCostTotal + r.itemCostTotal,
+      boxCostTotal: acc.boxCostTotal + r.boxCostTotal,
       costTotal: acc.costTotal + r.costTotal,
       profit: acc.profit + r.profit,
     }),
@@ -133,6 +179,8 @@ export function sumMargins(rows: MarginRow[]) {
       tax: 0,
       otherFees: 0,
       netAmount: 0,
+      itemCostTotal: 0,
+      boxCostTotal: 0,
       costTotal: 0,
       profit: 0,
     }

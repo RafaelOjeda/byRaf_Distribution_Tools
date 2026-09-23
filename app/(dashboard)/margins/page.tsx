@@ -1,20 +1,48 @@
 "use client";
 
 import { type FormEvent, useMemo, useState } from "react";
-import { computeMargins, groupReconRows, sumMargins } from "@/lib/margin";
+import {
+  DIM_DIVISOR,
+  computeMargins,
+  cubicInches,
+  dimWeight,
+  groupReconRows,
+  sumMargins,
+  type SkuInputs,
+} from "@/lib/margin";
 import type { ReconRow } from "@/lib/walmart/recon";
 import { loadWalmartData } from "./actions";
 
 const money = (n: number) =>
   `${n < 0 ? "-" : ""}$${Math.abs(n).toFixed(2)}`;
 
+type SkuField = keyof SkuInputs;
+
+const SKU_FIELDS: { key: SkuField; label: string; step: string }[] = [
+  { key: "unitCost", label: "Unit cost", step: "0.01" },
+  { key: "boxCost", label: "Box cost", step: "0.01" },
+  { key: "boxLength", label: "L (in)", step: "0.1" },
+  { key: "boxWidth", label: "W (in)", step: "0.1" },
+  { key: "boxHeight", label: "H (in)", step: "0.1" },
+];
+
 export default function MarginsPage() {
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [rows, setRows] = useState<ReconRow[] | null>(null);
-  const [costs, setCosts] = useState<Record<string, string>>({});
+  // Raw strings keyed by SKU then field, so a half-typed "1." doesn't fight the input.
+  const [inputs, setInputs] = useState<
+    Record<string, Partial<Record<SkuField, string>>>
+  >({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function setField(sku: string, field: SkuField, value: string) {
+    setInputs((prev) => ({
+      ...prev,
+      [sku]: { ...prev[sku], [field]: value },
+    }));
+  }
 
   async function handleLoad(e: FormEvent) {
     e.preventDefault();
@@ -31,18 +59,22 @@ export default function MarginsPage() {
 
   const lines = useMemo(() => (rows ? groupReconRows(rows) : []), [rows]);
 
-  const numericCosts = useMemo(() => {
-    const out: Record<string, number> = {};
-    for (const [sku, value] of Object.entries(costs)) {
-      const n = parseFloat(value);
-      if (!Number.isNaN(n)) out[sku] = n;
+  const parsedInputs = useMemo(() => {
+    const out: Record<string, SkuInputs> = {};
+    for (const [sku, fields] of Object.entries(inputs)) {
+      const parsed: SkuInputs = {};
+      for (const { key } of SKU_FIELDS) {
+        const n = parseFloat(fields[key] ?? "");
+        if (!Number.isNaN(n)) parsed[key] = n;
+      }
+      out[sku] = parsed;
     }
     return out;
-  }, [costs]);
+  }, [inputs]);
 
   const margins = useMemo(
-    () => computeMargins(lines, numericCosts),
-    [lines, numericCosts]
+    () => computeMargins(lines, parsedInputs),
+    [lines, parsedInputs]
   );
 
   const skus = useMemo(
@@ -106,7 +138,7 @@ export default function MarginsPage() {
         <button
           onClick={() => {
             setRows(null);
-            setCosts({});
+            setInputs({});
           }}
           className="text-sm underline"
         >
@@ -115,34 +147,78 @@ export default function MarginsPage() {
       </div>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">1. Enter your cost per SKU</h2>
+        <h2 className="font-medium">1. Enter your costs and box per SKU</h2>
         <p className="text-sm text-black/60 dark:text-white/60">
-          Not saved — re-enter each session.
+          Not saved — re-enter each session. Box cost counts once per
+          shipment; unit cost is multiplied by quantity.
         </p>
-        <div className="flex max-w-md flex-col gap-2">
-          {skus.map((sku) => (
-            <label
-              key={sku}
-              className="flex items-center justify-between gap-3 text-sm"
-            >
-              <span className="truncate">{sku}</span>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="0.00"
-                value={costs[sku] ?? ""}
-                onChange={(e) =>
-                  setCosts((c) => ({ ...c, [sku]: e.target.value }))
-                }
-                className="w-28 rounded border border-black/15 px-2 py-1 text-right dark:border-white/20"
-              />
-            </label>
-          ))}
-          {skus.length === 0 && (
-            <p className="text-sm text-black/60 dark:text-white/60">
-              No SKUs found in the returned data.
-            </p>
-          )}
+        <div className="overflow-x-auto">
+          <table className="text-sm whitespace-nowrap">
+            <thead>
+              <tr className="border-b border-black/10 text-left dark:border-white/10">
+                <th className="py-1 pr-3">SKU</th>
+                {SKU_FIELDS.map((f) => (
+                  <th key={f.key} className="py-1 pr-3 text-right">
+                    {f.label}
+                  </th>
+                ))}
+                <th className="py-1 pr-3 text-right">Cu in</th>
+                <th
+                  className="py-1 pr-3 text-right"
+                  title={`Volume ÷ ${DIM_DIVISOR}. An estimate of billable dimensional weight — not what Walmart actually charged.`}
+                >
+                  Dim wt
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {skus.map((sku) => {
+                const parsed = parsedInputs[sku] ?? {};
+                const cu = cubicInches(parsed);
+                const dim = dimWeight(parsed);
+                return (
+                  <tr
+                    key={sku}
+                    className="border-b border-black/5 dark:border-white/5"
+                  >
+                    <td className="py-1 pr-3">{sku}</td>
+                    {SKU_FIELDS.map((f) => (
+                      <td key={f.key} className="py-1 pr-3">
+                        <input
+                          type="number"
+                          step={f.step}
+                          min="0"
+                          placeholder="—"
+                          aria-label={`${f.label} for ${sku}`}
+                          value={inputs[sku]?.[f.key] ?? ""}
+                          onChange={(e) =>
+                            setField(sku, f.key, e.target.value)
+                          }
+                          className="w-24 rounded border border-black/15 px-2 py-1 text-right dark:border-white/20"
+                        />
+                      </td>
+                    ))}
+                    <td className="py-1 pr-3 text-right text-black/60 dark:text-white/60">
+                      {cu === null ? "—" : cu.toFixed(0)}
+                    </td>
+                    <td className="py-1 pr-3 text-right text-black/60 dark:text-white/60">
+                      {dim === null ? "—" : `${dim.toFixed(1)} lb`}
+                    </td>
+                  </tr>
+                );
+              })}
+              {skus.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={SKU_FIELDS.length + 3}
+                    className="py-3 text-black/60 dark:text-white/60"
+                  >
+                    No SKUs found in the returned data.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -206,8 +282,11 @@ export default function MarginsPage() {
                     {money(m.tax + m.otherFees)}
                   </td>
                   <td className="py-1 pr-3 text-right">{money(m.netAmount)}</td>
-                  <td className="py-1 pr-3 text-right">
-                    {m.hasCost ? (
+                  <td
+                    className="py-1 pr-3 text-right"
+                    title={`Item ${money(m.itemCostTotal)} + box ${money(m.boxCostTotal)}`}
+                  >
+                    {m.costTotal !== 0 || m.hasCost ? (
                       money(-m.costTotal)
                     ) : (
                       <span className="text-amber-600">—</span>
@@ -260,7 +339,10 @@ export default function MarginsPage() {
                   <td className="py-2 pr-3 text-right">
                     {money(totals.netAmount)}
                   </td>
-                  <td className="py-2 pr-3 text-right">
+                  <td
+                    className="py-2 pr-3 text-right"
+                    title={`Item ${money(totals.itemCostTotal)} + box ${money(totals.boxCostTotal)}`}
+                  >
                     {money(-totals.costTotal)}
                   </td>
                   <td className="py-2 pr-3 text-right">
