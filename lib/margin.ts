@@ -20,6 +20,7 @@ export interface OrderLineSummary {
   noEstimate: boolean;
   estimateNote?: string;
   orderDate?: string; // YYYY-MM-DD, estimated lines only
+  postedDate?: string; // YYYY-MM-DD settlement posting date, settled lines only
 
   // Components. Every row lands in exactly one of these, so they always
   // sum to netAmount - nothing is silently dropped.
@@ -40,6 +41,12 @@ export interface OrderLineSummary {
  */
 export function normalizeSku(sku: string): string {
   return sku.trim().toUpperCase();
+}
+
+/** Walmart sends MM/DD/YYYY; ISO sorts and compares correctly as a string. */
+function toIsoDate(mdy: string | undefined): string | undefined {
+  const m = mdy?.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m ? `${m[3]}-${m[1]}-${m[2]}` : undefined;
 }
 
 type Component = "revenue" | "commission" | "shipping" | "tax" | "otherFees";
@@ -97,6 +104,11 @@ export function groupReconRows(rows: ReconRow[]): OrderLineSummary[] {
     group[classify(row["Amount Type"], row["Transaction Description"])] +=
       amount;
     group.netAmount += amount;
+
+    const posted = toIsoDate(row["Transaction Posted Timestamp"]);
+    if (posted && (!group.postedDate || posted < group.postedDate)) {
+      group.postedDate = posted; // earliest row wins
+    }
 
     if (!group.sku && row["Partner Item Id"]) group.sku = row["Partner Item Id"];
     if (!group.itemName && row["Partner Item Name"]) {

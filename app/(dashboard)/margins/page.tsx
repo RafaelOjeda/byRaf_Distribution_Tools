@@ -19,6 +19,7 @@ import {
   type SkuInputs,
   type SkuSummary,
 } from "@/lib/margin";
+import { orderLinesToCsv, skuSummaryToCsv } from "@/lib/csv";
 import type { InventoryItem } from "@/lib/walmart/inventory";
 import type { ReconRow } from "@/lib/walmart/recon";
 import {
@@ -30,6 +31,22 @@ import {
 
 const money = (n: number) =>
   `${n < 0 ? "-" : ""}$${Math.abs(n).toFixed(2)}`;
+
+/** Hands a string to the browser as a file. Nothing leaves the page. */
+function downloadCsv(prefix: string, csv: string) {
+  const now = new Date();
+  const local = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const url = URL.createObjectURL(
+    new Blob([csv], { type: "text/csv;charset=utf-8" })
+  );
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${prefix}-${local}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 /** Walmart sends dates as MMDDYYYY. */
 function formatReportDate(d: string): string {
@@ -595,7 +612,19 @@ export default function MarginsPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">2. By SKU</h2>
+        <div className="flex items-baseline justify-between gap-4">
+          <h2 className="font-medium">2. By SKU</h2>
+          <button
+            onClick={() =>
+              downloadCsv("walmart-by-sku", skuSummaryToCsv(skuSummaries))
+            }
+            disabled={skuSummaries.length === 0}
+            className="text-sm underline disabled:opacity-40"
+            title="Downloads this table as a CSV. Estimated rows are included and marked in the Status/line-count columns; cells that aren't known are left blank."
+          >
+            Download CSV
+          </button>
+        </div>
         <p className="text-sm text-black/60 dark:text-white/60">
           Settled and estimated order lines rolled up per product. A SKU
           with no settled history yet can&apos;t have its fees estimated,
@@ -605,7 +634,19 @@ export default function MarginsPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-medium">3. Order lines</h2>
+        <div className="flex items-baseline justify-between gap-4">
+          <h2 className="font-medium">3. Order lines</h2>
+          <button
+            onClick={() =>
+              downloadCsv("walmart-order-lines", orderLinesToCsv(margins))
+            }
+            disabled={margins.length === 0}
+            className="text-sm underline disabled:opacity-40"
+            title="Downloads this table as a CSV, one row per order line, with a Status column (Settled / Estimated / Not estimable). Excel shows the 15-digit purchase order numbers in scientific notation until you widen the column; the values are intact."
+          >
+            Download CSV
+          </button>
+        </div>
         <p className="text-sm text-black/60 dark:text-white/60">
           Revenue − commission − shipping − other − your cost = profit. Fee
           columns are shown as Walmart reports them (negative = money out).
