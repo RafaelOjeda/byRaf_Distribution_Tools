@@ -11,10 +11,21 @@ import {
   type SkuInputs,
 } from "@/lib/margin";
 import type { ReconRow } from "@/lib/walmart/recon";
-import { loadWalmartData } from "./actions";
+import { listAvailableReports, loadWalmartData } from "./actions";
 
 const money = (n: number) =>
   `${n < 0 ? "-" : ""}$${Math.abs(n).toFixed(2)}`;
+
+/** Walmart sends dates as MMDDYYYY. */
+function formatReportDate(d: string): string {
+  const m = d.match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (!m) return d;
+  const [, mm, dd, yyyy] = m;
+  return new Date(`${yyyy}-${mm}-${dd}T00:00:00`).toLocaleDateString(
+    undefined,
+    { year: "numeric", month: "short", day: "numeric" }
+  );
+}
 
 type SkuField = keyof SkuInputs;
 
@@ -26,9 +37,14 @@ const SKU_FIELDS: { key: SkuField; label: string; step: string }[] = [
   { key: "boxHeight", label: "H (in)", step: "0.1" },
 ];
 
+type Step = "credentials" | "reports" | "data";
+
 export default function MarginsPage() {
+  const [step, setStep] = useState<Step>("credentials");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
+  const [reportDates, setReportDates] = useState<string[]>([]);
+  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
   const [rows, setRows] = useState<ReconRow[] | null>(null);
   // Raw strings keyed by SKU then field, so a half-typed "1." doesn't fight the input.
   const [inputs, setInputs] = useState<
@@ -44,17 +60,62 @@ export default function MarginsPage() {
     }));
   }
 
-  async function handleLoad(e: FormEvent) {
+  function toggleDate(date: string) {
+    setSelectedDates((prev) => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date);
+      else next.add(date);
+      return next;
+    });
+  }
+
+  async function handleListReports(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const result = await loadWalmartData(clientId, clientSecret);
+    const result = await listAvailableReports(clientId, clientSecret);
+    setLoading(false);
+    if ("error" in result) {
+      setError(result.error);
+      return;
+    }
+    if (result.reportDates.length === 0) {
+      setError(
+        "Walmart has no settlement reports available for this account yet."
+      );
+      return;
+    }
+    setReportDates(result.reportDates);
+    setSelectedDates(new Set(result.reportDates)); // default: all selected
+    setStep("reports");
+  }
+
+  async function handleLoadSelected() {
+    setLoading(true);
+    setError(null);
+    const result = await loadWalmartData(
+      clientId,
+      clientSecret,
+      [...selectedDates]
+    );
     setLoading(false);
     if ("error" in result) {
       setError(result.error);
       return;
     }
     setRows(result.rows);
+    setStep("data");
+  }
+
+  function startOver() {
+    setStep("credentials");
+    setClientId("");
+    setClientSecret("");
+    setReportDates([]);
+    setSelectedDates(new Set());
+    setRows(null);
+    setInputs({});
+    setError(null);
   }
 
   const lines = useMemo(() => (rows ? groupReconRows(rows) : []), [rows]);
@@ -84,18 +145,18 @@ export default function MarginsPage() {
 
   const totals = useMemo(() => sumMargins(margins), [margins]);
 
-  if (!rows) {
+  if (step === "credentials") {
     return (
       <div className="flex max-w-md flex-col gap-6">
         <div>
           <h1 className="text-xl font-semibold">Margins</h1>
           <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-            Paste your Walmart Marketplace API credentials to pull your real
-            settlement data. Nothing is saved anywhere — refresh this page
-            and it&apos;s gone.
+            Paste your Walmart Marketplace API credentials to see which
+            settlement reports are available. Nothing is saved anywhere —
+            refresh this page and it&apos;s gone.
           </p>
         </div>
-        <form onSubmit={handleLoad} className="flex flex-col gap-3">
+        <form onSubmit={handleListReports} className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-sm">
             Client ID
             <input
@@ -123,7 +184,7 @@ export default function MarginsPage() {
             disabled={loading}
             className="rounded bg-black px-3 py-2 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-black"
           >
-            {loading ? "Loading…" : "Load my data"}
+            {loading ? "Checking…" : "See available reports"}
           </button>
           {error && <p className="text-sm text-red-600">{error}</p>}
         </form>
@@ -131,19 +192,94 @@ export default function MarginsPage() {
     );
   }
 
+  if (step === "reports") {
+    return (
+      <div className="flex max-w-md flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold">Settlement reports</h1>
+          <button onClick={startOver} className="text-sm underline">
+            Start over
+          </button>
+        </div>
+        <p className="text-sm text-black/60 dark:text-white/60">
+          These are the same reports Walmart shows under Payments in Seller
+          Center — one per settlement period, roughly every two weeks. Pick
+          which to pull.
+        </p>
+        <div className="flex flex-col gap-1">
+          {reportDates.map((date) => (
+            <label
+              key={date}
+              className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-black/5 dark:hover:bg-white/5"
+            >
+              <input
+                type="checkbox"
+                checked={selectedDates.has(date)}
+                onChange={() => toggleDate(date)}
+              />
+              {formatReportDate(date)}
+              <span className="text-black/40 dark:text-white/40">
+                ({date})
+              </span>
+            </label>
+          ))}
+        </div>
+        <div className="flex gap-4 text-sm">
+          <button
+            onClick={() => setSelectedDates(new Set(reportDates))}
+            className="underline"
+          >
+            Select all
+          </button>
+          <button
+            onClick={() => setSelectedDates(new Set())}
+            className="underline"
+          >
+            Select none
+          </button>
+        </div>
+        <button
+          onClick={handleLoadSelected}
+          disabled={loading || selectedDates.size === 0}
+          className="rounded bg-black px-3 py-2 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-black"
+        >
+          {loading
+            ? "Loading…"
+            : `Load ${selectedDates.size} report${selectedDates.size === 1 ? "" : "s"}`}
+        </button>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Margins</h1>
-        <button
-          onClick={() => {
-            setRows(null);
-            setInputs({});
-          }}
-          className="text-sm underline"
-        >
-          Start over
-        </button>
+        <div>
+          <h1 className="text-xl font-semibold">Margins</h1>
+          <p className="text-sm text-black/60 dark:text-white/60">
+            {[...selectedDates]
+              .sort()
+              .map(formatReportDate)
+              .join(", ")}
+          </p>
+        </div>
+        <div className="flex gap-4">
+          <button
+            onClick={() => {
+              setRows(null);
+              setInputs({});
+              setError(null);
+              setStep("reports");
+            }}
+            className="text-sm underline"
+          >
+            Change reports
+          </button>
+          <button onClick={startOver} className="text-sm underline">
+            Start over
+          </button>
+        </div>
       </div>
 
       <section className="flex flex-col gap-3">

@@ -101,13 +101,20 @@ export async function fetchAllRowsForDate(
   return rows;
 }
 
-/** Pulls every available settlement period's rows in one shot. */
-export async function fetchAllAvailableRows(token: string): Promise<ReconRow[]> {
-  const { availableApReportDates } = await listAvailableReconFiles(token);
-
+/** Pulls rows for a chosen set of settlement periods. */
+export async function fetchRowsForDates(
+  token: string,
+  reportDates: string[]
+): Promise<ReconRow[]> {
   const rows: ReconRow[] = [];
-  for (const reportDate of availableApReportDates) {
+  for (const reportDate of reportDates) {
     rows.push(...(await fetchAllRowsForDate(token, reportDate)));
   }
   return rows;
+}
+
+/** Pulls every available settlement period's rows in one shot. */
+export async function fetchAllAvailableRows(token: string): Promise<ReconRow[]> {
+  const { availableApReportDates } = await listAvailableReconFiles(token);
+  return fetchRowsForDates(token, availableApReportDates);
 }
