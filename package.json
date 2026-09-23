@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:push": "dotenv -e .env.local -- drizzle-kit push",
-    "db:studio": "dotenv -e .env.local -- drizzle-kit studio"
+    "db:studio": "dotenv -e .env.local -- drizzle-kit studio",
+    "test:walmart": "dotenv -e .env.local -- tsx scripts/test-walmart-connection.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
@@ -27,6 +28,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
     "tailwindcss": "^4",
+    "tsx": "^4.19.0",
     "typescript": "^5"
   }
 }
