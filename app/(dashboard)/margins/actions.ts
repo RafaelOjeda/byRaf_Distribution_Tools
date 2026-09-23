@@ -1,11 +1,24 @@
 "use server";
 
-import { fetchWalmartToken } from "@/lib/walmart/auth";
 import {
+  buildSkuHistory,
+  estimateUnsettled,
+  groupReconRows,
+  settlementKey,
+  type OrderLineSummary,
+} from "@/lib/margin";
+import { fetchWalmartToken } from "@/lib/walmart/auth";
+import { fetchOrdersSince } from "@/lib/walmart/orders";
+import {
+  fetchAllAvailableRows,
   fetchRowsForDates,
   listAvailableReconFiles,
   type ReconRow,
 } from "@/lib/walmart/recon";
+
+// Settlement runs ~2-3 weeks behind, so 60 days comfortably covers every
+// order that could still be unsettled.
+const UNSETTLED_LOOKBACK_DAYS = 60;
 
 type Result<T> = T | { error: string };
 
@@ -59,4 +72,36 @@ export async function loadWalmartData(
   return withToken(clientId, clientSecret, async (token) => ({
     rows: await fetchRowsForDates(token, reportDates),
   }));
+}
+
+/**
+ * Orders Walmart hasn't settled yet, with commission and shipping
+ * estimated from each SKU's settled history. Reads every available
+ * report (not just the selected ones) so "settled" and the history mean
+ * the same thing no matter which reports are being viewed. Only derived
+ * line summaries leave the server - raw orders carry customer PII.
+ */
+export async function loadUnsettledOrders(
+  clientId: string,
+  clientSecret: string
+): Promise<Result<{ lines: OrderLineSummary[] }>> {
+  return withToken(clientId, clientSecret, async (token) => {
+    const since = new Date(Date.now() - UNSETTLED_LOOKBACK_DAYS * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+
+    const [settledRows, orders] = await Promise.all([
+      fetchAllAvailableRows(token),
+      fetchOrdersSince(token, since),
+    ]);
+
+    const settled = groupReconRows(settledRows);
+    const settledKeys = new Set(
+      settled.map((l) => settlementKey(l.purchaseOrderNo, l.sku))
+    );
+
+    return {
+      lines: estimateUnsettled(orders, settledKeys, buildSkuHistory(settled)),
+    };
+  });
 }

@@ -8,10 +8,15 @@ import {
   dimWeight,
   groupReconRows,
   sumMargins,
+  type OrderLineSummary,
   type SkuInputs,
 } from "@/lib/margin";
 import type { ReconRow } from "@/lib/walmart/recon";
-import { listAvailableReports, loadWalmartData } from "./actions";
+import {
+  listAvailableReports,
+  loadUnsettledOrders,
+  loadWalmartData,
+} from "./actions";
 
 const money = (n: number) =>
   `${n < 0 ? "-" : ""}$${Math.abs(n).toFixed(2)}`;
@@ -46,6 +51,8 @@ export default function MarginsPage() {
   const [reportDates, setReportDates] = useState<string[]>([]);
   const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
   const [rows, setRows] = useState<ReconRow[] | null>(null);
+  const [unsettled, setUnsettled] = useState<OrderLineSummary[]>([]);
+  const [unsettledError, setUnsettledError] = useState<string | null>(null);
   // Raw strings keyed by SKU then field, so a half-typed "1." doesn't fight the input.
   const [inputs, setInputs] = useState<
     Record<string, Partial<Record<SkuField, string>>>
@@ -93,32 +100,48 @@ export default function MarginsPage() {
   async function handleLoadSelected() {
     setLoading(true);
     setError(null);
-    const result = await loadWalmartData(
-      clientId,
-      clientSecret,
-      [...selectedDates]
-    );
+    setUnsettledError(null);
+    const [result, recent] = await Promise.all([
+      loadWalmartData(clientId, clientSecret, [...selectedDates]),
+      loadUnsettledOrders(clientId, clientSecret),
+    ]);
     setLoading(false);
     if ("error" in result) {
       setError(result.error);
       return;
     }
+    // Recent orders are a bonus - if they fail, still show settled data.
+    if ("error" in recent) {
+      setUnsettledError(recent.error);
+      setUnsettled([]);
+    } else {
+      setUnsettled(recent.lines);
+    }
     setRows(result.rows);
     setStep("data");
   }
 
+  function clearData() {
+    setRows(null);
+    setUnsettled([]);
+    setUnsettledError(null);
+    setInputs({});
+    setError(null);
+  }
+
   function startOver() {
+    clearData();
     setStep("credentials");
     setClientId("");
     setClientSecret("");
     setReportDates([]);
     setSelectedDates(new Set());
-    setRows(null);
-    setInputs({});
-    setError(null);
   }
 
-  const lines = useMemo(() => (rows ? groupReconRows(rows) : []), [rows]);
+  const lines = useMemo(
+    () => [...unsettled, ...(rows ? groupReconRows(rows) : [])],
+    [rows, unsettled]
+  );
 
   const parsedInputs = useMemo(() => {
     const out: Record<string, SkuInputs> = {};
@@ -143,7 +166,24 @@ export default function MarginsPage() {
     [lines]
   );
 
-  const totals = useMemo(() => sumMargins(margins), [margins]);
+  // Settled and estimated totals are kept apart so exact numbers never
+  // get blended with projections; no-estimate lines are left out entirely.
+  const settledTotals = useMemo(
+    () => sumMargins(margins.filter((m) => m.status === "settled")),
+    [margins]
+  );
+  const estimatedTotals = useMemo(
+    () =>
+      sumMargins(
+        margins.filter((m) => m.status === "estimated" && !m.noEstimate)
+      ),
+    [margins]
+  );
+  const settledCount = margins.filter((m) => m.status === "settled").length;
+  const estimatedCount = margins.filter(
+    (m) => m.status === "estimated" && !m.noEstimate
+  ).length;
+  const noEstimateCount = margins.filter((m) => m.noEstimate).length;
 
   if (step === "credentials") {
     return (
@@ -258,18 +298,24 @@ export default function MarginsPage() {
         <div>
           <h1 className="text-xl font-semibold">Margins</h1>
           <p className="text-sm text-black/60 dark:text-white/60">
+            Settled:{" "}
             {[...selectedDates]
               .sort()
               .map(formatReportDate)
               .join(", ")}
+            {unsettled.length > 0 &&
+              ` · plus ${unsettled.length} recent order line${unsettled.length === 1 ? "" : "s"} not yet settled`}
           </p>
+          {unsettledError && (
+            <p className="text-sm text-amber-600">
+              Couldn&apos;t load recent orders: {unsettledError}
+            </p>
+          )}
         </div>
         <div className="flex gap-4">
           <button
             onClick={() => {
-              setRows(null);
-              setInputs({});
-              setError(null);
+              clearData();
               setStep("reports");
             }}
             className="text-sm underline"
@@ -363,11 +409,16 @@ export default function MarginsPage() {
         <p className="text-sm text-black/60 dark:text-white/60">
           Revenue − commission − shipping − other − your cost = profit. Fee
           columns are shown as Walmart reports them (negative = money out).
+          <span className="italic"> Est.</span> rows are orders Walmart
+          hasn&apos;t settled yet: revenue is exact, but commission and
+          shipping are projected from that SKU&apos;s settled history (hover
+          for details) and switch to exact figures once the order settles.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm whitespace-nowrap">
             <thead>
               <tr className="border-b border-black/10 text-left dark:border-white/10">
+                <th className="py-1 pr-3">Status</th>
                 <th className="py-1 pr-3">SKU</th>
                 <th className="py-1 pr-3">Item</th>
                 <th className="py-1 pr-3">Fulfillment</th>
@@ -383,69 +434,97 @@ export default function MarginsPage() {
               </tr>
             </thead>
             <tbody>
-              {margins.map((m) => (
-                <tr
-                  key={`${m.purchaseOrderNo}-${m.purchaseOrderLine}`}
-                  className="border-b border-black/5 dark:border-white/5"
-                >
-                  <td className="py-1 pr-3">{m.sku}</td>
-                  <td
-                    className="max-w-[16rem] truncate py-1 pr-3"
-                    title={m.itemName}
+              {margins.map((m) => {
+                const est = m.status === "estimated";
+                const noEst = (
+                  <span
+                    className="text-amber-600"
+                    title={m.estimateNote}
                   >
-                    {m.itemName}
-                  </td>
-                  <td className="py-1 pr-3">{m.fulfillmentType}</td>
-                  <td className="py-1 pr-3 text-right">{m.qty}</td>
-                  <td className="py-1 pr-3 text-right">{money(m.revenue)}</td>
-                  <td
-                    className="py-1 pr-3 text-right text-red-600 dark:text-red-400"
-                    title={
-                      m.commissionRate
-                        ? `Commission rate: ${m.commissionRate}%`
-                        : undefined
-                    }
+                    no estimate
+                  </span>
+                );
+                return (
+                  <tr
+                    key={`${m.status}-${m.purchaseOrderNo}-${m.purchaseOrderLine}`}
+                    className={`border-b border-black/5 dark:border-white/5 ${est ? "italic text-black/70 dark:text-white/70" : ""}`}
                   >
-                    {money(m.commission)}
-                  </td>
-                  <td className="py-1 pr-3 text-right text-red-600 dark:text-red-400">
-                    {money(m.shipping)}
-                  </td>
-                  <td
-                    className="py-1 pr-3 text-right"
-                    title={`Tax collected/withheld: ${money(m.tax)}`}
-                  >
-                    {money(m.tax + m.otherFees)}
-                  </td>
-                  <td className="py-1 pr-3 text-right">{money(m.netAmount)}</td>
-                  <td
-                    className="py-1 pr-3 text-right"
-                    title={`Item ${money(m.itemCostTotal)} + box ${money(m.boxCostTotal)}`}
-                  >
-                    {m.costTotal !== 0 || m.hasCost ? (
-                      money(-m.costTotal)
-                    ) : (
-                      <span className="text-amber-600">—</span>
-                    )}
-                  </td>
-                  <td className="py-1 pr-3 text-right font-medium">
-                    {money(m.profit)}
-                  </td>
-                  <td className="py-1 pr-3 text-right">
-                    {!m.hasCost ? (
-                      <span className="text-amber-600">no cost</span>
-                    ) : m.margin === null ? (
-                      "—"
-                    ) : (
-                      `${(m.margin * 100).toFixed(1)}%`
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    <td
+                      className="py-1 pr-3"
+                      title={
+                        est ? `Ordered ${m.orderDate} · ${m.estimateNote}` : undefined
+                      }
+                    >
+                      {est ? `Est. · ${m.orderDate?.slice(5)}` : "Settled"}
+                    </td>
+                    <td className="py-1 pr-3">{m.sku}</td>
+                    <td
+                      className="max-w-[16rem] truncate py-1 pr-3"
+                      title={m.itemName}
+                    >
+                      {m.itemName}
+                    </td>
+                    <td className="py-1 pr-3">{m.fulfillmentType}</td>
+                    <td className="py-1 pr-3 text-right">{m.qty}</td>
+                    <td className="py-1 pr-3 text-right">{money(m.revenue)}</td>
+                    <td
+                      className="py-1 pr-3 text-right text-red-600 dark:text-red-400"
+                      title={
+                        est
+                          ? m.estimateNote
+                          : m.commissionRate
+                            ? `Commission rate: ${m.commissionRate}%`
+                            : undefined
+                      }
+                    >
+                      {m.noEstimate ? noEst : money(m.commission)}
+                    </td>
+                    <td
+                      className="py-1 pr-3 text-right text-red-600 dark:text-red-400"
+                      title={est ? m.estimateNote : undefined}
+                    >
+                      {m.noEstimate ? noEst : money(m.shipping)}
+                    </td>
+                    <td
+                      className="py-1 pr-3 text-right"
+                      title={`Tax collected/withheld: ${money(m.tax)}`}
+                    >
+                      {money(m.tax + m.otherFees)}
+                    </td>
+                    <td className="py-1 pr-3 text-right">
+                      {m.noEstimate ? noEst : money(m.netAmount)}
+                    </td>
+                    <td
+                      className="py-1 pr-3 text-right"
+                      title={`Item ${money(m.itemCostTotal)} + box ${money(m.boxCostTotal)}`}
+                    >
+                      {m.costTotal !== 0 || m.hasCost ? (
+                        money(-m.costTotal)
+                      ) : (
+                        <span className="text-amber-600">—</span>
+                      )}
+                    </td>
+                    <td className="py-1 pr-3 text-right font-medium">
+                      {m.noEstimate ? noEst : money(m.profit)}
+                    </td>
+                    <td className="py-1 pr-3 text-right">
+                      {m.noEstimate ? (
+                        noEst
+                      ) : !m.hasCost ? (
+                        <span className="text-amber-600">no cost</span>
+                      ) : m.margin === null ? (
+                        "—"
+                      ) : (
+                        `${(m.margin * 100).toFixed(1)}%`
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
               {margins.length === 0 && (
                 <tr>
                   <td
-                    colSpan={12}
+                    colSpan={13}
                     className="py-3 text-black/60 dark:text-white/60"
                   >
                     No order lines found.
@@ -455,46 +534,71 @@ export default function MarginsPage() {
             </tbody>
             {margins.length > 0 && (
               <tfoot>
-                <tr className="border-t-2 border-black/20 font-medium dark:border-white/20">
-                  <td className="py-2 pr-3" colSpan={4}>
-                    {margins.length} order line
-                    {margins.length === 1 ? "" : "s"}
-                  </td>
-                  <td className="py-2 pr-3 text-right">
-                    {money(totals.revenue)}
-                  </td>
-                  <td className="py-2 pr-3 text-right text-red-600 dark:text-red-400">
-                    {money(totals.commission)}
-                  </td>
-                  <td className="py-2 pr-3 text-right text-red-600 dark:text-red-400">
-                    {money(totals.shipping)}
-                  </td>
-                  <td className="py-2 pr-3 text-right">
-                    {money(totals.tax + totals.otherFees)}
-                  </td>
-                  <td className="py-2 pr-3 text-right">
-                    {money(totals.netAmount)}
-                  </td>
-                  <td
-                    className="py-2 pr-3 text-right"
-                    title={`Item ${money(totals.itemCostTotal)} + box ${money(totals.boxCostTotal)}`}
-                  >
-                    {money(-totals.costTotal)}
-                  </td>
-                  <td className="py-2 pr-3 text-right">
-                    {money(totals.profit)}
-                  </td>
-                  <td className="py-2 pr-3 text-right">
-                    {totals.revenue !== 0
-                      ? `${((totals.profit / totals.revenue) * 100).toFixed(1)}%`
-                      : "—"}
-                  </td>
-                </tr>
+                {settledCount > 0 && (
+                  <TotalsRow
+                    label={`Settled · ${settledCount} line${settledCount === 1 ? "" : "s"}`}
+                    totals={settledTotals}
+                    first
+                  />
+                )}
+                {estimatedCount > 0 && (
+                  <TotalsRow
+                    label={`Estimated · ${estimatedCount} line${estimatedCount === 1 ? "" : "s"}${noEstimateCount > 0 ? ` (+${noEstimateCount} with no estimate, excluded)` : ""}`}
+                    totals={estimatedTotals}
+                    first={settledCount === 0}
+                    italic
+                  />
+                )}
               </tfoot>
             )}
           </table>
         </div>
       </section>
     </div>
+  );
+}
+
+function TotalsRow({
+  label,
+  totals,
+  first,
+  italic,
+}: {
+  label: string;
+  totals: ReturnType<typeof sumMargins>;
+  first?: boolean;
+  italic?: boolean;
+}) {
+  return (
+    <tr
+      className={`font-medium ${first ? "border-t-2 border-black/20 dark:border-white/20" : ""} ${italic ? "italic" : ""}`}
+    >
+      <td className="py-2 pr-3" colSpan={5}>
+        {label}
+      </td>
+      <td className="py-2 pr-3 text-right">{money(totals.revenue)}</td>
+      <td className="py-2 pr-3 text-right text-red-600 dark:text-red-400">
+        {money(totals.commission)}
+      </td>
+      <td className="py-2 pr-3 text-right text-red-600 dark:text-red-400">
+        {money(totals.shipping)}
+      </td>
+      <td className="py-2 pr-3 text-right">
+        {money(totals.tax + totals.otherFees)}
+      </td>
+      <td className="py-2 pr-3 text-right">{money(totals.netAmount)}</td>
+      <td
+        className="py-2 pr-3 text-right"
+        title={`Item ${money(totals.itemCostTotal)} + box ${money(totals.boxCostTotal)}`}
+      >
+        {money(-totals.costTotal)}
+      </td>
+      <td className="py-2 pr-3 text-right">{money(totals.profit)}</td>
+      <td className="py-2 pr-3 text-right">
+        {totals.revenue !== 0
+          ? `${((totals.profit / totals.revenue) * 100).toFixed(1)}%`
+          : "—"}
+      </td>
+    </tr>
   );
 }

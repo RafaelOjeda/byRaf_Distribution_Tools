@@ -22,7 +22,11 @@ At your request, the live app currently has **no login and no database use at al
 - **WFS storage fee rollup — a correctness gap, not a nice-to-have.** `groupReconRows` in `lib/margin.ts` skips rows with no `Purchase Order #`, and WFS storage fees arrive that way. Once WFS activity shows up in a report, those costs silently disappear from the dashboard. Current data is all Seller Fulfilled, so nothing is wrong *yet*.
 - **CSV import for SKU costs and box dimensions.** Skipped because it mainly works around costs not being saved; still wanted afterward for bulk entry.
 
+**Recent (unsettled) orders, added 2026-09-24:** orders from the Orders API (`GET /v3/orders`, last 60 days) that aren't in any settlement report yet show as "Est." rows. Revenue is exact; commission and shipping are projected from each SKU's settled history. SKUs with no settled history show "no estimate" rather than a guessed rate. Settled and estimated totals are shown separately, never blended. At the time this was added, 18 of 25 recent orders were unsettled — the dashboard had been showing about a quarter of recent sales.
+
 **What was learned building this, now true for the real plan too:**
+- **The recon report and Orders API disagree on line numbers for the same order.** PO 129124698245692 is line 2 in its settlement report and line 1 in the Orders API. Joining the two sources must use Purchase Order # + SKU, not PO + line.
+- **Label cost is not available before settlement.** `GET /v3/shipping/labels/purchase-orders/{po}` works but returns only carrier, service type and tracking — no cost field.
 - `reconFileJson` needed params never documented by Walmart, discovered from the API's own error messages: `reportDate` (MMDDYYYY), `offset` (0-based), `noOfRecords` (page size). Pagination ends when the response's `nextOffset` is `-1`.
 - There's a real `Fulfillment Type` field directly on each row (`"Seller Fulfilled"` seen so far) — **no need to infer WFS-vs-self from fee-type presence**, as originally planned. Simpler than expected.
 - Real `Amount Type` values seen: `Product Price` (revenue), `Product tax`, `Product tax withheld`, `Commission on Product`, `Fee/Reimbursement`. Real `Transaction Type` values: `Sale`, `Adjustment`, `PaymentSummary`.
