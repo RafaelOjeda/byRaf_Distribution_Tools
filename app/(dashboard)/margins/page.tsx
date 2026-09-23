@@ -1,9 +1,12 @@
 "use client";
 
 import { type FormEvent, useMemo, useState } from "react";
-import { computeMargins, groupReconRows } from "@/lib/margin";
+import { computeMargins, groupReconRows, sumMargins } from "@/lib/margin";
 import type { ReconRow } from "@/lib/walmart/recon";
 import { loadWalmartData } from "./actions";
+
+const money = (n: number) =>
+  `${n < 0 ? "-" : ""}$${Math.abs(n).toFixed(2)}`;
 
 export default function MarginsPage() {
   const [clientId, setClientId] = useState("");
@@ -46,6 +49,8 @@ export default function MarginsPage() {
     () => [...new Set(lines.map((l) => l.sku))].filter(Boolean).sort(),
     [lines]
   );
+
+  const totals = useMemo(() => sumMargins(margins), [margins]);
 
   if (!rows) {
     return (
@@ -143,8 +148,12 @@ export default function MarginsPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="font-medium">2. Margins</h2>
+        <p className="text-sm text-black/60 dark:text-white/60">
+          Revenue − commission − shipping − other − your cost = profit. Fee
+          columns are shown as Walmart reports them (negative = money out).
+        </p>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm whitespace-nowrap">
             <thead>
               <tr className="border-b border-black/10 text-left dark:border-white/10">
                 <th className="py-1 pr-3">SKU</th>
@@ -152,7 +161,11 @@ export default function MarginsPage() {
                 <th className="py-1 pr-3">Fulfillment</th>
                 <th className="py-1 pr-3 text-right">Qty</th>
                 <th className="py-1 pr-3 text-right">Revenue</th>
-                <th className="py-1 pr-3 text-right">Net settlement</th>
+                <th className="py-1 pr-3 text-right">Commission</th>
+                <th className="py-1 pr-3 text-right">Shipping</th>
+                <th className="py-1 pr-3 text-right">Other</th>
+                <th className="py-1 pr-3 text-right">Net</th>
+                <th className="py-1 pr-3 text-right">Cost</th>
                 <th className="py-1 pr-3 text-right">Profit</th>
                 <th className="py-1 pr-3 text-right">Margin</th>
               </tr>
@@ -164,19 +177,44 @@ export default function MarginsPage() {
                   className="border-b border-black/5 dark:border-white/5"
                 >
                   <td className="py-1 pr-3">{m.sku}</td>
-                  <td className="max-w-xs truncate py-1 pr-3" title={m.itemName}>
+                  <td
+                    className="max-w-[16rem] truncate py-1 pr-3"
+                    title={m.itemName}
+                  >
                     {m.itemName}
                   </td>
                   <td className="py-1 pr-3">{m.fulfillmentType}</td>
                   <td className="py-1 pr-3 text-right">{m.qty}</td>
-                  <td className="py-1 pr-3 text-right">
-                    ${m.revenue.toFixed(2)}
+                  <td className="py-1 pr-3 text-right">{money(m.revenue)}</td>
+                  <td
+                    className="py-1 pr-3 text-right text-red-600 dark:text-red-400"
+                    title={
+                      m.commissionRate
+                        ? `Commission rate: ${m.commissionRate}%`
+                        : undefined
+                    }
+                  >
+                    {money(m.commission)}
                   </td>
-                  <td className="py-1 pr-3 text-right">
-                    ${m.netAmount.toFixed(2)}
+                  <td className="py-1 pr-3 text-right text-red-600 dark:text-red-400">
+                    {money(m.shipping)}
                   </td>
+                  <td
+                    className="py-1 pr-3 text-right"
+                    title={`Tax collected/withheld: ${money(m.tax)}`}
+                  >
+                    {money(m.tax + m.otherFees)}
+                  </td>
+                  <td className="py-1 pr-3 text-right">{money(m.netAmount)}</td>
                   <td className="py-1 pr-3 text-right">
-                    ${m.profit.toFixed(2)}
+                    {m.hasCost ? (
+                      money(-m.costTotal)
+                    ) : (
+                      <span className="text-amber-600">—</span>
+                    )}
+                  </td>
+                  <td className="py-1 pr-3 text-right font-medium">
+                    {money(m.profit)}
                   </td>
                   <td className="py-1 pr-3 text-right">
                     {!m.hasCost ? (
@@ -192,7 +230,7 @@ export default function MarginsPage() {
               {margins.length === 0 && (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={12}
                     className="py-3 text-black/60 dark:text-white/60"
                   >
                     No order lines found.
@@ -200,6 +238,42 @@ export default function MarginsPage() {
                 </tr>
               )}
             </tbody>
+            {margins.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-black/20 font-medium dark:border-white/20">
+                  <td className="py-2 pr-3" colSpan={4}>
+                    {margins.length} order line
+                    {margins.length === 1 ? "" : "s"}
+                  </td>
+                  <td className="py-2 pr-3 text-right">
+                    {money(totals.revenue)}
+                  </td>
+                  <td className="py-2 pr-3 text-right text-red-600 dark:text-red-400">
+                    {money(totals.commission)}
+                  </td>
+                  <td className="py-2 pr-3 text-right text-red-600 dark:text-red-400">
+                    {money(totals.shipping)}
+                  </td>
+                  <td className="py-2 pr-3 text-right">
+                    {money(totals.tax + totals.otherFees)}
+                  </td>
+                  <td className="py-2 pr-3 text-right">
+                    {money(totals.netAmount)}
+                  </td>
+                  <td className="py-2 pr-3 text-right">
+                    {money(-totals.costTotal)}
+                  </td>
+                  <td className="py-2 pr-3 text-right">
+                    {money(totals.profit)}
+                  </td>
+                  <td className="py-2 pr-3 text-right">
+                    {totals.revenue !== 0
+                      ? `${((totals.profit / totals.revenue) * 100).toFixed(1)}%`
+                      : "—"}
+                  </td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </section>
