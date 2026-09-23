@@ -13,7 +13,9 @@ async function walmartHeaders() {
 }
 
 export interface AvailableReconFiles {
-  reportDates: string[];
+  // Confirmed against a live response 2026-09-22 - Walmart's docs never
+  // actually state this field name.
+  availableApReportDates: string[];
 }
 
 /** GET /v3/report/reconreport/availableReconFiles?reportVersion=v1 */
