@@ -31,7 +31,11 @@ The Walmart Marketplace API uses `grant_type=client_credentials` — machine-to-
 
 That leaves the app itself ungated, and the sensitive dataset here is **your supplier cost per SKU** — the one thing not already on Walmart's side. Vercel Authentication restricts the deployment to your Vercel account: zero code, zero cost, one toggle, swappable for Clerk if teammates ever need in.
 
-✅ **Enabled, 2026-09-23** (`vercel project protection enable --sso`), scope `prod_deployment_urls_and_all_previews`. **Known platform limitation to remember:** Vercel Authentication never protects a custom domain, only `*.vercel.app` URLs. No custom domain is attached today, so protection is currently complete — but if one is ever added (e.g. a `margins.byrafdistribution.com`), that domain would be open to the internet unless a separate protection layer is added at that time.
+✅ **Enabled, 2026-09-23**, scope `all` (via the Vercel API — `ssoProtection.deploymentType`). Worth recording exactly how this went, since the first attempt looked done but wasn't:
+
+The CLI's `vercel project protection enable --sso` only sets `deploymentType: "prod_deployment_urls_and_all_previews"` ("Standard Protection" in the dashboard) — which, despite the name, does **not** cover the assigned production domain alias (`by-raf-distribution-tools.vercel.app`), only the raw per-deployment URLs and previews. After enabling it and deploying, a plain unauthenticated `curl` to the production URL returned `200` — the app, including the costs page, was genuinely public. Caught by testing the actual URL rather than trusting the CLI's confirmation. Fixed by setting `deploymentType: "all"` directly via `vercel api` (the CLI has no flag for this scope); re-verified with curl afterward — confirmed redirecting to `vercel.com/sso-api` on the real production URL.
+
+**Takeaway kept for later:** after any deployment-protection change, verify with an actual unauthenticated request to the real URL being used — not just the command's own success output.
 
 **This repo is public.** Secrets live only in Vercel env vars. Nothing credential-shaped is ever committed — `.env*` is already gitignored.
 
@@ -201,7 +205,9 @@ Ordered so that each phase de-risks the next, and so the riskiest unknown is con
 
 **Phase 0 — Provision.** Install the Vercel CLI (`npm i -g vercel`, not currently installed). `vercel link`. `vercel integration add neon`. Enable Vercel Authentication. Add `WALMART_CLIENT_ID` / `WALMART_CLIENT_SECRET`. `vercel env pull`.
 
-✅ **Done, 2026-09-23.** Linked to `by-raf-distribution-tools`; Neon connected and schema pushed (all 3 tables live); `DATABASE_URL` + both Walmart vars set consistently across Development/Preview/Production; Vercel Authentication enabled. Global install of the CLI hit an EACCES permissions error on the system Node install — used `npx vercel` throughout instead of fighting it. Only remaining item: first deploy.
+✅ **Done, 2026-09-23.** Linked to `by-raf-distribution-tools`; Neon connected and schema pushed (all 3 tables live); `DATABASE_URL` + both Walmart vars set consistently across Development/Preview/Production; Vercel Authentication enabled with correct `all` scope (see above — the CLI's default scope silently missed the production domain, caught by testing the live URL). Global install of the CLI hit an EACCES permissions error on the system Node install — used `npx vercel` throughout instead of fighting it.
+
+The project turned out to already be connected to GitHub (`productionBranch: main`, auto-deploy enabled) from when it was first created — not obvious from `vercel project inspect`'s summary view, only from the raw API response. Confirmed for real by matching a deployment's commit SHA to a git push. **So: no manual `vercel deploy` needed going forward — every push to `main` deploys to production automatically.** First production deploy is done.
 
 **Phase 1 — Skeleton.** Next.js + TypeScript + Tailwind, Drizzle schema, first migration, both pages stubbed. Deploy. Confirms the whole pipeline works before any Walmart logic exists.
 
