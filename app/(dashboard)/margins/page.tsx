@@ -2,10 +2,12 @@
 
 import {
   Fragment,
+  type ChangeEvent,
   type FormEvent,
   type KeyboardEvent,
   type ReactNode,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -28,7 +30,13 @@ import {
   type SkuInputs,
   type SkuSummary,
 } from "@/lib/margin";
-import { orderLinesToCsv, skuSummaryToCsv } from "@/lib/csv";
+import {
+  costsToCsv,
+  orderLinesToCsv,
+  parseCostImportCsv,
+  skuSummaryToCsv,
+  type CostImportResult,
+} from "@/lib/csv";
 import { priceSeriesBySku } from "@/lib/prices";
 import type { InventoryItem } from "@/lib/walmart/inventory";
 import type { CatalogItem } from "@/lib/walmart/items";
@@ -113,6 +121,10 @@ export default function MarginsPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [importPreview, setImportPreview] = useState<CostImportResult | null>(
+    null
+  );
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   function setField(sku: string, field: SkuField, value: string) {
     setInputs((prev) => ({
@@ -148,6 +160,44 @@ export default function MarginsPage() {
       ...prev,
       [sku]: (prev[sku] ?? []).filter((_, i) => i !== index),
     }));
+  }
+
+  async function handleImportFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file after a fix
+    if (!file) return;
+    const text = await file.text();
+    setImportPreview(parseCostImportCsv(text));
+  }
+
+  // Replaces all cost/box inputs with what the file contained - the
+  // preview step is the confirmation, so this doesn't ask again.
+  function applyImport() {
+    if (!importPreview) return;
+    const nextInputs: typeof inputs = {};
+    const nextLotDrafts: typeof lotDrafts = {};
+    for (const [sku, parsed] of Object.entries(importPreview.inputs)) {
+      const fields: Partial<Record<SkuField, string>> = {};
+      for (const { key } of BOX_FIELDS) {
+        const v = parsed[key];
+        if (v !== undefined) fields[key] = String(v);
+      }
+      nextInputs[sku] = fields;
+      if (parsed.lots?.length) {
+        nextLotDrafts[sku] = parsed.lots.map((l) => ({
+          qty: String(l.qty),
+          unitCost: String(l.unitCost),
+        }));
+      }
+    }
+    setInputs(nextInputs);
+    setLotDrafts(nextLotDrafts);
+    setExpanded(new Set(Object.keys(nextLotDrafts)));
+    setImportPreview(null);
+  }
+
+  function cancelImport() {
+    setImportPreview(null);
   }
 
   // Arrow keys move between tabs, per the ARIA tabs pattern.
@@ -249,6 +299,7 @@ export default function MarginsPage() {
     setInputs({});
     setLotDrafts({});
     setExpanded(new Set());
+    setImportPreview(null);
     setError(null);
   }
 
@@ -611,13 +662,52 @@ export default function MarginsPage() {
         >
       {tab === "inventory" && (
       <>
-        <PanelHeader title="Inventory and costs">
+        <PanelHeader
+          title="Inventory and costs"
+          action={
+            <div className="flex gap-2">
+              <button
+                onClick={() =>
+                  downloadCsv("walmart-costs", costsToCsv(skus, parsedInputs))
+                }
+                disabled={skus.length === 0}
+                className="sc-btn"
+                title="Downloads every SKU's purchase batches and box info as a CSV - blank if nothing entered yet, so it also works as a fill-in template."
+              >
+                Export costs
+              </button>
+              <button
+                onClick={() => importFileRef.current?.click()}
+                className="sc-btn"
+              >
+                Import CSV
+              </button>
+              <input
+                ref={importFileRef}
+                type="file"
+                accept=".csv,text/csv"
+                onChange={handleImportFile}
+                className="hidden"
+              />
+            </div>
+          }
+        >
           Not saved — re-enter each session. Add a batch for each price you
           bought an item at, including units already sold; cost per unit is
           the quantity-weighted average across batches. &ldquo;Left&rdquo;
           is purchased − sold and should match Walmart&apos;s on-hand
           count.
         </PanelHeader>
+        {importPreview && (
+          <ImportPreviewCard
+            preview={importPreview}
+            existingSkuCount={
+              new Set([...Object.keys(inputs), ...Object.keys(lotDrafts)]).size
+            }
+            onApply={applyImport}
+            onCancel={cancelImport}
+          />
+        )}
         <div className="overflow-x-auto">
           <table className="sc-table w-full text-sm whitespace-nowrap">
             <thead>
@@ -1051,6 +1141,69 @@ function PanelHeader({
         {action}
       </div>
       {children && <p className="text-sm text-sc-ink-2">{children}</p>}
+    </div>
+  );
+}
+
+function ImportPreviewCard({
+  preview,
+  existingSkuCount,
+  onApply,
+  onCancel,
+}: {
+  preview: CostImportResult;
+  existingSkuCount: number;
+  onApply: () => void;
+  onCancel: () => void;
+}) {
+  const { stats, warnings, errors } = preview;
+  return (
+    <div className="sc-card flex flex-col gap-3 border-2 border-sc-line p-4">
+      <h3 className="text-base font-bold">Review import</h3>
+      <p className="text-sm text-sc-ink-2">
+        {stats.skus} SKU{stats.skus === 1 ? "" : "s"} — {stats.batches}{" "}
+        purchase batch{stats.batches === 1 ? "" : "es"}, {stats.boxed} with
+        box info.
+        {stats.skippedRows > 0 &&
+          ` ${stats.skippedRows} row${stats.skippedRows === 1 ? "" : "s"} skipped, see below.`}
+      </p>
+      {existingSkuCount > 0 && (
+        <p className="text-sm text-amber-600">
+          This replaces your current entries for {existingSkuCount} SKU
+          {existingSkuCount === 1 ? "" : "s"}.
+        </p>
+      )}
+      {warnings.length > 0 && (
+        <ul className="max-h-32 list-disc overflow-y-auto pl-5 text-xs text-amber-600">
+          {warnings.slice(0, 20).map((w, i) => (
+            <li key={i}>{w}</li>
+          ))}
+          {warnings.length > 20 && <li>…and {warnings.length - 20} more</li>}
+        </ul>
+      )}
+      {errors.length > 0 && (
+        <ul className="max-h-32 list-disc overflow-y-auto pl-5 text-xs text-red-600">
+          {errors.slice(0, 20).map((e, i) => (
+            <li key={i}>
+              {e.row > 0 ? `Row ${e.row}: ` : ""}
+              {e.message}
+            </li>
+          ))}
+          {errors.length > 20 && <li>…and {errors.length - 20} more</li>}
+        </ul>
+      )}
+      <div className="flex gap-2">
+        <button
+          onClick={onApply}
+          disabled={stats.skus === 0}
+          className="sc-btn-primary"
+        >
+          Apply import
+        </button>
+        <button onClick={onCancel} className="sc-btn">
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }

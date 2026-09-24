@@ -19,7 +19,7 @@ Walmart Marketplace shows a seller their sale price and their fees, but has no p
 | **By SKU** | One row per product: units, average price, revenue, commission, shipping, shipping % of revenue (amber above 15%, red above 25%), net, cost, profit, margin. |
 | **Order lines** | One row per order line with revenue, commission, shipping, other fees, net, cost, profit and margin, plus settled and estimated totals. |
 | **Price over time** | A line chart of average selling price per unit by order date, one line per product, with a tooltip, keyboard support and a table view. |
-| **Inventory & costs** | Every SKU you stock, with on-hand count. Enter purchase batches (quantity × price each) and box cost and dimensions. Average cost is quantity-weighted across batches. "Left" (bought − sold) turns amber when it disagrees with Walmart's count. |
+| **Inventory & costs** | Every SKU you stock, with on-hand count. Enter purchase batches (quantity × price each) and box cost and dimensions by hand, or **import a CSV** (and export the current ones, which doubles as a fill-in template). Average cost is quantity-weighted across batches. "Left" (bought − sold) turns amber when it disagrees with Walmart's count. |
 | **Stock value** | Units on hand at your average cost and at the listed price, with totals that say how many SKUs they cover. |
 
 By SKU and Order lines each have a **Download CSV** button. The app is light-mode only.
@@ -45,7 +45,7 @@ Settled and estimated totals are always shown separately, never blended.
 
 ### Known limitations
 
-- **Costs are re-entered every session**, since nothing is saved. Saving them is the planned next step.
+- **Costs are re-entered every session**, since nothing is saved. CSV import (Inventory & costs tab) makes bulk re-entry fast; saving them for good is the planned next step.
 - **Every page load re-fetches** the selected settlement history plus orders, inventory and catalog. It is quick at current volume but does not scale to years of history.
 - **WFS stock is not included** in inventory or stock value, and WFS storage fees are not surfaced yet.
 - **Refunds and returns are not handled** (none have been observed to design against).
@@ -71,6 +71,7 @@ npm run dev        # http://localhost:3000/margins
 | `npm run dev` / `build` / `start` | Standard Next.js |
 | `npm run lint` | ESLint |
 | `npm run test:walmart` | Checks that credentials in `.env.local` can fetch a token and list settlement reports |
+| `npm run test:csv` | Fixture checks for the cost CSV import/export parser |
 | `npm run db:push` | Applies the Drizzle schema to Neon (unused by the app today, see below) |
 
 Only the scripts read environment variables. Copy [.env.example](.env.example) to `.env.local` and fill in `WALMART_CLIENT_ID` and `WALMART_CLIENT_SECRET`. Never commit `.env.local`; it is gitignored.
