@@ -180,8 +180,8 @@ const SHIP_NODE_LABELS: Record<string, string> = {
 /**
  * Match key between the recon report and the Orders API. Not PO + line
  * number: the two APIs disagree on line numbers for the same order
- * (PO 129124698245692 is line 2 in its recon report, line 1 in the
- * Orders API). Trade-off: an order with the same SKU on two lines that
+ * (observed: line 2 in the recon report, line 1 in the Orders API).
+ * Trade-off: an order with the same SKU on two lines that
  * settle in different periods would count as settled once either does.
  */
 export function settlementKey(purchaseOrderNo: string, sku: string): string {

@@ -1,48 +1,56 @@
 # Walmart Seller Margin Tracker — V1 Plan
 
-## Current Build: Stateless MVP (2026-09-23)
+## Current Build: Stateless MVP (status as of 2026-09-24)
 
-**What's actually deployed right now deliberately deviates from the plan below** — this section documents that deviation; the rest of the document is the original persisted-architecture design, still the intended direction later.
+**What is deployed deliberately deviates from the persisted design in the rest of this document.** This section is the current truth; for a user-facing description see the [README](README.md), and for verified Walmart API behavior see [docs/walmart-api-notes.md](docs/walmart-api-notes.md).
 
-At your request, the live app currently has **no login and no database use at all**:
+### What is live
 
-- No Vercel Authentication — anyone with the URL can open the app (removed 2026-09-23; it was enabled, then explicitly turned back off for this).
-- A single page (`/margins`) with a form for Walmart Client ID + Client Secret, pasted fresh every visit — kept only in React state, never `localStorage`/`sessionStorage`, never sent anywhere but this one request.
-- A Server Action (`app/(dashboard)/margins/actions.ts`) uses those credentials to pull **every available settlement period live**, on every page load. Nothing is written to Neon — the `sku_costs`/`walmart_recon_rows`/`sync_runs` tables and their schema still exist (Phase 0/1 work, kept for later) but this flow never touches them.
-- SKU costs are typed in on the same page, held in React state only. Refresh, and both the pulled data and the entered costs are gone. **This was a deliberate, explicit choice** — the alternative (costs persisted, only Walmart data ephemeral) was offered and declined in favor of true statelessness for this MVP pass.
-- Explicitly designed to be usable by **any Walmart seller**, not just BYRAF — whoever's Client ID/Secret gets pasted in, that's whose data displays. The key itself is the access control now, not a login.
+- **No login, no database use.** Vercel Authentication was enabled and then explicitly turned back off (2026-09-23). The pasted API key is the access control; anyone with the URL can open the app but sees only the data of the credentials they paste in.
+- **Flow:** paste Client ID and Secret, pick which settlement reports to load, then a five-section page: **1** inventory and costs, **2** stock value, **3** by SKU, **4** price over time (line chart), **5** order lines. Sections 3 and 5 export to CSV.
+- **Everything is live and ephemeral.** Server actions in `app/(dashboard)/margins/actions.ts` are the only code that sees credentials. Credentials and results exist only for the request and the browser tab. Nothing is written to Neon; the `sku_costs`, `walmart_recon_rows` and `sync_runs` tables from Phase 0/1 exist but are unused.
+- **Recent orders are included as estimates.** Orders not yet on a settlement report show as "Est." rows: revenue is exact, commission and shipping are projected from each SKU's settled history, and a SKU with no history shows "no estimate" rather than a guessed rate. Settled and estimated totals are always kept separate.
+- **Costs are purchase batches**, not one number: quantity × price each, averaged by quantity, because the same item is bought at different prices. Batches record what was paid *including for units already sold*, so they legitimately exceed current stock. The stock check is therefore a reconciliation (`purchased − sold` vs. Walmart's on-hand count, amber on mismatch, never blocking), not a cap. A cap would have been unusable: a product with many units sold and few left could not even have its first batch entered.
+- **Stock value** is on-hand × average cost and on-hand × listed price. "Current price" comes from the catalog, not last sale price, because most stocked SKUs have never sold. A missing figure is blank, never $0, and totals state how many SKUs they cover. Unpublished listings show their price but are left out of the at-price total, since that stock cannot sell.
+- **Price over time** places every sale on its real order date (Orders API, last 60 days); older settled lines fall back to the settlement posting date, which runs about two days after the sale, and are counted so the approximation is visible.
+- **CSV export** leaves unknown cells blank rather than 0: lines whose fees cannot be estimated carry placeholder zeros internally, and a line with no cost entered would otherwise export a profit that silently assumed cost = 0.
 
-**Real trade-offs this accepts, worth remembering:**
-- Every page load re-fetches and re-parses the *entire* available settlement history (currently small — 31 rows, 1 period — but this will not stay cheap or fast as history grows, and has no pagination/backfill checkpointing to fall back on).
-- Costs must be re-typed every single session — there is no bulk import in this build.
-- No refund/adjustment reconciliation across time the way the persisted design handles it — a session only ever sees whatever `availableReconFiles` returns at that moment.
-- The app itself (not the data) is now public to anyone with the link, gated only by whether they have real Walmart credentials to type in.
+### Trade-offs this accepts
 
-**Deliberately deferred until the app becomes stateful** (decided 2026-09-24 — persistence is coming soon, so these aren't worth building for the MVP):
-- **WFS storage fee rollup — a correctness gap, not a nice-to-have.** `groupReconRows` in `lib/margin.ts` skips rows with no `Purchase Order #`, and WFS storage fees arrive that way. Once WFS activity shows up in a report, those costs silently disappear from the dashboard. Current data is all Seller Fulfilled, so nothing is wrong *yet*.
-- **CSV import for SKU costs and box dimensions.** Skipped because it mainly works around costs not being saved; still wanted afterward for bulk entry.
+- Costs must be re-entered every session; there is no bulk import.
+- Every load re-fetches the selected settlement history plus orders, inventory and catalog. Fine at current volume, not at years of history, and there is no backfill checkpointing.
+- No refund/adjustment reconciliation across periods (none have been observed to design against).
+- WFS stock and WFS storage fees are not surfaced.
+- Estimated shipping is an average; Walmart does not expose label cost before settlement.
 
-**Recent (unsettled) orders, added 2026-09-24:** orders from the Orders API (`GET /v3/orders`, last 60 days) that aren't in any settlement report yet show as "Est." rows. Revenue is exact; commission and shipping are projected from each SKU's settled history. SKUs with no settled history show "no estimate" rather than a guessed rate. Settled and estimated totals are shown separately, never blended. At the time this was added, 18 of 25 recent orders were unsettled — the dashboard had been showing about a quarter of recent sales.
+### Deferred until the app becomes stateful
 
-**Inventory and cost batches, added 2026-09-24:** `GET /v3/inventories` gives on-hand/available/reserved per SKU, so the page lists **every SKU you stock**, not just ones that have sold (10 vs 3 at the time). Cost per SKU is now a list of purchase batches (qty × price each) rather than a single number, averaged by quantity — the same item gets bought at different prices. Batches record **what you paid, including for units already sold**, so they legitimately exceed current stock. The check is therefore a reconciliation, not a cap: `purchased − sold` should equal Walmart's on-hand count, and a mismatch is flagged in amber but never blocks entry (real drift happens — damage, returns, stock held but unlisted). A hard cap would have been unusable: 21 Barbies sold against 1 on hand means you couldn't even enter the first batch.
+Decided 2026-09-24: persistence is coming, so workarounds for statelessness are not worth building first.
 
-**What was learned building this, now true for the real plan too:**
-- **`GET /v3/items` (catalog prices) pages differently again, and offset paging is unsafe.** The item order changes between calls, so walking `offset=3, 6, 9…` returned the same SKU twice and would skip others. A cursor is only returned if you ask for one: the first request must send `nextCursor=*`; without it the response has no cursor at all whatever the page size. Each response's `nextCursor` goes back as the `nextCursor` param with the same `limit` (accepted up to at least 500). **End of data is a `404 CONTENT_NOT_FOUND`**, not an empty page: when the last page fills exactly, Walmart still returns a cursor and the next request 404s. Found when a page size of 1 over 10 items failed on page 11; treating that specific 404 as "done" (and nothing else) fixed it. The response also carries `publishedStatus` (`PUBLISHED` vs `SYSTEM_PROBLEM` for listings pulled for policy violations) and the listed `price.amount`.
-- **A stocked SKU's "current price" can't come from sales.** Most stocked SKUs have never sold, so last-sale price is empty for them; the catalog's listed price is the only source. Stock behind an unpublished listing can't currently sell, so it's shown but left out of the at-price total.
-- **Settled recon lines only carry a settlement posting date**, about two days after the order. For trends, every line is placed on its real order date (from the Orders API, which covers the last 60 days); older settled lines fall back to the posting date and are counted so it's visible.
-- **`inputQty` from `/v3/inventories` is not an on-hand count.** It's the quantity the seller last told Walmart they have, and it doesn't decrement as units ship. The Barbie read 1 while `availToSellQty` was 0, and Transformers read 2 after both units shipped. Real stock still in hand is `availToSellQty + reservedQty`; the first version used `inputQty` and showed stock the seller didn't have. This endpoint covers seller-fulfilled stock only — WFS stock is a separate endpoint (`/v3/fulfillment/inventory`, `onHandQty`) not wired in yet.
-- **Walmart's own APIs disagree on SKU casing.** Inventory returns `Jurassic-World-001`; the settlement report says `JURASSIC-WORLD-001`. Every SKU-keyed lookup goes through `normalizeSku()` or the same product silently splits in two.
-- **`/v3/inventories` caps `limit` at 50**, unlike the other endpoints, and its cursor works differently from the Orders API's. Confirmed by forcing `limit=3` against the 10-SKU account: `meta.nextCursor` is an opaque token sent back as the **`nextCursor` query param** (appending it to the URL like Orders 404s; a param named `cursor` is silently ignored and returns page 1 again), and every page must repeat the same `limit` or the cursor is rejected as invalid/expired. The first version of the fetcher used the Orders-style form and would have silently stopped after 50 SKUs.
-- **The recon report and Orders API disagree on line numbers for the same order.** PO 129124698245692 is line 2 in its settlement report and line 1 in the Orders API. Joining the two sources must use Purchase Order # + SKU, not PO + line.
-- **Label cost is not available before settlement.** `GET /v3/shipping/labels/purchase-orders/{po}` works but returns only carrier, service type and tracking — no cost field.
-- `reconFileJson` needed params never documented by Walmart, discovered from the API's own error messages: `reportDate` (MMDDYYYY), `offset` (0-based), `noOfRecords` (page size). Pagination ends when the response's `nextOffset` is `-1`.
-- There's a real `Fulfillment Type` field directly on each row (`"Seller Fulfilled"` seen so far) — **no need to infer WFS-vs-self from fee-type presence**, as originally planned. Simpler than expected.
-- Real `Amount Type` values seen: `Product Price` (revenue), `Product tax`, `Product tax withheld`, `Commission on Product`, `Fee/Reimbursement`. Real `Transaction Type` values: `Sale`, `Adjustment`, `PaymentSummary`.
-- A `Transaction Description: "Walmart Shipping Label Service Charge"` row (an `Adjustment` / `Fee/Reimbursement`) confirmed the plan's assumption that self-fulfilled label costs bought through Walmart do land on the recon report as a fee.
+- **Persistence itself** (the user likes this feature and wants it later). Save only what the user types: purchase batches, box cost and dimensions. Walmart data stays live. Needs a lots table, since `sku_costs` holds one cost per SKU. **Open design question: who owns saved data**, given there is no login and other sellers may use the app. Recommended, not yet chosen: key it by a hash of the Client ID + Secret already pasted each visit (no new login; catch: rotating the secret orphans saved data). Alternatives: a real login, or Vercel Authentication back on for one user.
+- **WFS storage fee rollup** — a correctness gap, not a nicety. `groupReconRows` in `lib/margin.ts` skips rows with no `Purchase Order #`, which is how WFS storage fees are expected to arrive, so once WFS activity appears those costs would silently vanish from the dashboard. Current data is all seller-fulfilled, so nothing is wrong yet.
+- **CSV import** of costs and box dimensions.
+
+### Where the original phases stand
+
+The phases below describe the persisted design. Their *work* has mostly been done statelessly.
+
+| Phase | Status |
+|---|---|
+| 0 Provision (Vercel, Neon, env vars) | Done |
+| 1 Skeleton (Next.js, schema, pages) | Done |
+| 2 Prove connectivity | Done |
+| 3 Ingest raw, then look | Done statelessly: real field values inspected, nothing stored |
+| 4 Classify + margin calculation | Done in `lib/margin.ts` (in memory, no query layer) |
+| 5 Costs UI | Done as purchase batches, not persisted, no CSV import |
+| 6 Margins UI | Done (by SKU, order lines, chart, stock value, CSV export); no WFS fee panel |
+| 7 Automate (backfill, daily cron) | Not started; belongs with persistence |
 
 ---
 
 ## What We're Trying to Build
+
+> **Everything from here down is the original persisted-architecture design (the V1 plan), kept as the roadmap.** Where it disagrees with "Current Build" above, "Current Build" is what is actually running.
 
 Walmart Marketplace has no built-in way to enter what you paid for an item, so there's no native profit margin view — you only see your selling price and fees separately. This tool closes that gap for BYRAF Distribution's Walmart sales.
 
@@ -67,7 +75,9 @@ Deployed as a **single Vercel project**. Three changes from the original plan, e
 | SQLite | **Neon Postgres** via Vercel Marketplace, with Drizzle ORM | Vercel's filesystem is ephemeral — a SQLite file is wiped on every deploy and not shared between function instances. Neon provisions through the Marketplace and injects `DATABASE_URL` automatically. |
 | AWS | **Vercel** | Cron, secrets, and access control are all built in. |
 
-**Access control: Vercel Authentication (deployment protection).** Worth being explicit, because this was an open question:
+**Access control: Vercel Authentication (deployment protection).** Worth being explicit, because this was an open question.
+
+> **Superseded 2026-09-23: Vercel Authentication was later switched off** and the pasted API key became the access control (see "Current Build"). The reasoning below still applies if a login is ever reinstated, and the verification lesson at the end of this section applies to any protection change.
 
 The Walmart Marketplace API uses `grant_type=client_credentials` — machine-to-machine. There is no "Sign in with Walmart" identity provider, so the Client ID + Secret are *server-side app secrets*, not user credentials. Our backend holds them and acts as the seller account on every call; nobody logs in "as" the seller.
 
