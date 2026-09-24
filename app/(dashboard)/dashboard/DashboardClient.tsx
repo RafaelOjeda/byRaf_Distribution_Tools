@@ -37,6 +37,7 @@ import {
   type SourceDescriptor,
 } from "@/lib/middleware";
 import { fetchSnapshot, listPeriods } from "@/lib/middleware/actions";
+import InstallPrompt from "./InstallPrompt";
 import PriceChart from "./PriceChart";
 
 const money = (n: number) =>
@@ -364,7 +365,8 @@ export default function DashboardClient({
 
   if (step === "connect") {
     return (
-      <div className="mx-auto mt-8 flex w-full max-w-md flex-col gap-5">
+      <>
+      <div className="mx-auto mt-2 sm:mt-8 flex w-full max-w-md flex-col gap-5">
         <div>
           <h1 className="text-[28px] leading-9 font-normal">Connect a source</h1>
           <p className="mt-2 text-sm text-sc-ink-2">
@@ -404,6 +406,8 @@ export default function DashboardClient({
           {error && <p className="text-sm text-red-600">{error}</p>}
         </form>
       </div>
+      <InstallPrompt />
+      </>
     );
   }
 
