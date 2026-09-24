@@ -22,6 +22,7 @@ import {
   type SkuInputs,
 } from "../lib/middleware/engine/margins";
 import { priceSeriesBySku } from "../lib/middleware/engine/prices";
+import { buildAliasIndex, findPossibleDuplicates, resolveSku } from "../lib/middleware/engine/identity";
 import {
   estimateUnsettled,
   groupReconRows,
@@ -345,9 +346,9 @@ check("priceSeriesBySku: ties in units break by SKU display name", () => {
   assert.deepEqual(names, ["WIDGET-A", "widget-b", "WIDGET-C"]);
 });
 
-check("stockValue and reconcileStock pin stock figures", () => {
+check("stockValue pools quantity across sources and flags oversell risk", () => {
   const inventory = [
-    { sku: "widget-a", onHand: 8 },
+    { sku: "widget-a", onHand: 8, source: "s1", sourceLabel: "Source 1" },
     { sku: "widget-b", onHand: 0 },
     { sku: "widget-d", onHand: 3 },
   ];
@@ -355,23 +356,88 @@ check("stockValue and reconcileStock pin stock figures", () => {
     { sku: "WIDGET-A", price: 29.99, publishedStatus: "PUBLISHED" },
     { sku: "WIDGET-D", price: 9.99, publishedStatus: "UNPUBLISHED" },
   ];
-  const { rows, totals } = stockValue(inventory, catalog, costs);
+  const soldA = skuSummaries.find((s) => s.sku === "WIDGET-A")!.units; // 3
+  const { rows, totals } = stockValue(inventory, catalog, costs, {
+    "WIDGET-A": soldA,
+  });
 
-  assert.equal(rows.length, 2); // widget-b's onHand=0 is excluded
-  assert.equal(rows[0].sku, "widget-a");
-  assert.equal(cents(rows[0].valueAtCost ?? 0), 40);
-  assert.equal(cents(rows[0].valueAtPrice ?? 0), 239.92);
-  assert.equal(totals.costedSkus, 1);
+  // widget-b has cost batches entered (5 units, none sold in this fixture)
+  // even though its own source reports 0 on hand - the pool figure is
+  // your purchase records, not any one source's feed, so it still shows.
+  assert.equal(rows.length, 3);
+  const a = rows.find((r) => r.sku === "widget-a")!;
+  // Pool: purchased 10 - sold 3 = 7. Not the raw inventory count (8).
+  assert.equal(a.onHand, 7);
+  assert.equal(a.onHandIsEstimate, false);
+  assert.deepEqual(a.bySource, [{ source: "s1", sourceLabel: "Source 1", onHand: 8 }]);
+  // A source claims 8 on hand but the pool only supports 7.
+  assert.equal(a.oversellRisk, true);
+  assert.equal(cents(a.valueAtCost ?? 0), 35); // 7 * 5
+  assert.equal(cents(a.valueAtPrice ?? 0), 209.93); // 7 * 29.99
+
+  const b = rows.find((r) => r.sku === "widget-b")!;
+  assert.equal(b.onHand, 5); // purchased 5 - sold 0 (not passed in `sold`)
+  assert.equal(b.onHandIsEstimate, false);
+  assert.equal(b.oversellRisk, false); // source's 0 doesn't exceed the pool
+  assert.equal(cents(b.valueAtCost ?? 0), 15); // 5 * 3
+  assert.equal(b.valueAtPrice, null); // not in the catalog fixture
+
+  const d = rows.find((r) => r.sku === "widget-d")!;
+  // No cost batches entered for WIDGET-D: falls back to the source count.
+  assert.equal(d.onHand, 3);
+  assert.equal(d.onHandIsEstimate, true);
+  assert.equal(d.oversellRisk, false);
+  assert.equal(d.valueAtCost, null);
+
+  assert.equal(totals.costedSkus, 2);
   assert.equal(totals.pricedSkus, 1);
   assert.equal(totals.unpublishedSkus, 1);
-  assert.equal(cents(totals.atCost), 40);
-  assert.equal(cents(totals.atPrice), 239.92);
+  assert.equal(totals.oversellSkus, 1);
+  assert.equal(cents(totals.atCost), 50); // 35 + 15
+  assert.equal(cents(totals.atPrice), 209.93);
 
-  const soldA = skuSummaries.find((s) => s.sku === "WIDGET-A")!.units;
   const stock = reconcileStock(costs["WIDGET-A"].lots, soldA, 8);
   assert.equal(stock.purchased, 10);
   assert.equal(stock.impliedOnHand, 7);
   assert.equal(stock.discrepancy, -1);
+});
+
+check("buildAliasIndex/resolveSku merge an alias SKU into its canonical key", () => {
+  const index = buildAliasIndex({
+    "WIDGET-A": { aliasSkus: ["amz-widget-1", "EBAY WIDGET 1"] },
+  });
+  assert.equal(resolveSku("AMZ-Widget-1", index), "WIDGET-A");
+  assert.equal(resolveSku("ebay widget 1", index), "WIDGET-A");
+  // No alias declared: resolves to itself, untouched.
+  assert.equal(resolveSku("WIDGET-Z", index), "WIDGET-Z");
+});
+
+check("findPossibleDuplicates flags near-matches without merging them", () => {
+  const dupes = findPossibleDuplicates([
+    { sku: "WIDGET-A", itemName: "Widget A" },
+    { sku: "WIDGETA", itemName: "Different name entirely" }, // same stripped form
+    { sku: "GADGET-1", itemName: "Widget A" }, // same item name, different SKU
+    { sku: "WIDGET-B", itemName: "Widget B" }, // no match
+  ]);
+  assert.deepEqual(new Set(dupes.get("WIDGET-A")), new Set(["WIDGETA", "GADGET-1"]));
+  assert.deepEqual(dupes.get("WIDGETA"), ["WIDGET-A"]);
+  assert.equal(dupes.has("WIDGET-B"), false);
+});
+
+check("summarizeBySku surfaces possibleDuplicates per row", () => {
+  const dupeMargins = computeMargins(
+    assignSaleDates(
+      [
+        { ...settled[0], sku: "WIDGET-A" },
+        { ...settled[0], sku: "WIDGETA", itemName: "Widget A clone" },
+      ],
+      {}
+    ),
+    {}
+  );
+  const summaries = summarizeBySku(dupeMargins);
+  const a = summaries.find((s) => s.sku === "WIDGET-A")!;
+  assert.deepEqual(a.possibleDuplicates, ["WIDGETA"]);
 });
 
 console.log(`\n${passed} check(s) passed.`);

@@ -122,4 +122,21 @@ check("costsToCsv -> parseCostImportCsv round-trips", () => {
   assert.deepEqual(result.inputs, inputs);
 });
 
+check("Alias SKUs column round-trips and merges with commas or semicolons", () => {
+  const inputs: Record<string, SkuInputs> = {
+    "SKU-1": { boxCost: 0.42, aliasSkus: ["AMZ-1", "EBAY-1"] },
+  };
+  const csv = costsToCsv(["SKU-1"], inputs);
+  assert.match(csv, /AMZ-1; EBAY-1/);
+  const result = parseCostImportCsv(csv);
+  assert.deepEqual(result.errors, []);
+  assert.deepEqual(result.inputs, inputs);
+  assert.equal(result.stats.aliased, 1);
+
+  const commaSeparated = parseCostImportCsv(
+    'SKU,Alias SKUs\nSKU-2,"AMZ-2, EBAY-2"\n'
+  );
+  assert.deepEqual(commaSeparated.inputs["SKU-2"].aliasSkus, ["AMZ-2", "EBAY-2"]);
+});
+
 console.log(`\n${passed} check(s) passed.`);

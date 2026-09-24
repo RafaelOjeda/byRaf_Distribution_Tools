@@ -79,6 +79,16 @@ export interface Money {
   currency: string;
 }
 
+/** A source's own reported count for one SKU. See engine/margins.ts stockValue for the pooling rules. */
+export interface StockItem {
+  sku: string;
+  onHand: number;
+  availToSell: number;
+  reserved: number;
+  source?: string;
+  sourceLabel?: string;
+}
+
 export interface SourceStatus {
   id: string;
   label: string;
@@ -135,7 +145,7 @@ export interface Report {
   priceSeries: import("../engine/prices").PriceSeries[];
   stock: ReturnType<typeof import("../engine/margins").stockValue>;
   /** Every SKU any connected source reports, including SKUs with nothing in stock right now - unlike `stock.rows`, which only lists what's on hand. */
-  inventory: { sku: string; onHand: number; availToSell: number; reserved: number }[];
+  inventory: StockItem[];
   marketplaceFees: AccountCharge[];
   settledTotals: ReturnType<typeof import("../engine/margins").sumMargins>;
   estimatedTotals: ReturnType<typeof import("../engine/margins").sumMargins>;
@@ -158,7 +168,7 @@ export interface SnapshotSource {
   lines: import("../engine/types").OrderLineSummary[];
   charges: AccountCharge[];
   orderDates: Record<string, string>;
-  inventory: { sku: string; onHand: number; availToSell: number; reserved: number }[];
+  inventory: StockItem[];
   catalog: { sku: string; price: number | null; publishedStatus: string }[];
 }
 

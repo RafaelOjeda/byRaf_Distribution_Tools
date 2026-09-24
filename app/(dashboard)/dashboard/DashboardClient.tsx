@@ -101,6 +101,7 @@ export default function DashboardClient({
     Record<string, Partial<Record<SkuField, string>>>
   >({});
   const [lotDrafts, setLotDrafts] = useState<Record<string, LotDraft[]>>({});
+  const [aliasDrafts, setAliasDrafts] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -166,6 +167,7 @@ export default function DashboardClient({
     if (!importPreview) return;
     const nextInputs: typeof inputs = {};
     const nextLotDrafts: typeof lotDrafts = {};
+    const nextAliasDrafts: typeof aliasDrafts = {};
     for (const [sku, parsed] of Object.entries(importPreview.inputs)) {
       const fields: Partial<Record<SkuField, string>> = {};
       for (const { key } of BOX_FIELDS) {
@@ -179,9 +181,13 @@ export default function DashboardClient({
           unitCost: String(l.unitCost),
         }));
       }
+      if (parsed.aliasSkus?.length) {
+        nextAliasDrafts[sku] = parsed.aliasSkus.join(", ");
+      }
     }
     setInputs(nextInputs);
     setLotDrafts(nextLotDrafts);
+    setAliasDrafts(nextAliasDrafts);
     setExpanded(new Set(Object.keys(nextLotDrafts)));
     setImportPreview(null);
   }
@@ -287,6 +293,7 @@ export default function DashboardClient({
     setSourceFilter("all");
     setInputs({});
     setLotDrafts({});
+    setAliasDrafts({});
     setExpanded(new Set());
     setImportPreview(null);
     setError(null);
@@ -319,8 +326,15 @@ export default function DashboardClient({
         .filter((l) => !Number.isNaN(l.qty) && !Number.isNaN(l.unitCost));
       out[sku] = { ...out[sku], lots };
     }
+    for (const [sku, raw] of Object.entries(aliasDrafts)) {
+      const aliasSkus = raw
+        .split(/[;,]/)
+        .map((a) => a.trim())
+        .filter(Boolean);
+      if (aliasSkus.length > 0) out[sku] = { ...out[sku], aliasSkus };
+    }
     return out;
-  }, [inputs, lotDrafts]);
+  }, [inputs, lotDrafts, aliasDrafts]);
 
   // The middleware fetched the snapshot once; a cost edit only re-runs
   // buildReport (pure, no network), so this stays instant.
@@ -702,6 +716,10 @@ export default function DashboardClient({
                 onAdd={() => addLot(sku)}
                 onUpdate={(i, field, value) => updateLot(sku, i, field, value)}
                 onRemove={(i) => removeLot(sku, i)}
+                aliasValue={aliasDrafts[sku] ?? ""}
+                onAliasChange={(value) =>
+                  setAliasDrafts((prev) => ({ ...prev, [sku]: value }))
+                }
               />
             );
           })}
@@ -860,6 +878,10 @@ export default function DashboardClient({
                               updateLot(sku, i, field, value)
                             }
                             onRemove={(i) => removeLot(sku, i)}
+                            aliasValue={aliasDrafts[sku] ?? ""}
+                            onAliasChange={(value) =>
+                              setAliasDrafts((prev) => ({ ...prev, [sku]: value }))
+                            }
                           />
                         </td>
                       </tr>
@@ -888,10 +910,13 @@ export default function DashboardClient({
         <PanelHeader title="Stock value">
           What the units you have on hand are worth: at what they cost you
           (your average across the batches entered under Inventory &amp;
-          costs) and at the price they&apos;re currently listed for. Only
-          products in stock are shown. Merchant-fulfilled stock only —
-          units held in a marketplace&apos;s own warehouses aren&apos;t
-          included yet.
+          costs) and at the price they&apos;re currently listed for. The
+          same physical units are never summed across sources - once any
+          purchase batch is entered, &ldquo;On hand&rdquo; is your own
+          pool (purchased minus sold); with none entered it falls back to
+          the largest count a single source reports, marked (est.).
+          Merchant-fulfilled stock only — units held in a
+          marketplace&apos;s own warehouses aren&apos;t included yet.
         </PanelHeader>
         <StockValueTable stock={stockVal} />
       </>
@@ -1205,7 +1230,7 @@ function ImportPreviewCard({
       <p className="text-sm text-sc-ink-2">
         {stats.skus} SKU{stats.skus === 1 ? "" : "s"} — {stats.batches}{" "}
         purchase batch{stats.batches === 1 ? "" : "es"}, {stats.boxed} with
-        box info.
+        box info, {stats.aliased} with alias SKUs.
         {stats.skippedRows > 0 &&
           ` ${stats.skippedRows} row${stats.skippedRows === 1 ? "" : "s"} skipped, see below.`}
       </p>
@@ -1285,6 +1310,13 @@ function StockValueTable({ stock }: { stock: Report["stock"] }) {
 
   return (
     <div className="flex flex-col gap-3">
+      {t.oversellSkus > 0 && (
+        <p className="text-sm text-amber-600">
+          {t.oversellSkus} SKU{t.oversellSkus === 1 ? "" : "s"} where a source
+          reports more on hand than your purchase records support - see
+          &ldquo;On hand&rdquo; below.
+        </p>
+      )}
       {/* Totals say how many SKUs they cover, so a partial total can't
           read as the whole picture. */}
       <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
@@ -1336,10 +1368,23 @@ function StockValueTable({ stock }: { stock: Report["stock"] }) {
           <li key={r.sku} className="rounded-lg border border-sc-line p-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 font-bold break-words">{r.sku}</div>
-              <div className="shrink-0 text-sm text-sc-ink-2">
-                {r.onHand} on hand
+              <div
+                className={`shrink-0 text-sm ${r.oversellRisk ? "text-amber-600" : "text-sc-ink-2"}`}
+                title={r.onHandIsEstimate ? "No cost batches entered - falling back to the largest source count" : undefined}
+              >
+                {r.onHand} on hand{r.onHandIsEstimate ? " (est.)" : ""}
               </div>
             </div>
+            {r.bySource.length > 0 && (
+              <p className="mt-1 text-xs text-sc-ink-2">
+                {r.bySource.map((b) => `${b.sourceLabel} ${b.onHand}`).join(" · ")}
+              </p>
+            )}
+            {r.oversellRisk && (
+              <p className="mt-1 text-xs text-amber-600">
+                A source reports more on hand than your purchase records support.
+              </p>
+            )}
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
               <Fig label="Avg cost">
                 {r.avgCost === null ? (
@@ -1393,7 +1438,21 @@ function StockValueTable({ stock }: { stock: Report["stock"] }) {
                 className="border-b border-sc-row"
               >
                 <td className="pr-3">{r.sku}</td>
-                <td className="pr-3 text-right">{r.onHand}</td>
+                <td
+                  className={`pr-3 text-right ${r.oversellRisk ? "text-amber-600" : ""}`}
+                  title={
+                    r.oversellRisk
+                      ? `A source reports more on hand than your purchase records support: ${r.bySource.map((b) => `${b.sourceLabel} ${b.onHand}`).join(", ")}`
+                      : r.onHandIsEstimate
+                        ? "No cost batches entered - falling back to the largest source count"
+                        : r.bySource.length > 0
+                          ? r.bySource.map((b) => `${b.sourceLabel}: ${b.onHand}`).join(" · ")
+                          : undefined
+                  }
+                >
+                  {r.onHand}
+                  {r.onHandIsEstimate ? " (est.)" : ""}
+                </td>
                 <td
                   className="pr-3 text-right"
                   title={
@@ -1522,6 +1581,8 @@ function InventoryCard({
   onAdd,
   onUpdate,
   onRemove,
+  aliasValue,
+  onAliasChange,
 }: {
   sku: string;
   onHand: number | null;
@@ -1538,6 +1599,8 @@ function InventoryCard({
   onAdd: () => void;
   onUpdate: (index: number, field: keyof LotDraft, value: string) => void;
   onRemove: (index: number) => void;
+  aliasValue: string;
+  onAliasChange: (value: string) => void;
 }) {
   const muted = <span className="text-sc-ink-2/70">—</span>;
   return (
@@ -1623,6 +1686,8 @@ function InventoryCard({
             onAdd={onAdd}
             onUpdate={onUpdate}
             onRemove={onRemove}
+            aliasValue={aliasValue}
+            onAliasChange={onAliasChange}
           />
         </div>
       )}
@@ -1636,12 +1701,16 @@ function CostLotsEditor({
   onAdd,
   onUpdate,
   onRemove,
+  aliasValue,
+  onAliasChange,
 }: {
   sku: string;
   drafts: LotDraft[];
   onAdd: () => void;
   onUpdate: (index: number, field: keyof LotDraft, value: string) => void;
   onRemove: (index: number) => void;
+  aliasValue: string;
+  onAliasChange: (value: string) => void;
 }) {
   const parsed: CostLot[] = drafts
     .map((d) => ({ qty: parseFloat(d.qty), unitCost: parseFloat(d.unitCost) }))
@@ -1708,6 +1777,18 @@ function CostLotsEditor({
           </span>
         )}
       </div>
+
+      <label className="mt-1 flex w-full flex-col gap-1 text-xs text-sc-ink-2 sm:max-w-xs">
+        Alias SKUs (other sources&apos; SKUs for this same product)
+        <input
+          type="text"
+          placeholder="e.g. SRC2-SKU-01, SRC3-SKU-1"
+          aria-label={`Alias SKUs for ${sku}`}
+          value={aliasValue}
+          onChange={(e) => onAliasChange(e.target.value)}
+          className="sc-input w-full text-sc-ink"
+        />
+      </label>
     </div>
   );
 }
@@ -1739,6 +1820,14 @@ function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                     {s.bySource
                       .map((b) => `${b.sourceLabel} ${b.units}`)
                       .join(" · ")}
+                  </div>
+                )}
+                {s.possibleDuplicates.length > 0 && (
+                  <div
+                    className="truncate text-xs text-amber-600"
+                    title={`Might be the same product as: ${s.possibleDuplicates.join(", ")}. Add an alias under Inventory & costs to merge them.`}
+                  >
+                    possible duplicate of {s.possibleDuplicates.join(", ")}
                   </div>
                 )}
               </div>
@@ -1873,9 +1962,16 @@ function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                 </td>
                 <td
                   className="max-w-[11rem] truncate pr-3"
-                  title={s.itemName}
+                  title={
+                    s.possibleDuplicates.length > 0
+                      ? `${s.itemName} - possible duplicate of ${s.possibleDuplicates.join(", ")}`
+                      : s.itemName
+                  }
                 >
                   {s.itemName}
+                  {s.possibleDuplicates.length > 0 && (
+                    <span className="ml-1 text-amber-600">⚠</span>
+                  )}
                 </td>
                 <td className="pr-3 text-right">{s.units}</td>
                 <td

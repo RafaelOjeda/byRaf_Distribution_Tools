@@ -1,3 +1,4 @@
+import { findPossibleDuplicates } from "./identity";
 import { normalizeSku, type OrderLineSummary } from "./types";
 
 export interface SkuHistory {
@@ -89,6 +90,8 @@ export interface SkuInputs {
   boxLength?: number;
   boxWidth?: number;
   boxHeight?: number;
+  /** Other SKUs (on any source) that are this same physical product. Resolved before grouping - see engine/identity.ts. */
+  aliasSkus?: string[];
 }
 
 function validLots(lots: CostLot[] | undefined): CostLot[] {
@@ -116,7 +119,18 @@ export function averageUnitCost(lots: CostLot[] | undefined): number | null {
 
 export interface StockValueRow {
   sku: string;
+  /**
+   * The quantity valuation is based on: the pool figure (purchased −
+   * sold, from cost batches) once any batch is entered, else the
+   * largest count reported by a single source - see `onHandIsEstimate`.
+   */
   onHand: number;
+  /** true => `onHand` is a fallback (no cost batches entered yet), not the real pool figure. */
+  onHandIsEstimate: boolean;
+  /** Every source's own reported count - never summed, because it's the same physical units seen twice. */
+  bySource: { source: string; sourceLabel: string; onHand: number }[];
+  /** A source reports more on hand than your own purchase records support. */
+  oversellRisk: boolean;
   avgCost: number | null; // null = no batches entered
   listedPrice: number | null; // null = catalog gave no price
   publishedStatus: string | null; // null = SKU not found in the catalog
@@ -132,11 +146,22 @@ export interface StockValueTotals {
   pricedSkus: number;
   atPrice: number; // over pricedSkus only - published SKUs with a price
   unpublishedSkus: number; // stocked, priced, but can't currently sell
+  oversellSkus: number;
 }
 
 /**
  * What the stock on hand is worth, at what it cost and at what it's
- * listed for. Only SKUs actually in stock (onHand > 0) appear.
+ * listed for. Only SKUs actually in stock appear.
+ *
+ * Merchant stock is one pool, never summed across sources - the same
+ * physical units are what every source's own inventory count describes.
+ * `bySource` shows each source's count; `onHand` (the valuation
+ * quantity) is the pool figure - purchased minus sold, from the cost
+ * batches entered - once any batch exists for the SKU. With none
+ * entered it falls back to the largest count across sources, marked
+ * `onHandIsEstimate`. A source claiming more than the pool implies is
+ * `oversellRisk`, advisory only (see docs/multi-marketplace-plan.md,
+ * "Stock across channels").
  *
  * Cost is the quantity-weighted average across every batch entered, not
  * FIFO: batches carry no dates, and an average is what's wanted.
@@ -148,30 +173,58 @@ export interface StockValueTotals {
  * sell right now, so counting it would overstate what's realisable.
  */
 export function stockValue(
-  inventory: { sku: string; onHand: number }[],
+  inventory: {
+    sku: string;
+    onHand: number;
+    source?: string;
+    sourceLabel?: string;
+  }[],
   catalog: { sku: string; price: number | null; publishedStatus: string }[],
-  inputs: Record<string, SkuInputs>
+  inputs: Record<string, SkuInputs>,
+  sold: Record<string, number> = {}
 ): { rows: StockValueRow[]; totals: StockValueTotals } {
   const cat = new Map(catalog.map((c) => [normalizeSku(c.sku), c]));
 
-  const rows: StockValueRow[] = inventory
-    .filter((i) => i.onHand > 0)
-    .map((i) => {
-      const key = normalizeSku(i.sku);
+  const bySku = new Map<string, typeof inventory>();
+  for (const i of inventory) {
+    const key = normalizeSku(i.sku);
+    const group = bySku.get(key);
+    if (group) group.push(i);
+    else bySku.set(key, [i]);
+  }
+
+  const rows: StockValueRow[] = [...bySku.entries()]
+    .map(([key, items]) => {
+      const bySource = items.map((i) => ({
+        source: i.source ?? "unknown",
+        sourceLabel: i.sourceLabel ?? i.source ?? "unknown",
+        onHand: i.onHand,
+      }));
+      const maxSourceOnHand = Math.max(0, ...bySource.map((b) => b.onHand));
+
+      const purchased = totalPurchased(inputs[key]?.lots);
+      const poolOnHand = purchased - (sold[key] ?? 0);
+      const onHandIsEstimate = purchased === 0;
+      const onHand = onHandIsEstimate ? maxSourceOnHand : poolOnHand;
+
       const item = cat.get(key);
       const avgCost = averageUnitCost(inputs[key]?.lots);
       const listedPrice = item?.price ?? null;
       return {
-        sku: i.sku,
-        onHand: i.onHand,
+        sku: items[0].sku,
+        onHand,
+        onHandIsEstimate,
+        bySource,
+        oversellRisk: !onHandIsEstimate && maxSourceOnHand > poolOnHand,
         avgCost,
         listedPrice,
         publishedStatus: item?.publishedStatus ?? null,
         isPublished: item?.publishedStatus === "PUBLISHED",
-        valueAtCost: avgCost === null ? null : i.onHand * avgCost,
-        valueAtPrice: listedPrice === null ? null : i.onHand * listedPrice,
+        valueAtCost: avgCost === null ? null : onHand * avgCost,
+        valueAtPrice: listedPrice === null ? null : onHand * listedPrice,
       };
     })
+    .filter((r) => r.onHand > 0 || r.bySource.some((b) => b.onHand > 0))
     // Biggest money first; SKUs with no figure sink to the bottom.
     .sort(
       (a, b) =>
@@ -193,6 +246,7 @@ export function stockValue(
       unpublishedSkus: rows.filter(
         (r) => r.valueAtPrice !== null && !r.isPublished
       ).length,
+      oversellSkus: rows.filter((r) => r.oversellRisk).length,
     },
   };
 }
@@ -314,6 +368,8 @@ export interface SkuSummary {
   totals: ReturnType<typeof sumMargins>;
   /** How many units/how much revenue each connected source contributed. Sorted units descending. */
   bySource: { source: string; sourceLabel: string; units: number; revenue: number }[];
+  /** Other SKUs that look like the same product but aren't aliased together - see findPossibleDuplicates. */
+  possibleDuplicates: string[];
 }
 
 /**
@@ -381,7 +437,13 @@ export function summarizeBySku(rows: MarginRow[]): SkuSummary[] {
       missingCost: counted.some((r) => !r.hasCost),
       totals,
       bySource,
+      possibleDuplicates: [],
     });
+  }
+
+  const duplicates = findPossibleDuplicates(summaries);
+  for (const s of summaries) {
+    s.possibleDuplicates = duplicates.get(s.sku) ?? [];
   }
 
   // Revenue descending. Not profit: unentered costs inflate profit, so

@@ -1,5 +1,5 @@
 import "server-only";
-import type { AccountCharge, SourceDescriptor } from "../contract";
+import type { AccountCharge, SourceDescriptor, StockItem } from "../contract";
 import type { OrderLineSummary } from "../engine/types";
 
 export type { AccountCharge };
@@ -10,7 +10,7 @@ export interface SourceSnapshot {
   charges: AccountCharge[];
   /** settlementKey(orderId, sku) -> ISO order date, for the full order-list window. */
   orderDates: Record<string, string>;
-  inventory: { sku: string; onHand: number; availToSell: number; reserved: number }[];
+  inventory: StockItem[];
   catalog: { sku: string; price: number | null; publishedStatus: string }[];
   /** Set when a part of this source's fetch failed; the parts that succeeded still populate the fields above. */
   errors: string[];
@@ -115,7 +115,11 @@ export abstract class MarketplaceConnector {
       lines: [...settled.lines.map(tag), ...recent.lines.map(tag)],
       charges: settled.charges,
       orderDates: recent.orderDates,
-      inventory,
+      inventory: inventory.map((i) => ({
+        ...i,
+        source: this.descriptor.id,
+        sourceLabel: this.descriptor.label,
+      })),
       catalog,
       errors,
     };

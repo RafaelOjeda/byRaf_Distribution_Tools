@@ -8,7 +8,9 @@ import type {
 } from "../contract";
 import { assignSaleDates, computeMargins, stockValue, summarizeBySku, sumMargins } from "./margins";
 import type { SkuInputs } from "./margins";
+import { buildAliasIndex, resolveSku } from "./identity";
 import { priceSeriesBySku } from "./prices";
+import type { OrderLineSummary } from "./types";
 
 function toSkuInputs(costs: CostInputs): Record<string, SkuInputs> {
   const out: Record<string, SkuInputs> = {};
@@ -19,6 +21,7 @@ function toSkuInputs(costs: CostInputs): Record<string, SkuInputs> {
       boxLength: c.boxLength,
       boxWidth: c.boxWidth,
       boxHeight: c.boxHeight,
+      aliasSkus: c.aliasSkus,
     };
   }
   return out;
@@ -63,7 +66,15 @@ export function buildReport(
   const orderDates: Record<string, string> = {};
   for (const s of included) Object.assign(orderDates, s.orderDates);
 
-  const rawLines = included.flatMap((s) => s.lines);
+  // Alias resolution happens before any grouping - every SKU-keyed
+  // lookup downstream (computeMargins, summarizeBySku, stockValue,
+  // priceSeriesBySku) sees the resolved identity. See
+  // docs/multi-marketplace-plan.md, "Product identity (phase 4, engine)".
+  const aliasIndex = buildAliasIndex(costs);
+  const resolveLine = (l: OrderLineSummary): OrderLineSummary =>
+    l.sku ? { ...l, sku: resolveSku(l.sku, aliasIndex) } : l;
+
+  const rawLines = included.flatMap((s) => s.lines).map(resolveLine);
   const lines = assignSaleDates(rawLines, orderDates);
 
   const skuInputs = toSkuInputs(costs);
@@ -71,9 +82,14 @@ export function buildReport(
   const bySku = summarizeBySku(margins);
   const priceSeries = priceSeriesBySku(lines);
 
-  const inventory = included.flatMap((s) => s.inventory);
-  const catalog = included.flatMap((s) => s.catalog);
-  const stock = stockValue(inventory, catalog, skuInputs);
+  const inventory = included
+    .flatMap((s) => s.inventory)
+    .map((i) => ({ ...i, sku: resolveSku(i.sku, aliasIndex) }));
+  const catalog = included
+    .flatMap((s) => s.catalog)
+    .map((c) => ({ ...c, sku: resolveSku(c.sku, aliasIndex) }));
+  const sold = Object.fromEntries(bySku.map((s) => [s.sku, s.units]));
+  const stock = stockValue(inventory, catalog, skuInputs, sold);
 
   const marketplaceFees = included.flatMap((s) => s.charges);
 
