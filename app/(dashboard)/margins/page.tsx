@@ -49,6 +49,7 @@ import {
   loadUnsettledOrders,
   loadWalmartData,
 } from "./actions";
+import InstallPrompt from "./InstallPrompt";
 import PriceChart from "./PriceChart";
 
 const money = (n: number) =>
@@ -483,61 +484,64 @@ export default function MarginsPage() {
 
   if (step === "reports") {
     return (
-      <div className="sc-card mx-auto mt-8 flex w-full max-w-md flex-col gap-5 p-6">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="text-[28px] leading-9 font-normal">Settlement reports</h1>
-          <button onClick={startOver} className="sc-link mt-2 shrink-0 text-sm">
-            Start over
-          </button>
-        </div>
-        <p className="text-sm text-sc-ink-2">
-          These are the same reports Walmart shows under Payments in Seller
-          Center — one per settlement period, roughly every two weeks. Pick
-          which to pull.
-        </p>
-        <div className="flex flex-col overflow-hidden rounded-lg border border-sc-line">
-          {reportDates.map((date) => (
-            <label
-              key={date}
-              className="flex min-h-11 cursor-pointer items-center gap-3 border-b border-sc-row px-3 py-2.5 text-sm last:border-b-0 hover:bg-sc-head"
+      <>
+        <InstallPrompt />
+        <div className="sc-card mx-auto mt-8 flex w-full max-w-md flex-col gap-5 p-6">
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="text-[28px] leading-9 font-normal">Settlement reports</h1>
+            <button onClick={startOver} className="sc-link mt-2 shrink-0 text-sm">
+              Start over
+            </button>
+          </div>
+          <p className="text-sm text-sc-ink-2">
+            These are the same reports Walmart shows under Payments in Seller
+            Center — one per settlement period, roughly every two weeks. Pick
+            which to pull.
+          </p>
+          <div className="flex flex-col overflow-hidden rounded-lg border border-sc-line">
+            {reportDates.map((date) => (
+              <label
+                key={date}
+                className="flex min-h-11 cursor-pointer items-center gap-3 border-b border-sc-row px-3 py-2.5 text-sm last:border-b-0 hover:bg-sc-head"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedDates.has(date)}
+                  onChange={() => toggleDate(date)}
+                />
+                {formatReportDate(date)}
+                <span className="text-sc-ink-2/70">
+                  ({date})
+                </span>
+              </label>
+            ))}
+          </div>
+          <div className="flex gap-4 text-sm">
+            <button
+              onClick={() => setSelectedDates(new Set(reportDates))}
+              className="sc-link"
             >
-              <input
-                type="checkbox"
-                checked={selectedDates.has(date)}
-                onChange={() => toggleDate(date)}
-              />
-              {formatReportDate(date)}
-              <span className="text-sc-ink-2/70">
-                ({date})
-              </span>
-            </label>
-          ))}
-        </div>
-        <div className="flex gap-4 text-sm">
+              Select all
+            </button>
+            <button
+              onClick={() => setSelectedDates(new Set())}
+              className="sc-link"
+            >
+              Select none
+            </button>
+          </div>
           <button
-            onClick={() => setSelectedDates(new Set(reportDates))}
-            className="sc-link"
+            onClick={handleLoadSelected}
+            disabled={loading || selectedDates.size === 0}
+            className="sc-btn-primary w-full"
           >
-            Select all
+            {loading
+              ? "Loading…"
+              : `Load ${selectedDates.size} report${selectedDates.size === 1 ? "" : "s"}`}
           </button>
-          <button
-            onClick={() => setSelectedDates(new Set())}
-            className="sc-link"
-          >
-            Select none
-          </button>
+          {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
-        <button
-          onClick={handleLoadSelected}
-          disabled={loading || selectedDates.size === 0}
-          className="sc-btn-primary w-full"
-        >
-          {loading
-            ? "Loading…"
-            : `Load ${selectedDates.size} report${selectedDates.size === 1 ? "" : "s"}`}
-        </button>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-      </div>
+      </>
     );
   }
 
