@@ -53,7 +53,7 @@ Settled and estimated totals are always shown separately, never blended.
 - **Refunds and returns are not handled** (none have been observed to design against).
 - Shipping shown on estimated lines is an average, not the actual label cost. Walmart does not expose label cost before settlement.
 
-See [walmart-margin-tracker-plan.md](walmart-margin-tracker-plan.md) for design decisions and the roadmap, and [docs/walmart-api-notes.md](docs/walmart-api-notes.md) for what the Walmart API actually does.
+See [walmart-margin-tracker-plan.md](walmart-margin-tracker-plan.md) for design decisions and the roadmap, and [docs/walmart-api-notes.md](docs/walmart-api-notes.md) for what the Walmart API actually does. Support for more marketplaces (Amazon, then eBay) in one dashboard is planned in [docs/multi-marketplace-plan.md](docs/multi-marketplace-plan.md).
 
 ## Development
 
