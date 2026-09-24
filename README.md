@@ -24,6 +24,8 @@ Walmart Marketplace shows a seller their sale price and their fees, but has no p
 
 By SKU and Order lines each have a **Download CSV** button. The app is light-mode only.
 
+**Mobile first.** On a phone, every table becomes a list of cards showing all of its figures, with no sideways scrolling; the tables take over from tablet width (768px) up. The price chart redraws at the phone's real width so its text stays readable, and tapping it shows the tooltip across the chart.
+
 **Profit is never shown for a product with no cost entered.** Tiles, table cells and totals show "—" instead, because a profit that assumed the item was free would look real.
 
 ### Settled vs. estimated
@@ -39,7 +41,7 @@ Settled and estimated totals are always shown separately, never blended.
 
 - **Nothing is stored.** No database is used. Credentials and all fetched data live only in your browser tab and the single server request that needs them. Refresh and it is gone, including anything you typed.
 - **The API key is the access control.** There is no login. The app itself is public, and it shows data only for whichever credentials are pasted in. This was a deliberate choice; Vercel Authentication is switched off.
-- **Credentials are used per request and never cached or logged** server-side. Token fetching is deliberately not shared between requests, so one seller's session can never reach another's.
+- **Credentials are used per request and never cached or logged** server-side. Token fetching is deliberately not shared between requests, so one seller's session can never reach another's. Note that Next.js's *dev* server prints every server-action call with its arguments by default, which would print the Client Secret; `next.config.ts` turns that off (`logging.serverFunctions: false`). Production never logged them — verified with fake credentials against `next start`.
 - **Customer data stays on the server.** Walmart's orders include customer names and addresses. Only derived line-level numbers (SKU, quantity, amounts, date) are sent to the browser.
 - **CSV exports guard against formula injection.** Text starting with `=`, `+`, `-` or `@` is prefixed so a spreadsheet cannot run it as a formula.
 

@@ -1,16 +1,25 @@
 "use client";
 
-import { useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+} from "react";
 import type { PriceSeries } from "@/lib/prices";
 
 /** Most series drawn at once; any others stay reachable in the table view. */
 const MAX_SERIES = 6;
 
-const W = 760;
-const H = 340;
-const M = { left: 56, right: 132, top: 16, bottom: 34 };
-const PLOT_W = W - M.left - M.right;
-const PLOT_H = H - M.top - M.bottom;
+// The chart is drawn at its real rendered width (measured below) rather
+// than a fixed canvas scaled to fit, so 12px text stays 12px on a phone
+// instead of shrinking to ~6px. Below NARROW the right-hand end labels
+// are dropped - there is no room, and the legend already shows each
+// product's latest price.
+const MAX_W = 900;
+const NARROW = 560;
 // Keeps the first and last points off the axis line and the right edge.
 const PAD = 10;
 
@@ -63,6 +72,26 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
   const [table, setTable] = useState(false);
   const [hover, setHover] = useState<number | null>(null); // index into dates
   const svgRef = useRef<SVGSVGElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [boxW, setBoxW] = useState(760);
+
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const w = Math.round(entry.contentRect.width);
+      if (w > 0) setBoxW(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [table]);
+
+  const narrow = boxW < NARROW;
+  const W = Math.min(boxW, MAX_W);
+  const H = narrow ? 240 : 340;
+  const M = { left: 48, right: narrow ? 12 : 132, top: 16, bottom: 30 };
+  const PLOT_W = W - M.left - M.right;
+  const PLOT_H = H - M.top - M.bottom;
 
   const dates = useMemo(
     () =>
@@ -86,20 +115,22 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
     for (let v = 0; v <= yMax + 1e-9; v += step) yTicks.push(v);
 
     const span = dMax - dMin;
-    const stepDays = [1, 2, 3, 5, 7, 14, 30, 60].find((d) => span / d <= 6) ?? 90;
+    const stepDays =
+      [1, 2, 3, 5, 7, 14, 30, 60].find((d) => span / d <= (narrow ? 4 : 6)) ?? 90;
     const xTicks: string[] = [];
     for (let d = dMin; d <= dMax + 1e-9; d += stepDays) {
       xTicks.push(new Date(d * 86_400_000).toISOString().slice(0, 10));
     }
     return { x, y, yTicks, xTicks, yMax, dMin, dMax };
-  }, [canChart, charted, dates]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- M/PLOT_* derive from W, H, narrow
+  }, [canChart, charted, dates, W, H, narrow]);
 
   // End labels only for a few series, and only where they end near the
   // right edge - a label parked mid-chart would sit on top of other
   // lines. Colliding labels are dropped rather than nudged apart (that
   // detaches a label from its line); the legend and tooltip carry them.
   const endLabels = useMemo(() => {
-    if (!geo || charted.length > 4) return [];
+    if (!geo || narrow || charted.length > 4) return [];
     const nearRight = (geo.dMax - geo.dMin) * 0.15;
     const cands = charted
       .map((s, i) => ({ s, i, y: geo.y(s.last.avg) }))
@@ -109,7 +140,7 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
       if (kept.every((k) => Math.abs(k.y - c.y) >= 14)) kept.push(c);
     }
     return kept;
-  }, [geo, charted]);
+  }, [geo, charted, narrow]);
 
   if (series.length === 0) {
     return (
@@ -199,7 +230,7 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
       {!table && canChart && geo && (
         // The SVG scales with its box; capping the width keeps axis and
         // label text near its designed size on wide screens.
-        <div className="relative max-w-[900px]">
+        <div ref={boxRef} className="relative max-w-[900px]">
           <svg
             ref={svgRef}
             viewBox={`0 0 ${W} ${H}`}
@@ -210,7 +241,12 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
             onKeyDown={onKeyDown}
             onFocus={() => setHover((h) => h ?? dates.length - 1)}
             onBlur={() => setHover(null)}
-            onPointerLeave={() => setHover(null)}
+            // Touch fires pointerleave the moment a finger lifts, which
+            // would erase the tooltip right after a tap. Only a mouse
+            // leaving clears it; a tap keeps it until focus moves away.
+            onPointerLeave={(e) => {
+              if (e.pointerType === "mouse") setHover(null);
+            }}
           >
             {/* Grid + y axis */}
             {geo.yTicks.map((v) => (
@@ -286,12 +322,21 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
             <div
               role="status"
               aria-live="polite"
-              className="pointer-events-none absolute top-2 z-10 w-max max-w-[22rem] rounded-md border px-3 py-2 text-xs shadow-sm"
+              className={`pointer-events-none absolute top-2 z-10 rounded-md border px-3 py-2 text-xs shadow-sm ${narrow ? "" : "w-max max-w-[22rem]"}`}
               style={{
                 background: "var(--pc-surface)",
                 borderColor: "var(--pc-border)",
-                left: `${(geo.x(hoverDate) / W) * 100}%`,
-                transform: geo.x(hoverDate) > W * 0.55 ? "translateX(calc(-100% - 12px))" : "translateX(12px)",
+                // On a phone the tooltip spans the chart instead of
+                // floating beside the crosshair, where it would run off-screen.
+                ...(narrow
+                  ? { left: 0, right: 0 }
+                  : {
+                      left: `${(geo.x(hoverDate) / W) * 100}%`,
+                      transform:
+                        geo.x(hoverDate) > W * 0.55
+                          ? "translateX(calc(-100% - 12px))"
+                          : "translateX(12px)",
+                    }),
               }}
             >
               <div className="mb-1 font-medium">{fmtDate(hoverDate, true)}</div>
