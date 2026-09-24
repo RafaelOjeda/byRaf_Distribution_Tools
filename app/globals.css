@@ -146,3 +146,42 @@ body {
     background: #f7fafa;
   }
 }
+
+/*
+ * Phone rules, deliberately outside @layer so they beat Tailwind utilities
+ * like text-sm that otherwise win.
+ *
+ * iOS Safari zooms the whole page in when you focus any input with a font
+ * size under 16px, and doesn't zoom back out - so every field is 16px on
+ * phones. Tap targets follow Apple's 44pt minimum. Desktop (768px up)
+ * keeps the denser 14px look.
+ */
+html {
+  touch-action: manipulation; /* no double-tap zoom, no tap delay */
+}
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  select {
+    min-height: 44px;
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 22px;
+    height: 22px;
+  }
+  .sc-btn,
+  .sc-btn-primary,
+  .sc-tab {
+    min-height: 44px;
+  }
+  .sc-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}

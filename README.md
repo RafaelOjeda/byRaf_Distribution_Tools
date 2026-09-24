@@ -24,7 +24,9 @@ Walmart Marketplace shows a seller their sale price and their fees, but has no p
 
 By SKU and Order lines each have a **Download CSV** button. The app is light-mode only.
 
-**Mobile first.** On a phone, every table becomes a list of cards showing all of its figures, with no sideways scrolling; the tables take over from tablet width (768px) up. The price chart redraws at the phone's real width so its text stays readable, and tapping it shows the tooltip across the chart.
+**Mobile first.** On a phone, every table becomes a list of cards showing all of its figures, with no sideways scrolling; the tables take over from tablet width (768px) up. The summary tiles become one swipeable row so the data starts on the first screen. The price chart redraws at the phone's real width so its text stays readable, and tapping it shows the tooltip across the chart.
+
+iPhone specifics, checked in WebKit (Safari's engine) emulating an iPhone 17 Pro: every input is 16px or larger on phones, because Safari zooms the whole page in when you focus a smaller field and never zooms back; buttons, links and fields are at least 44px tall (Apple's minimum tap size); and nothing relies on hover.
 
 **Profit is never shown for a product with no cost entered.** Tiles, table cells and totals show "—" instead, because a profit that assumed the item was free would look real.
 

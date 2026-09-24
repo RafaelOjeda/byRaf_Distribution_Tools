@@ -1,6 +1,6 @@
 export default function DashboardLayout({ children }: LayoutProps<"/">) {
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-dvh flex-col">
       <header className="bg-sc-nav text-white">
         <div className="mx-auto flex h-12 max-w-[1600px] items-center gap-3 px-4 sm:px-6">
           <span className="text-[17px] font-bold tracking-tight">BYRAF</span>

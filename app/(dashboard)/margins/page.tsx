@@ -499,7 +499,7 @@ export default function MarginsPage() {
           {reportDates.map((date) => (
             <label
               key={date}
-              className="flex cursor-pointer items-center gap-3 border-b border-sc-row px-3 py-2.5 text-sm last:border-b-0 hover:bg-sc-head"
+              className="flex min-h-11 cursor-pointer items-center gap-3 border-b border-sc-row px-3 py-2.5 text-sm last:border-b-0 hover:bg-sc-head"
             >
               <input
                 type="checkbox"
@@ -577,7 +577,12 @@ export default function MarginsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      {/* Phone: one swipeable row, so the data isn't pushed a screen and a
+            half down by five stacked tiles. Grid from sm up. */}
+      <div
+        className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-5"
+        aria-label="Summary"
+      >
         <KpiTile label="Revenue" value={money(kpi.revenue)}>
           {money(kpi.revenueSettled)} settled ·{" "}
           {money(kpi.revenue - kpi.revenueSettled)} not yet settled
@@ -999,8 +1004,8 @@ export default function MarginsPage() {
           columns are shown as Walmart reports them (negative = money out).
           <span className="italic"> Est.</span> rows are orders Walmart
           hasn&apos;t settled yet: revenue is exact, but commission and
-          shipping are projected from that SKU&apos;s settled history (hover
-          for details) and switch to exact figures once the order settles.
+          shipping are projected from that SKU&apos;s settled history and
+          switch to exact figures once the order settles.
         </p>
 
         <ul className="flex flex-col gap-3 md:hidden">
@@ -1299,7 +1304,7 @@ function KpiTile({
   children?: ReactNode;
 }) {
   return (
-    <div className="sc-card flex flex-col gap-1 p-4">
+    <div className="sc-card flex w-[68%] shrink-0 snap-start flex-col gap-1 p-4 sm:w-auto">
       <div className="text-xs font-bold text-sc-ink-2">{label}</div>
       <div className="text-2xl leading-8">{value}</div>
       <div className="text-xs leading-4 text-sc-ink-2">{children}</div>
@@ -1592,7 +1597,7 @@ function InventoryCard({
               aria-label={`${f.label} for ${sku}`}
               value={boxValues[f.key] ?? ""}
               onChange={(e) => onBoxChange(f.key, e.target.value)}
-              className="sc-input w-full min-w-0 text-right text-sm text-sc-ink"
+              className="sc-input w-full min-w-0 text-right text-sc-ink"
             />
           </label>
         ))}
@@ -2013,6 +2018,9 @@ function OrderLineCard({ m }: { m: ReturnType<typeof computeMargins>[number] }) 
         </Fig>
         <Fig label="Other">{money(m.tax + m.otherFees)}</Fig>
       </dl>
+      {est && m.estimateNote && (
+        <p className="mt-2 text-xs text-sc-ink-2">{m.estimateNote}</p>
+      )}
     </li>
   );
 }
