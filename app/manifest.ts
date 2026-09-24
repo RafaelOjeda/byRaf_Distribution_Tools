@@ -2,10 +2,10 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "BYRAF Walmart Margin Tracker",
+    name: "BYRAF Margins Dashboard",
     short_name: "Margins",
-    description: "BYRAF Distribution — Walmart seller margin tracker",
-    start_url: "/margins",
+    description: "BYRAF Distribution — multi-marketplace seller margin tracker",
+    start_url: "/dashboard",
     scope: "/",
     display: "standalone",
     orientation: "portrait",

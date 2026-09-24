@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Walmart Margin Tracker",
-  description: "BYRAF Distribution — Walmart seller margin tracker",
+  title: "Margins Dashboard",
+  description: "BYRAF Distribution — multi-marketplace seller margin tracker",
   // iOS ignores most of the manifest: these make Add to Home Screen open
   // full-screen with a proper name.
   appleWebApp: {

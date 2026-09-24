@@ -1,5 +1,5 @@
-import type { CostLot, MarginRow, SkuInputs, SkuSummary } from "./margin";
-import { normalizeSku } from "./margin";
+import type { CostLot, MarginRow, SkuInputs, SkuSummary } from "./margins";
+import { normalizeSku } from "./types";
 
 type Cell = string | number | null;
 
@@ -7,8 +7,8 @@ const BOM = "﻿"; // so Excel reads UTF-8 (accented item names) correctly
 
 /**
  * Spreadsheets execute a cell starting with = + - @ tab or CR as a
- * formula. SKUs and item names come from Walmart's catalog, so string
- * cells get a leading apostrophe. Numbers are exempt: a legitimate
+ * formula. SKUs and item names come from a marketplace's catalog, so
+ * string cells get a leading apostrophe. Numbers are exempt: a legitimate
  * -12.50 must stay a number, not become text.
  */
 function guardFormula(s: string): string {
@@ -160,13 +160,20 @@ export const COST_IMPORT_HEADERS = [
   "Box Length",
   "Box Width",
   "Box Height",
+  "Alias SKUs",
 ];
+
+const ALIAS_SEPARATOR = "; ";
 
 /**
  * One row per purchase batch. A SKU with several batches gets several
- * rows; box fields are only written on its first row so re-entering them
- * per batch isn't required. A SKU with no batches yet (box info only)
- * gets a single row with the batch columns blank.
+ * rows; box fields and alias SKUs are only written on its first row so
+ * re-entering them per batch isn't required. A SKU with no batches yet
+ * (box/alias info only) gets a single row with the batch columns blank.
+ *
+ * Alias SKUs are other sources' SKUs for this same physical product
+ * (docs/multi-marketplace-plan.md, "Product identity"), written as one
+ * cell joined with "; " - e.g. "AMZ-LEGO-01; EBAY-LEGO-1".
  *
  * Doubles as the import template: exporting with no costs entered yet
  * still lists every currently loaded SKU, ready to fill in.
@@ -179,21 +186,22 @@ export function costsToCsv(
   for (const sku of skus) {
     const inp = inputs[sku];
     const lots = inp?.lots ?? [];
-    const box: Cell[] = [
+    const extra: Cell[] = [
       inp?.boxCost ?? null,
       inp?.boxLength ?? null,
       inp?.boxWidth ?? null,
       inp?.boxHeight ?? null,
+      inp?.aliasSkus?.length ? inp.aliasSkus.join(ALIAS_SEPARATOR) : null,
     ];
     if (lots.length === 0) {
-      rows.push([sku, null, null, ...box]);
+      rows.push([sku, null, null, ...extra]);
     } else {
       lots.forEach((lot, i) => {
         rows.push([
           sku,
           lot.qty,
           lot.unitCost,
-          ...(i === 0 ? box : [null, null, null, null]),
+          ...(i === 0 ? extra : [null, null, null, null, null]),
         ]);
       });
     }
@@ -267,7 +275,13 @@ export interface CostImportResult {
   inputs: Record<string, SkuInputs>; // keyed by normalizeSku
   warnings: string[];
   errors: CostImportRowError[];
-  stats: { skus: number; batches: number; boxed: number; skippedRows: number };
+  stats: {
+    skus: number;
+    batches: number;
+    boxed: number;
+    aliased: number;
+    skippedRows: number;
+  };
 }
 
 const COST_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
@@ -280,7 +294,7 @@ const empty = (
   inputs: {},
   warnings,
   errors,
-  stats: { skus: 0, batches: 0, boxed: 0, skippedRows: 0 },
+  stats: { skus: 0, batches: 0, boxed: 0, aliased: 0, skippedRows: 0 },
 });
 
 /** A cell our own export prefixed with `'` to block spreadsheet formula
@@ -336,6 +350,7 @@ export function parseCostImportCsv(text: string): CostImportResult {
   const qtyCol = colIndex("Batch Qty");
   const unitCostCol = colIndex("Batch Unit Cost");
   const boxCols = BOX_COLUMNS.map((b) => ({ ...b, col: colIndex(b.label) }));
+  const aliasCol = colIndex("Alias SKUs");
 
   let dataRows = rows.slice(1);
   const errors: CostImportRowError[] = [];
@@ -409,6 +424,22 @@ export function parseCostImportCsv(text: string): CostImportResult {
         }
         entry[key] = value;
       }
+
+      if (aliasCol !== -1) {
+        const raw = stripApostrophe(cells[aliasCol] ?? "").trim();
+        if (raw) {
+          const aliases = raw
+            .split(/[;,]/)
+            .map((a) => a.trim())
+            .filter(Boolean);
+          if (entry.aliasSkus && entry.aliasSkus.join() !== aliases.join()) {
+            warnings.push(
+              `SKU ${sku}: conflicting Alias SKUs values in the file; using "${aliases.join(ALIAS_SEPARATOR)}".`
+            );
+          }
+          entry.aliasSkus = aliases;
+        }
+      }
     } catch (e) {
       skippedRows++;
       errors.push({ row: rowNum, message: `SKU ${sku}: ${(e as Error).message}` });
@@ -417,6 +448,9 @@ export function parseCostImportCsv(text: string): CostImportResult {
 
   const boxed = Object.values(inputs).filter((i) =>
     BOX_COLUMNS.some((b) => i[b.key] !== undefined)
+  ).length;
+  const aliased = Object.values(inputs).filter(
+    (i) => i.aliasSkus && i.aliasSkus.length > 0
   ).length;
 
   return {
@@ -427,6 +461,7 @@ export function parseCostImportCsv(text: string): CostImportResult {
       skus: Object.keys(inputs).length,
       batches: batchCount,
       boxed,
+      aliased,
       skippedRows,
     },
   };

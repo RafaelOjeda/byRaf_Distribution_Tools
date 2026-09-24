@@ -2,6 +2,8 @@
 
 Status: **agreed direction, 2026-09-24.** Decisions are recorded at the bottom. Phase 1 can start.
 
+**Progress (2026-09-24):** Phases 1–4 are implemented on `claude/multi-marketplace-plan-m42xak` - the middleware carve-out, the dashboard on the contract, the demo connector with multi-source UI, and SKU aliasing/stock pooling. Phases 5–6 (Amazon, eBay) need real developer-registered API credentials that don't exist in this environment - see the "Amazon developer registration" risk below - so only the connector scaffolding pattern is proven (`docs/adding-a-marketplace.md`), not an actual working connector. Phase 7 (persistence) stays deferred per the decision below.
+
 ## Goal
 
 One dashboard that shows sales, fees, profit, inventory and stock value across every marketplace BYRAF sells on.

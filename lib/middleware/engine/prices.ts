@@ -1,4 +1,4 @@
-import { normalizeSku, type OrderLineSummary } from "./margin";
+import { normalizeSku, type OrderLineSummary } from "./types";
 
 /** One day's selling price for one SKU. */
 export interface PricePoint {
