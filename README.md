@@ -28,6 +28,8 @@ By SKU and Order lines each have a **Download CSV** button. The app is light-mod
 
 iPhone specifics, checked in WebKit (Safari's engine) emulating an iPhone 17 Pro: every input is 16px or larger on phones, because Safari zooms the whole page in when you focus a smaller field and never zooms back; buttons, links and fields are at least 44px tall (Apple's minimum tap size); and nothing relies on hover.
 
+**Install on your phone.** The app is installable, with the BYRAF crayon-dashboard logo as its icon. On iPhone: open it in Safari, tap Share, then "Add to Home Screen". On Android: in Chrome, tap the menu, then "Install app" (or "Add to Home screen"). It opens full-screen like an app. Nothing is stored, so you still paste your credentials each time it opens, and the app does not work offline. The icons are cut from `applogo.PNG` (repo root) into `app/icon.png`, `app/apple-icon.png` and `public/icons/`; the maskable one has extra padding so Android's round or squircle mask doesn't clip the artwork.
+
 **Profit is never shown for a product with no cost entered.** Tiles, table cells and totals show "—" instead, because a profit that assumed the item was free would look real.
 
 ### Settled vs. estimated
