@@ -30,7 +30,8 @@ Decided 2026-09-24: persistence is coming, so workarounds for statelessness are 
 
 - **Persistence itself** (the user likes this feature and wants it later). Save only what the user types: purchase batches, box cost and dimensions. Walmart data stays live. Needs a lots table, since `sku_costs` holds one cost per SKU. **Open design question: who owns saved data**, given there is no login and other sellers may use the app. Recommended, not yet chosen: key it by a hash of the Client ID + Secret already pasted each visit (no new login; catch: rotating the secret orphans saved data). Alternatives: a real login, or Vercel Authentication back on for one user.
 - **WFS storage fee rollup** — a correctness gap, not a nicety. `groupReconRows` in `lib/margin.ts` skips rows with no `Purchase Order #`, which is how WFS storage fees are expected to arrive, so once WFS activity appears those costs would silently vanish from the dashboard. Current data is all seller-fulfilled, so nothing is wrong yet.
-- **CSV import** of costs and box dimensions.
+
+**Done statelessly, 2026-09-24: CSV import of costs and box dimensions.** One row per purchase batch, box columns filled once per SKU (`SKU, Batch Qty, Batch Unit Cost, Box Cost, Box Length, Box Width, Box Height`); "Export costs" produces the same shape, so it also works as a fill-in template and the two are a true round trip. Import is a preview-then-confirm step — row-level errors (bad numbers, one-sided qty/cost, negatives) are listed rather than silently dropped, and conflicting box values for the same SKU across rows warn and keep the last one. Everything happens client-side in `lib/csv.ts` (`parseCsv`, `costsToCsv`, `parseCostImportCsv`); applying **replaces** the current session's `inputs`/`lotDrafts` state, same as every other input on this stateless page — nothing is persisted. Checked against fixtures in `scripts/test-csv-import.ts` (`npm run test:csv`), since the repo has no test framework.
 
 ### Where the original phases stand
 
@@ -43,7 +44,7 @@ The phases below describe the persisted design. Their *work* has mostly been don
 | 2 Prove connectivity | Done |
 | 3 Ingest raw, then look | Done statelessly: real field values inspected, nothing stored |
 | 4 Classify + margin calculation | Done in `lib/margin.ts` (in memory, no query layer) |
-| 5 Costs UI | Done as purchase batches, not persisted, no CSV import |
+| 5 Costs UI | Done as purchase batches, not persisted; CSV import/export done statelessly |
 | 6 Margins UI | Done (by SKU, order lines, chart, stock value, CSV export); no WFS fee panel |
 | 7 Automate (backfill, daily cron) | Not started; belongs with persistence |
 

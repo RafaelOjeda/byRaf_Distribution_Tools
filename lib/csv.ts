@@ -1,4 +1,5 @@
-import type { MarginRow, SkuSummary } from "./margin";
+import type { CostLot, MarginRow, SkuInputs, SkuSummary } from "./margin";
+import { normalizeSku } from "./margin";
 
 type Cell = string | number | null;
 
@@ -145,4 +146,288 @@ export function skuSummaryToCsv(rows: SkuSummary[]): string {
       ];
     })
   );
+}
+
+// ---------------------------------------------------------------------
+// Cost import / export (purchase batches + box cost & dimensions)
+// ---------------------------------------------------------------------
+
+export const COST_IMPORT_HEADERS = [
+  "SKU",
+  "Batch Qty",
+  "Batch Unit Cost",
+  "Box Cost",
+  "Box Length",
+  "Box Width",
+  "Box Height",
+];
+
+/**
+ * One row per purchase batch. A SKU with several batches gets several
+ * rows; box fields are only written on its first row so re-entering them
+ * per batch isn't required. A SKU with no batches yet (box info only)
+ * gets a single row with the batch columns blank.
+ *
+ * Doubles as the import template: exporting with no costs entered yet
+ * still lists every currently loaded SKU, ready to fill in.
+ */
+export function costsToCsv(
+  skus: string[],
+  inputs: Record<string, SkuInputs>
+): string {
+  const rows: Cell[][] = [];
+  for (const sku of skus) {
+    const inp = inputs[sku];
+    const lots = inp?.lots ?? [];
+    const box: Cell[] = [
+      inp?.boxCost ?? null,
+      inp?.boxLength ?? null,
+      inp?.boxWidth ?? null,
+      inp?.boxHeight ?? null,
+    ];
+    if (lots.length === 0) {
+      rows.push([sku, null, null, ...box]);
+    } else {
+      lots.forEach((lot, i) => {
+        rows.push([
+          sku,
+          lot.qty,
+          lot.unitCost,
+          ...(i === 0 ? box : [null, null, null, null]),
+        ]);
+      });
+    }
+  }
+  return toCsv(COST_IMPORT_HEADERS, rows);
+}
+
+/**
+ * Parses CSV text into raw string cells per RFC 4180: quoted fields,
+ * embedded commas/newlines, and doubled quotes escaping a literal quote.
+ * Strips a leading BOM. Blank trailing lines are dropped.
+ */
+export function parseCsv(text: string): string[][] {
+  const s = text.startsWith(BOM) ? text.slice(BOM.length) : text;
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+  let i = 0;
+
+  while (i < s.length) {
+    const c = s[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (s[i + 1] === '"') {
+          field += '"';
+          i += 2;
+        } else {
+          inQuotes = false;
+          i++;
+        }
+      } else {
+        field += c;
+        i++;
+      }
+      continue;
+    }
+    if (c === '"') {
+      inQuotes = true;
+      i++;
+    } else if (c === ",") {
+      row.push(field);
+      field = "";
+      i++;
+    } else if (c === "\r") {
+      i++; // CRLF: the \n below ends the row
+    } else if (c === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      i++;
+    } else {
+      field += c;
+      i++;
+    }
+  }
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows.filter((r) => !(r.length === 1 && r[0].trim() === ""));
+}
+
+export interface CostImportRowError {
+  row: number; // 1 = header, first data row = 2
+  message: string;
+}
+
+export interface CostImportResult {
+  inputs: Record<string, SkuInputs>; // keyed by normalizeSku
+  warnings: string[];
+  errors: CostImportRowError[];
+  stats: { skus: number; batches: number; boxed: number; skippedRows: number };
+}
+
+const COST_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
+const COST_IMPORT_MAX_ROWS = 5000;
+
+const empty = (
+  errors: CostImportRowError[],
+  warnings: string[] = []
+): CostImportResult => ({
+  inputs: {},
+  warnings,
+  errors,
+  stats: { skus: 0, batches: 0, boxed: 0, skippedRows: 0 },
+});
+
+/** A cell our own export prefixed with `'` to block spreadsheet formula
+ *  execution (see `guardFormula`). Strip it back off before parsing. */
+function stripApostrophe(cell: string): string {
+  return cell.startsWith("'") ? cell.slice(1) : cell;
+}
+
+/** Blank -> not provided (undefined). Non-blank non-numeric -> throws. */
+function parseNumericCell(raw: string, label: string): number | undefined {
+  const s = stripApostrophe(raw).trim();
+  if (s === "") return undefined;
+  const n = Number(s);
+  if (!Number.isFinite(n)) throw new Error(`${label} "${raw}" is not a number`);
+  return n;
+}
+
+type BoxKey = "boxCost" | "boxLength" | "boxWidth" | "boxHeight";
+const BOX_COLUMNS: { key: BoxKey; label: string }[] = [
+  { key: "boxCost", label: "Box Cost" },
+  { key: "boxLength", label: "Box Length" },
+  { key: "boxWidth", label: "Box Width" },
+  { key: "boxHeight", label: "Box Height" },
+];
+
+/**
+ * Parses a cost-import CSV (see `COST_IMPORT_HEADERS`) into per-SKU
+ * purchase batches and box info, plus row-level errors so bad rows are
+ * surfaced rather than silently dropped. Nothing here touches state -
+ * the caller decides whether/how to apply the result.
+ */
+export function parseCostImportCsv(text: string): CostImportResult {
+  if (text.length > COST_IMPORT_MAX_BYTES) {
+    return empty([
+      {
+        row: 0,
+        message: `File is larger than ${COST_IMPORT_MAX_BYTES / (1024 * 1024)}MB.`,
+      },
+    ]);
+  }
+
+  const rows = parseCsv(text);
+  if (rows.length === 0) {
+    return empty([{ row: 0, message: "File is empty." }]);
+  }
+
+  const header = rows[0].map((h) => stripApostrophe(h).trim().toLowerCase());
+  const colIndex = (label: string) => header.indexOf(label.toLowerCase());
+  const skuCol = colIndex("SKU");
+  if (skuCol === -1) {
+    return empty([{ row: 1, message: 'Missing required "SKU" column.' }]);
+  }
+  const qtyCol = colIndex("Batch Qty");
+  const unitCostCol = colIndex("Batch Unit Cost");
+  const boxCols = BOX_COLUMNS.map((b) => ({ ...b, col: colIndex(b.label) }));
+
+  let dataRows = rows.slice(1);
+  const errors: CostImportRowError[] = [];
+  if (dataRows.length > COST_IMPORT_MAX_ROWS) {
+    errors.push({
+      row: 0,
+      message: `File has ${dataRows.length} rows; only the first ${COST_IMPORT_MAX_ROWS} were read.`,
+    });
+    dataRows = dataRows.slice(0, COST_IMPORT_MAX_ROWS);
+  }
+
+  const warnings: string[] = [];
+  const inputs: Record<string, SkuInputs> = {};
+  let skippedRows = 0;
+  let batchCount = 0;
+
+  dataRows.forEach((cells, i) => {
+    const rowNum = i + 2; // header is row 1
+    const rawSku = (cells[skuCol] ?? "").trim();
+    if (!rawSku) {
+      skippedRows++;
+      errors.push({ row: rowNum, message: "Blank SKU." });
+      return;
+    }
+    const sku = normalizeSku(stripApostrophe(rawSku));
+
+    try {
+      const qty =
+        qtyCol !== -1 ? parseNumericCell(cells[qtyCol] ?? "", "Batch Qty") : undefined;
+      const unitCost =
+        unitCostCol !== -1
+          ? parseNumericCell(cells[unitCostCol] ?? "", "Batch Unit Cost")
+          : undefined;
+      if ((qty !== undefined) !== (unitCost !== undefined)) {
+        throw new Error(
+          "Batch Qty and Batch Unit Cost must both be filled in, or both left blank"
+        );
+      }
+      if (qty !== undefined && qty <= 0) {
+        throw new Error(`Batch Qty ${qty} must be greater than 0`);
+      }
+      if (unitCost !== undefined && unitCost < 0) {
+        throw new Error(`Batch Unit Cost ${unitCost} can't be negative`);
+      }
+
+      const boxValues = boxCols.map(({ key, label, col }) => ({
+        key,
+        value:
+          col !== -1 ? parseNumericCell(cells[col] ?? "", label) : undefined,
+        label,
+      }));
+      for (const { value, label } of boxValues) {
+        if (value !== undefined && value < 0) {
+          throw new Error(`${label} ${value} can't be negative`);
+        }
+      }
+
+      const entry = (inputs[sku] ??= {});
+      if (qty !== undefined && unitCost !== undefined) {
+        const lot: CostLot = { qty, unitCost };
+        entry.lots = [...(entry.lots ?? []), lot];
+        batchCount++;
+      }
+      for (const { key, value, label } of boxValues) {
+        if (value === undefined) continue;
+        const prev = entry[key];
+        if (prev !== undefined && prev !== value) {
+          warnings.push(
+            `SKU ${sku}: conflicting ${label} values in the file (${prev} vs ${value}); using ${value}.`
+          );
+        }
+        entry[key] = value;
+      }
+    } catch (e) {
+      skippedRows++;
+      errors.push({ row: rowNum, message: `SKU ${sku}: ${(e as Error).message}` });
+    }
+  });
+
+  const boxed = Object.values(inputs).filter((i) =>
+    BOX_COLUMNS.some((b) => i[b.key] !== undefined)
+  ).length;
+
+  return {
+    inputs,
+    warnings,
+    errors,
+    stats: {
+      skus: Object.keys(inputs).length,
+      batches: batchCount,
+      boxed,
+      skippedRows,
+    },
+  };
 }
