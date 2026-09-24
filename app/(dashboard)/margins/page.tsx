@@ -5,6 +5,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
   type ReactNode,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -149,6 +150,15 @@ export default function MarginsPage() {
       [sku]: (prev[sku] ?? []).filter((_, i) => i !== index),
     }));
   }
+
+  // On a phone the tab bar scrolls sideways, so a tab selected from
+  // elsewhere (e.g. the Profit tile's link) can be off-screen.
+  useEffect(() => {
+    if (step !== "data") return;
+    document
+      .getElementById(`tab-${tab}`)
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [tab, step]);
 
   // Arrow keys move between tabs, per the ARIA tabs pattern.
   function onTabKey(e: KeyboardEvent<HTMLDivElement>) {
@@ -618,7 +628,43 @@ export default function MarginsPage() {
           is purchased − sold and should match Walmart&apos;s on-hand
           count.
         </PanelHeader>
-        <div className="overflow-x-auto">
+
+        {/* Phone: one card per SKU. Tables take over from md up. */}
+        <ul className="flex flex-col gap-3 md:hidden">
+          {skus.map((sku) => {
+            const parsed = parsedInputs[sku] ?? {};
+            const inv = inventoryBySku.get(sku);
+            return (
+              <InventoryCard
+                key={sku}
+                sku={sku}
+                onHand={inv ? inv.onHand : null}
+                onHandTitle={
+                  inv
+                    ? `${inv.availToSell} available to sell + ${inv.reserved} ordered but not shipped`
+                    : undefined
+                }
+                stock={reconcileStock(parsed.lots, soldBySku.get(sku) ?? 0, inv ? inv.onHand : null)}
+                avg={averageUnitCost(parsed.lots)}
+                cu={cubicInches(parsed)}
+                dim={dimWeight(parsed)}
+                boxValues={inputs[sku] ?? {}}
+                onBoxChange={(field, value) => setField(sku, field, value)}
+                drafts={lotDrafts[sku] ?? []}
+                isOpen={expanded.has(sku)}
+                onToggle={() => toggleExpanded(sku)}
+                onAdd={() => addLot(sku)}
+                onUpdate={(i, field, value) => updateLot(sku, i, field, value)}
+                onRemove={(i) => removeLot(sku, i)}
+              />
+            );
+          })}
+          {skus.length === 0 && (
+            <li className="text-sm text-sc-ink-2">No SKUs found in the returned data.</li>
+          )}
+        </ul>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="sc-table w-full text-sm whitespace-nowrap">
             <thead>
               <tr className="border-b border-sc-line text-left">
@@ -737,6 +783,7 @@ export default function MarginsPage() {
                         <td key={f.key} className="pr-3">
                           <input
                             type="number"
+                            inputMode="decimal"
                             step={f.step}
                             min="0"
                             placeholder="—"
@@ -865,7 +912,41 @@ export default function MarginsPage() {
           shipping are projected from that SKU&apos;s settled history (hover
           for details) and switch to exact figures once the order settles.
         </p>
-        <div className="overflow-x-auto">
+
+        <ul className="flex flex-col gap-3 md:hidden">
+          {margins.map((m) => (
+            <OrderLineCard
+              key={`${m.status}-${m.purchaseOrderNo}-${m.purchaseOrderLine}`}
+              m={m}
+            />
+          ))}
+          {margins.length === 0 && (
+            <li className="text-sm text-sc-ink-2">No order lines found.</li>
+          )}
+          {settledCount > 0 && (
+            <TotalsCard
+              label={`Settled · ${settledCount} line${settledCount === 1 ? "" : "s"}`}
+              totals={settledTotals}
+              uncosted={
+                margins.filter((m) => m.status === "settled" && !m.hasCost).length
+              }
+            />
+          )}
+          {estimatedCount > 0 && (
+            <TotalsCard
+              label={`Estimated · ${estimatedCount} line${estimatedCount === 1 ? "" : "s"}${noEstimateCount > 0 ? ` (+${noEstimateCount} not estimable, excluded)` : ""}`}
+              totals={estimatedTotals}
+              uncosted={
+                margins.filter(
+                  (m) => m.status === "estimated" && !m.noEstimate && !m.hasCost
+                ).length
+              }
+              italic
+            />
+          )}
+        </ul>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="sc-table w-full text-sm whitespace-nowrap">
             <thead>
               <tr className="border-b border-sc-line text-left">
@@ -1140,7 +1221,50 @@ function StockValueTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <ul className="flex flex-col gap-3 md:hidden">
+        {rows.map((r) => (
+          <li key={r.sku} className="rounded-lg border border-sc-line p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 font-bold break-words">{r.sku}</div>
+              <div className="shrink-0 text-sm text-sc-ink-2">
+                {r.onHand} on hand
+              </div>
+            </div>
+            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+              <Fig label="Avg cost">
+                {r.avgCost === null ? (
+                  <span className="text-amber-600">no cost</span>
+                ) : (
+                  money(r.avgCost)
+                )}
+              </Fig>
+              <Fig label="Listed price">
+                {r.listedPrice === null ? dash : money(r.listedPrice)}
+              </Fig>
+              <Fig label="Value at cost">
+                {r.valueAtCost === null ? dash : money(r.valueAtCost)}
+              </Fig>
+              <Fig label="Value at price">
+                {r.valueAtPrice === null ? (
+                  dash
+                ) : r.isPublished ? (
+                  money(r.valueAtPrice)
+                ) : (
+                  <span className="text-amber-600">{money(r.valueAtPrice)}</span>
+                )}
+              </Fig>
+            </dl>
+            {r.valueAtPrice !== null && !r.isPublished && (
+              <p className="mt-2 text-xs text-amber-600">
+                Unpublished ({r.publishedStatus}) — can&apos;t sell right now, so
+                it&apos;s left out of the at-price total.
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+
+      <div className="hidden overflow-x-auto md:block">
         <table className="sc-table w-full text-sm whitespace-nowrap">
           <thead>
             <tr className="border-b border-sc-line text-left">
@@ -1207,6 +1331,150 @@ function StockValueTable({
   );
 }
 
+/** A small label-over-value pair for the phone cards. */
+function Fig({
+  label,
+  children,
+  className = "",
+  title,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+  title?: string;
+}) {
+  return (
+    <div className={className} title={title}>
+      <dt className="text-xs text-sc-ink-2">{label}</dt>
+      <dd className="text-sm tabular-nums">{children}</dd>
+    </div>
+  );
+}
+
+function InventoryCard({
+  sku,
+  onHand,
+  onHandTitle,
+  stock,
+  avg,
+  cu,
+  dim,
+  boxValues,
+  onBoxChange,
+  drafts,
+  isOpen,
+  onToggle,
+  onAdd,
+  onUpdate,
+  onRemove,
+}: {
+  sku: string;
+  onHand: number | null;
+  onHandTitle?: string;
+  stock: ReturnType<typeof reconcileStock>;
+  avg: number | null;
+  cu: number | null;
+  dim: number | null;
+  boxValues: Partial<Record<SkuField, string>>;
+  onBoxChange: (field: SkuField, value: string) => void;
+  drafts: LotDraft[];
+  isOpen: boolean;
+  onToggle: () => void;
+  onAdd: () => void;
+  onUpdate: (index: number, field: keyof LotDraft, value: string) => void;
+  onRemove: (index: number) => void;
+}) {
+  const muted = <span className="text-sc-ink-2/70">—</span>;
+  return (
+    <li className="rounded-lg border border-sc-line p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 font-bold break-words">{sku}</div>
+        <div className="shrink-0 text-right">
+          <div className="text-xs text-sc-ink-2">Avg cost</div>
+          <div className="font-bold">
+            {avg === null ? <span className="text-amber-600">no cost</span> : money(avg)}
+          </div>
+        </div>
+      </div>
+
+      <dl className="mt-3 grid grid-cols-4 gap-2">
+        <Fig label="On hand" title={onHandTitle}>
+          {onHand ?? muted}
+        </Fig>
+        <Fig label="Sold">{stock.sold}</Fig>
+        <Fig label="Bought">{stock.purchased || muted}</Fig>
+        <Fig
+          label="Left"
+          title={
+            stock.discrepancy
+              ? `Your batches imply ${stock.impliedOnHand} left, Walmart says ${stock.onHand}.`
+              : undefined
+          }
+        >
+          {stock.purchased === 0 ? (
+            muted
+          ) : (
+            <span className={stock.discrepancy ? "text-amber-600" : ""}>
+              {stock.impliedOnHand}
+            </span>
+          )}
+        </Fig>
+      </dl>
+      {stock.discrepancy ? (
+        <p className="mt-1 text-xs text-amber-600">
+          Batches imply {stock.impliedOnHand} left; Walmart says {stock.onHand}.
+        </p>
+      ) : null}
+
+      <div className="mt-3 grid grid-cols-4 gap-2">
+        {BOX_FIELDS.map((f) => (
+          <label key={f.key} className="flex min-w-0 flex-col gap-1 text-xs text-sc-ink-2">
+            {f.label}
+            <input
+              type="number"
+              inputMode="decimal"
+              step={f.step}
+              min="0"
+              placeholder="—"
+              aria-label={`${f.label} for ${sku}`}
+              value={boxValues[f.key] ?? ""}
+              onChange={(e) => onBoxChange(f.key, e.target.value)}
+              className="sc-input w-full min-w-0 text-right text-sm text-sc-ink"
+            />
+          </label>
+        ))}
+      </div>
+      {(cu !== null || dim !== null) && (
+        <p className="mt-1 text-xs text-sc-ink-2">
+          {cu?.toFixed(0)} cu in · {dim?.toFixed(1)} lb dim wt (estimate)
+        </p>
+      )}
+
+      <button
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        className="sc-btn mt-3 w-full justify-between"
+      >
+        <span>
+          Purchase batches{drafts.length > 0 ? ` (${drafts.length})` : ""}
+        </span>
+        <span aria-hidden="true">{isOpen ? "▾" : "▸"}</span>
+      </button>
+      {isOpen && (
+        <div className="mt-2 rounded-lg bg-sc-head p-3">
+          <CostLotsEditor
+            sku={sku}
+            drafts={drafts}
+            onAdd={onAdd}
+            onUpdate={onUpdate}
+            onRemove={onRemove}
+          />
+        </div>
+      )}
+    </li>
+  );
+}
+
 function CostLotsEditor({
   sku,
   drafts,
@@ -1228,13 +1496,13 @@ function CostLotsEditor({
   const spent = parsed.reduce((n, l) => n + l.qty * l.unitCost, 0);
 
   return (
-    <div className="flex flex-col items-start gap-2">
+    <div className="flex w-full flex-col items-start gap-2">
       <span className="text-xs text-sc-ink-2">
         Purchase batches for {sku}
       </span>
 
       {drafts.map((lot, i) => (
-        <div key={i} className="flex items-center gap-2">
+        <div key={i} className="flex w-full items-center gap-2 sm:w-auto">
           <input
             type="number"
             min="0"
@@ -1243,7 +1511,8 @@ function CostLotsEditor({
             aria-label={`Batch ${i + 1} quantity for ${sku}`}
             value={lot.qty}
             onChange={(e) => onUpdate(i, "qty", e.target.value)}
-            className="w-20 sc-input text-right"
+            inputMode="numeric"
+            className="sc-input w-16 shrink-0 text-right sm:w-20"
           />
           <span className="text-sc-ink-2/70">×</span>
           <input
@@ -1254,9 +1523,10 @@ function CostLotsEditor({
             aria-label={`Batch ${i + 1} unit cost for ${sku}`}
             value={lot.unitCost}
             onChange={(e) => onUpdate(i, "unitCost", e.target.value)}
-            className="w-28 sc-input text-right"
+            inputMode="decimal"
+            className="sc-input w-24 shrink-0 text-right sm:w-28"
           />
-          <span className="w-24 text-right text-sc-ink-2">
+          <span className="hidden text-right text-sc-ink-2 sm:inline sm:w-24">
             {!Number.isNaN(parseFloat(lot.qty)) &&
             !Number.isNaN(parseFloat(lot.unitCost))
               ? money(parseFloat(lot.qty) * parseFloat(lot.unitCost))
@@ -1264,7 +1534,7 @@ function CostLotsEditor({
           </span>
           <button
             onClick={() => onRemove(i)}
-            className="text-sc-ink-2/70 hover:text-red-600"
+            className="ml-auto shrink-0 p-2 text-sc-ink-2/70 hover:text-red-600 sm:ml-0"
             aria-label={`Remove batch ${i + 1} for ${sku}`}
           >
             ✕
@@ -1272,7 +1542,7 @@ function CostLotsEditor({
         </div>
       ))}
 
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
         <button onClick={onAdd} className="sc-link text-sm">
           + Add batch
         </button>
@@ -1287,11 +1557,101 @@ function CostLotsEditor({
   );
 }
 
+function shipPctClass(pct: number | null): string {
+  if (pct === null) return "";
+  if (pct > SHIPPING_PCT_ALERT) return "text-red-600 font-medium";
+  if (pct > SHIPPING_PCT_WARN) return "text-amber-600";
+  return "";
+}
+
 function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
   const dash = <span className="text-sc-ink-2/70">—</span>;
 
   return (
-    <div className="overflow-x-auto">
+    <>
+    <ul className="flex flex-col gap-3 md:hidden">
+      {summaries.map((s) => {
+        const t = s.totals;
+        const unknownProfit = s.hasMoney && s.missingCost;
+        return (
+          <li key={s.sku} className="rounded-lg border border-sc-line p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-bold break-words">{s.sku}</div>
+                <div className="truncate text-xs text-sc-ink-2">{s.itemName}</div>
+              </div>
+              <div className="shrink-0 text-right">
+                <div className="text-xs text-sc-ink-2">Profit</div>
+                <div className="font-bold">
+                  {!s.hasMoney ? (
+                    dash
+                  ) : unknownProfit ? (
+                    <span className="text-amber-600">—</span>
+                  ) : (
+                    money(t.profit)
+                  )}
+                </div>
+                <div className="text-xs">
+                  {!s.hasMoney ? null : unknownProfit ? (
+                    <span className="text-amber-600">no cost</span>
+                  ) : s.margin === null ? null : (
+                    `${(s.margin * 100).toFixed(1)}% margin`
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <p className="mt-2 text-xs text-sc-ink-2">
+              {s.units} unit{s.units === 1 ? "" : "s"} · {s.lines} line
+              {s.lines === 1 ? "" : "s"}
+              {s.estimatedLines > 0 && ` (${s.estimatedLines} est.)`}
+              {s.noEstimateLines > 0 && ` · ${s.noEstimateLines} not estimable`}
+            </p>
+
+            {s.hasMoney ? (
+              <dl className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2">
+                <Fig label="Revenue">{money(t.revenue)}</Fig>
+                <Fig label="Avg price">
+                  {s.avgPrice === null ? dash : money(s.avgPrice)}
+                </Fig>
+                <Fig label="Net">{money(t.netAmount)}</Fig>
+                <Fig label="Commission">
+                  <span className="text-red-600">{money(t.commission)}</span>
+                </Fig>
+                <Fig
+                  label="Shipping"
+                  title={`Amber above ${SHIPPING_PCT_WARN * 100}% of revenue, red above ${SHIPPING_PCT_ALERT * 100}%.`}
+                >
+                  <span className="text-red-600">{money(t.shipping)}</span>
+                  {s.shippingPct !== null && (
+                    <span className={`block text-xs ${shipPctClass(s.shippingPct) || "text-sc-ink-2"}`}>
+                      {(s.shippingPct * 100).toFixed(1)}% of revenue
+                    </span>
+                  )}
+                </Fig>
+                <Fig label="Cost">
+                  {s.missingCost ? (
+                    <span className="text-amber-600">—</span>
+                  ) : (
+                    money(-t.costTotal)
+                  )}
+                </Fig>
+              </dl>
+            ) : (
+              <p className="mt-2 text-xs text-sc-ink-2">
+                No settled history for this SKU yet, so its fees can&apos;t be
+                estimated.
+              </p>
+            )}
+          </li>
+        );
+      })}
+      {summaries.length === 0 && (
+        <li className="text-sm text-sc-ink-2">No SKUs found.</li>
+      )}
+    </ul>
+
+    <div className="hidden overflow-x-auto md:block">
       <table className="sc-table w-full text-sm whitespace-nowrap">
         <thead>
           <tr className="border-b border-sc-line text-left">
@@ -1440,6 +1800,106 @@ function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
         </tbody>
       </table>
     </div>
+    </>
+  );
+}
+
+function OrderLineCard({ m }: { m: ReturnType<typeof computeMargins>[number] }) {
+  const est = m.status === "estimated";
+  const noEst = <span className="text-amber-600">no estimate</span>;
+  return (
+    <li
+      className={`rounded-lg border border-sc-line p-3 ${est ? "bg-sc-head/60" : ""}`}
+      title={est ? m.estimateNote : undefined}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className={`text-xs ${est ? "italic text-sc-ink-2" : "text-sc-ink-2"}`}>
+            {est ? `Estimated · ordered ${m.orderDate}` : `Settled · ${m.postedDate ?? ""}`}
+          </div>
+          <div className="font-bold break-words">{m.sku}</div>
+          <div className="truncate text-xs text-sc-ink-2">
+            {m.qty} × {m.itemName}
+          </div>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-xs text-sc-ink-2">Profit</div>
+          <div className="font-bold">
+            {m.noEstimate ? (
+              noEst
+            ) : m.hasCost ? (
+              money(m.profit)
+            ) : (
+              <span className="text-amber-600">—</span>
+            )}
+          </div>
+          <div className="text-xs">
+            {m.noEstimate ? null : !m.hasCost ? (
+              <span className="text-amber-600">no cost</span>
+            ) : m.margin === null ? null : (
+              `${(m.margin * 100).toFixed(1)}% margin`
+            )}
+          </div>
+        </div>
+      </div>
+      <dl className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2">
+        <Fig label="Revenue">{money(m.revenue)}</Fig>
+        <Fig label="Commission">
+          {m.noEstimate ? noEst : <span className="text-red-600">{money(m.commission)}</span>}
+        </Fig>
+        <Fig label="Shipping">
+          {m.noEstimate ? noEst : <span className="text-red-600">{money(m.shipping)}</span>}
+        </Fig>
+        <Fig label="Net">{m.noEstimate ? noEst : money(m.netAmount)}</Fig>
+        <Fig label="Cost">
+          {m.hasCost || m.costTotal !== 0 ? (
+            money(-m.costTotal)
+          ) : (
+            <span className="text-amber-600">—</span>
+          )}
+        </Fig>
+        <Fig label="Other">{money(m.tax + m.otherFees)}</Fig>
+      </dl>
+    </li>
+  );
+}
+
+function TotalsCard({
+  label,
+  totals,
+  uncosted,
+  italic,
+}: {
+  label: string;
+  totals: ReturnType<typeof sumMargins>;
+  uncosted: number;
+  italic?: boolean;
+}) {
+  const unknown = <span className="text-amber-600">—</span>;
+  return (
+    <li className={`rounded-lg border-2 border-sc-line bg-sc-head p-3 ${italic ? "italic" : ""}`}>
+      <div className="text-sm font-bold">{label}</div>
+      <dl className="mt-2 grid grid-cols-3 gap-x-3 gap-y-2">
+        <Fig label="Revenue">{money(totals.revenue)}</Fig>
+        <Fig label="Commission">
+          <span className="text-red-600">{money(totals.commission)}</span>
+        </Fig>
+        <Fig label="Shipping">
+          <span className="text-red-600">{money(totals.shipping)}</span>
+        </Fig>
+        <Fig label="Net">{money(totals.netAmount)}</Fig>
+        <Fig label="Cost">{uncosted > 0 ? unknown : money(-totals.costTotal)}</Fig>
+        <Fig label="Profit">
+          {uncosted > 0 ? unknown : money(totals.profit)}
+        </Fig>
+      </dl>
+      {uncosted > 0 && (
+        <p className="mt-2 text-xs not-italic text-amber-600">
+          {uncosted} line{uncosted === 1 ? " has" : "s have"} no cost entered, so
+          cost and profit aren&apos;t known yet.
+        </p>
+      )}
+    </li>
   );
 }
 
