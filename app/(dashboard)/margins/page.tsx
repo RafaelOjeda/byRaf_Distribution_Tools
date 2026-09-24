@@ -437,111 +437,111 @@ export default function MarginsPage() {
 
   if (step === "credentials") {
     return (
-      <div className="sc-card mx-auto mt-8 flex w-full max-w-md flex-col gap-5 p-6">
-        <div>
-          <h1 className="text-[28px] leading-9 font-normal">Sign in with your API keys</h1>
-          <p className="mt-2 text-sm text-sc-ink-2">
-            Paste your Walmart Marketplace API credentials (from Seller
-            Center) to see which settlement reports are available. Nothing
-            is saved anywhere — refresh this page and it&apos;s gone.
-          </p>
+      <>
+        <div className="sc-card mx-auto mt-2 sm:mt-8 flex w-full max-w-md flex-col gap-5 p-6">
+          <div>
+            <h1 className="text-[28px] leading-9 font-normal">Sign in with your API keys</h1>
+            <p className="mt-2 text-sm text-sc-ink-2">
+              Paste your Walmart Marketplace API credentials (from Seller
+              Center) to see which settlement reports are available. Nothing
+              is saved anywhere — refresh this page and it&apos;s gone.
+            </p>
+          </div>
+          <form onSubmit={handleListReports} className="flex flex-col gap-3">
+            <label className="flex flex-col gap-1 text-sm font-bold">
+              Client ID
+              <input
+                type="text"
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                className="sc-input font-normal"
+                autoComplete="off"
+                required
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-bold">
+              Client Secret
+              <input
+                type="password"
+                value={clientSecret}
+                onChange={(e) => setClientSecret(e.target.value)}
+                className="sc-input font-normal"
+                autoComplete="off"
+                required
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={loading}
+              className="sc-btn-primary mt-1 w-full"
+            >
+              {loading ? "Checking…" : "See available reports"}
+            </button>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+          </form>
         </div>
-        <form onSubmit={handleListReports} className="flex flex-col gap-3">
-          <label className="flex flex-col gap-1 text-sm font-bold">
-            Client ID
-            <input
-              type="text"
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-              className="sc-input font-normal"
-              autoComplete="off"
-              required
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-bold">
-            Client Secret
-            <input
-              type="password"
-              value={clientSecret}
-              onChange={(e) => setClientSecret(e.target.value)}
-              className="sc-input font-normal"
-              autoComplete="off"
-              required
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={loading}
-            className="sc-btn-primary mt-1 w-full"
-          >
-            {loading ? "Checking…" : "See available reports"}
-          </button>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-        </form>
-      </div>
+        <InstallPrompt />
+      </>
     );
   }
 
   if (step === "reports") {
     return (
-      <>
-        <InstallPrompt />
-        <div className="sc-card mx-auto mt-8 flex w-full max-w-md flex-col gap-5 p-6">
-          <div className="flex items-start justify-between gap-4">
-            <h1 className="text-[28px] leading-9 font-normal">Settlement reports</h1>
-            <button onClick={startOver} className="sc-link mt-2 shrink-0 text-sm">
-              Start over
-            </button>
-          </div>
-          <p className="text-sm text-sc-ink-2">
-            These are the same reports Walmart shows under Payments in Seller
-            Center — one per settlement period, roughly every two weeks. Pick
-            which to pull.
-          </p>
-          <div className="flex flex-col overflow-hidden rounded-lg border border-sc-line">
-            {reportDates.map((date) => (
-              <label
-                key={date}
-                className="flex min-h-11 cursor-pointer items-center gap-3 border-b border-sc-row px-3 py-2.5 text-sm last:border-b-0 hover:bg-sc-head"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedDates.has(date)}
-                  onChange={() => toggleDate(date)}
-                />
-                {formatReportDate(date)}
-                <span className="text-sc-ink-2/70">
-                  ({date})
-                </span>
-              </label>
-            ))}
-          </div>
-          <div className="flex gap-4 text-sm">
-            <button
-              onClick={() => setSelectedDates(new Set(reportDates))}
-              className="sc-link"
-            >
-              Select all
-            </button>
-            <button
-              onClick={() => setSelectedDates(new Set())}
-              className="sc-link"
-            >
-              Select none
-            </button>
-          </div>
-          <button
-            onClick={handleLoadSelected}
-            disabled={loading || selectedDates.size === 0}
-            className="sc-btn-primary w-full"
-          >
-            {loading
-              ? "Loading…"
-              : `Load ${selectedDates.size} report${selectedDates.size === 1 ? "" : "s"}`}
+      <div className="sc-card mx-auto mt-8 flex w-full max-w-md flex-col gap-5 p-6">
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="text-[28px] leading-9 font-normal">Settlement reports</h1>
+          <button onClick={startOver} className="sc-link mt-2 shrink-0 text-sm">
+            Start over
           </button>
-          {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
-      </>
+        <p className="text-sm text-sc-ink-2">
+          These are the same reports Walmart shows under Payments in Seller
+          Center — one per settlement period, roughly every two weeks. Pick
+          which to pull.
+        </p>
+        <div className="flex flex-col overflow-hidden rounded-lg border border-sc-line">
+          {reportDates.map((date) => (
+            <label
+              key={date}
+              className="flex min-h-11 cursor-pointer items-center gap-3 border-b border-sc-row px-3 py-2.5 text-sm last:border-b-0 hover:bg-sc-head"
+            >
+              <input
+                type="checkbox"
+                checked={selectedDates.has(date)}
+                onChange={() => toggleDate(date)}
+              />
+              {formatReportDate(date)}
+              <span className="text-sc-ink-2/70">
+                ({date})
+              </span>
+            </label>
+          ))}
+        </div>
+        <div className="flex gap-4 text-sm">
+          <button
+            onClick={() => setSelectedDates(new Set(reportDates))}
+            className="sc-link"
+          >
+            Select all
+          </button>
+          <button
+            onClick={() => setSelectedDates(new Set())}
+            className="sc-link"
+          >
+            Select none
+          </button>
+        </div>
+        <button
+          onClick={handleLoadSelected}
+          disabled={loading || selectedDates.size === 0}
+          className="sc-btn-primary w-full"
+        >
+          {loading
+            ? "Loading…"
+            : `Load ${selectedDates.size} report${selectedDates.size === 1 ? "" : "s"}`}
+        </button>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+      </div>
     );
   }
 

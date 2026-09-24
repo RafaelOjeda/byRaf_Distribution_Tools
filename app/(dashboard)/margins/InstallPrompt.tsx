@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 /*
- * "Add to Home Screen" banner shown right after credentials are accepted.
+ * "Add to Home Screen" banner shown on the sign-in screen, so it is visible
+ * before anyone has entered anything.
  *
  * Android/Chrome lets a page trigger the install prompt itself (the
  * beforeinstallprompt event), so there the button really installs. iOS has no
@@ -22,17 +23,19 @@ type InstallEvent = Event & {
 const DISMISSED_KEY = "byraf-install-dismissed";
 
 let deferred: InstallEvent | null = null;
+let dismissedThisSession = false;
 const listeners = new Set<() => void>();
+const notify = () => listeners.forEach((fn) => fn());
 
 if (typeof window !== "undefined") {
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault(); // keep it for our own button
     deferred = e as InstallEvent;
-    listeners.forEach((fn) => fn());
+    notify();
   });
   window.addEventListener("appinstalled", () => {
     deferred = null;
-    listeners.forEach((fn) => fn());
+    notify();
   });
 }
 
@@ -52,6 +55,7 @@ function detect(): Platform {
 }
 
 function readDismissed(): boolean {
+  if (dismissedThisSession) return true;
   try {
     return localStorage.getItem(DISMISSED_KEY) === "1";
   } catch {
@@ -59,25 +63,32 @@ function readDismissed(): boolean {
   }
 }
 
+// One primitive snapshot so React can compare it cheaply. The server snapshot
+// is "hidden", so the first client render matches the server's HTML and the
+// real state appears right after hydration.
+const snapshot = () =>
+  `${readDismissed() ? "hidden" : (detect() ?? "hidden")}|${deferred ? "native" : "manual"}`;
+const serverSnapshot = () => "hidden|manual";
+const subscribe = (fn: () => void) => {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+};
+
 export default function InstallPrompt() {
-  // Only ever rendered after a click (the reports step), never during server
-  // rendering, so it's safe to read the browser here directly.
-  const [platform, setPlatform] = useState<Platform>(detect);
-  const [dismissed, setDismissed] = useState(readDismissed);
+  const state = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
   const [showSteps, setShowSteps] = useState(false);
+  const [platform, mode] = state.split("|") as [
+    Platform | "hidden",
+    "native" | "manual",
+  ];
 
-  useEffect(() => {
-    const refresh = () => setPlatform(detect());
-    listeners.add(refresh);
-    return () => {
-      listeners.delete(refresh);
-    };
-  }, []);
-
-  if (!platform || dismissed) return null;
+  if (platform === "hidden") return null;
 
   function dismiss() {
-    setDismissed(true);
+    dismissedThisSession = true;
+    notify();
     try {
       localStorage.setItem(DISMISSED_KEY, "1");
     } catch {
@@ -95,30 +106,29 @@ export default function InstallPrompt() {
     await prompt.prompt();
     const { outcome } = await prompt.userChoice;
     if (outcome === "accepted") dismiss();
-    else listeners.forEach((fn) => fn());
+    else notify();
   }
 
-  const native = deferred !== null;
+  const native = mode === "native";
 
   return (
     <section
       aria-label="Install as an app"
-      className="sc-card mx-auto mt-6 flex w-full max-w-md flex-col gap-3 border-l-4 border-l-sc-accent p-4"
+      className="sc-card mx-auto mt-3 flex w-full max-w-md flex-col gap-2 border-l-4 border-l-sc-accent p-3 sm:mt-6 sm:gap-3 sm:p-4"
     >
       <div className="flex items-start gap-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/icons/icon-192.png"
           alt=""
-          width={48}
-          height={48}
-          className="h-12 w-12 shrink-0 rounded-xl border border-sc-line"
+          width={40}
+          height={40}
+          className="h-10 w-10 shrink-0 rounded-xl border border-sc-line"
         />
         <div className="flex-1">
           <h2 className="text-base font-bold">Add this to your home screen</h2>
           <p className="mt-0.5 text-sm text-sc-ink-2">
-            Open it like an app, full screen, with one tap. You&rsquo;ll still
-            paste your credentials each time, since nothing is saved.
+            Opens full screen, like an app.
           </p>
         </div>
       </div>
