@@ -1,136 +1,4 @@
-import type { Order } from "./walmart/orders";
-import type { ReconRow } from "./walmart/recon";
-
-export interface OrderLineSummary {
-  purchaseOrderNo: string;
-  purchaseOrderLine: string;
-  sku: string;
-  itemName: string;
-  qty: number;
-  fulfillmentType: string;
-  commissionRate: string;
-
-  // "settled" = exact figures from a recon report. "estimated" = an
-  // order Walmart hasn't settled yet; commission and shipping are
-  // projected from that SKU's settled history.
-  status: "settled" | "estimated";
-  // Estimated line whose SKU has no settled history to project from.
-  // Its commission/shipping/net are placeholders and must not be shown
-  // or summed.
-  noEstimate: boolean;
-  estimateNote?: string;
-  orderDate?: string; // YYYY-MM-DD, estimated lines only
-  postedDate?: string; // YYYY-MM-DD settlement posting date, settled lines only
-  /**
-   * The date a sale is placed on for trend charts: the real order date
-   * where the Orders API has it, else the settlement posting date (which
-   * runs a couple of days after the sale). saleDateBasis says which.
-   * Kept separate from orderDate/postedDate so the CSV export's meaning
-   * of those two columns doesn't change.
-   */
-  saleDate?: string;
-  saleDateBasis?: "order" | "posted";
-
-  // Components. Every row lands in exactly one of these, so they always
-  // sum to netAmount - nothing is silently dropped.
-  revenue: number; // "Product Price"
-  commission: number; // "Commission on Product" (negative)
-  shipping: number; // shipping label charges (negative)
-  tax: number; // tax collected + withheld, normally nets to 0
-  otherFees: number; // anything not matched above
-
-  netAmount: number;
-}
-
-/**
- * Walmart's own APIs disagree on SKU casing - the inventory API returns
- * "Jurassic-World-001" where the settlement report says
- * "JURASSIC-WORLD-001". Every SKU-keyed lookup goes through this so the
- * same product doesn't silently split in two.
- */
-export function normalizeSku(sku: string): string {
-  return sku.trim().toUpperCase();
-}
-
-/** Walmart sends MM/DD/YYYY; ISO sorts and compares correctly as a string. */
-function toIsoDate(mdy: string | undefined): string | undefined {
-  const m = mdy?.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  return m ? `${m[3]}-${m[1]}-${m[2]}` : undefined;
-}
-
-type Component = "revenue" | "commission" | "shipping" | "tax" | "otherFees";
-
-/**
- * Categories confirmed against live settlement data 2026-09-23. Shipping
- * is matched on description rather than Amount Type, because Walmart
- * files label charges under the generic "Fee/Reimbursement" type.
- */
-function classify(amountType: string, description: string): Component {
-  if (amountType === "Product Price") return "revenue";
-  if (amountType === "Commission on Product") return "commission";
-  if (amountType.startsWith("Product tax")) return "tax";
-  if (/shipping/i.test(description)) return "shipping";
-  return "otherFees";
-}
-
-/**
- * Groups raw recon rows into one summary per order line. Rows with no
- * Purchase Order # (account-level rows like PaymentSummary, or WFS
- * storage fees) are dropped here - they don't belong to a single line.
- */
-export function groupReconRows(rows: ReconRow[]): OrderLineSummary[] {
-  const groups = new Map<string, OrderLineSummary>();
-
-  for (const row of rows) {
-    const po = row["Purchase Order #"];
-    const line = row["Purchase Order line #"];
-    if (!po || !line) continue;
-
-    const key = `${po}::${line}`;
-    let group = groups.get(key);
-    if (!group) {
-      group = {
-        purchaseOrderNo: po,
-        purchaseOrderLine: line,
-        sku: row["Partner Item Id"] || "",
-        itemName: row["Partner Item Name"] || "",
-        qty: 0,
-        fulfillmentType: row["Fulfillment Type"] || "",
-        commissionRate: "",
-        status: "settled",
-        noEstimate: false,
-        revenue: 0,
-        commission: 0,
-        shipping: 0,
-        tax: 0,
-        otherFees: 0,
-        netAmount: 0,
-      };
-      groups.set(key, group);
-    }
-
-    const amount = parseFloat(row["Amount"]) || 0;
-    group[classify(row["Amount Type"], row["Transaction Description"])] +=
-      amount;
-    group.netAmount += amount;
-
-    const posted = toIsoDate(row["Transaction Posted Timestamp"]);
-    if (posted && (!group.postedDate || posted < group.postedDate)) {
-      group.postedDate = posted; // earliest row wins
-    }
-
-    if (!group.sku && row["Partner Item Id"]) group.sku = row["Partner Item Id"];
-    if (!group.itemName && row["Partner Item Name"]) {
-      group.itemName = row["Partner Item Name"];
-    }
-    if (!group.qty) group.qty = parseInt(row["Ship Qty"], 10) || 0;
-    if (!group.commissionRate && row["Commission Rate"]) {
-      group.commissionRate = row["Commission Rate"];
-    }
-  }
-
-  return [...groups.values()];
-}
+import { normalizeSku, type OrderLineSummary } from "./types";
 
 export interface SkuHistory {
   commissionRate: number; // effective fraction of revenue, e.g. 0.064
@@ -140,9 +8,8 @@ export interface SkuHistory {
 
 /**
  * Per-SKU averages from settled lines. Commission is the effective rate
- * actually charged, not the "Commission Rate" field: the Barbie SKU's
- * effective rate (~6.4%) differs from the plain category rate, likely
- * from an incentive program, so a flat category rate would be wrong.
+ * actually charged, not a flat category rate: incentive programs and
+ * similar can make the two differ.
  */
 export function buildSkuHistory(
   settled: OrderLineSummary[]
@@ -172,17 +39,12 @@ export function buildSkuHistory(
   return out;
 }
 
-const SHIP_NODE_LABELS: Record<string, string> = {
-  SellerFulfilled: "Seller Fulfilled",
-  WFSFulfilled: "WFS",
-};
-
 /**
- * Match key between the recon report and the Orders API. Not PO + line
- * number: the two APIs disagree on line numbers for the same order
- * (observed: line 2 in the recon report, line 1 in the Orders API).
- * Trade-off: an order with the same SKU on two lines that
- * settle in different periods would count as settled once either does.
+ * Match key between a settlement/recon report and a source's own order
+ * list. Not just PO + line number: connectors have been seen to disagree
+ * with themselves on line numbers for the same order. Trade-off: an order
+ * with the same SKU on two lines that settle in different periods would
+ * count as settled once either does.
  */
 export function settlementKey(purchaseOrderNo: string, sku: string): string {
   return `${purchaseOrderNo}::${normalizeSku(sku)}`;
@@ -190,10 +52,10 @@ export function settlementKey(purchaseOrderNo: string, sku: string): string {
 
 /**
  * Places every line on a sale date. Estimated lines already carry their
- * real order date. Settled lines look theirs up in orderDates (built
- * from the Orders API, keyed with settlementKey); ones older than the
- * Orders API window fall back to the settlement posting date and are
- * marked "posted" so the approximation is visible, not silent.
+ * real order date. Settled lines look theirs up in orderDates (keyed with
+ * settlementKey); ones older than the order-list window fall back to the
+ * settlement posting date and are marked "posted" so the approximation is
+ * visible, not silent.
  */
 export function assignSaleDates(
   lines: OrderLineSummary[],
@@ -208,79 +70,6 @@ export function assignSaleDates(
     }
     return l;
   });
-}
-
-/**
- * Turns orders Walmart hasn't settled yet into estimated line summaries.
- * Lines already in a recon report (settledKeys, built with
- * settlementKey) and fully cancelled lines are skipped. Tax is left at
- * 0: Walmart collects and withholds it, so it nets to nothing on every
- * settled line seen so far.
- */
-export function estimateUnsettled(
-  orders: Order[],
-  settledKeys: Set<string>,
-  history: Record<string, SkuHistory>
-): OrderLineSummary[] {
-  const out: OrderLineSummary[] = [];
-
-  for (const order of orders) {
-    for (const line of order.orderLines?.orderLine ?? []) {
-      const sku = line.item?.sku ?? "";
-      if (settledKeys.has(settlementKey(order.purchaseOrderId, sku))) {
-        continue;
-      }
-
-      const orderedQty = parseInt(line.orderLineQuantity?.amount, 10) || 0;
-      const activeQty = (line.orderLineStatuses?.orderLineStatus ?? [])
-        .filter((s) => s.status !== "Cancelled")
-        .reduce((n, s) => n + (parseInt(s.statusQuantity?.amount, 10) || 0), 0);
-      if (activeQty === 0 || orderedQty === 0) continue;
-
-      // chargeAmount is taken as the line total and scaled down for any
-      // partially cancelled quantity. Every line seen so far is qty 1,
-      // so the line-total reading is unverified for qty > 1.
-      const scale = activeQty / orderedQty;
-      let revenue = 0;
-      let otherFees = 0;
-      for (const c of line.charges?.charge ?? []) {
-        const amount = (c.chargeAmount?.amount ?? 0) * scale;
-        if (c.chargeType === "PRODUCT") revenue += amount;
-        else otherFees += amount;
-      }
-
-      const h = history[normalizeSku(sku)];
-      const commission = h ? -revenue * h.commissionRate : 0;
-      const shipping = h ? h.avgShipping : 0;
-
-      out.push({
-        purchaseOrderNo: order.purchaseOrderId,
-        purchaseOrderLine: line.lineNumber,
-        sku,
-        itemName: line.item?.productName ?? "",
-        qty: activeQty,
-        fulfillmentType:
-          SHIP_NODE_LABELS[order.shipNode?.type ?? ""] ??
-          order.shipNode?.type ??
-          "",
-        commissionRate: h ? (h.commissionRate * 100).toFixed(1) : "",
-        status: "estimated",
-        noEstimate: !h,
-        estimateNote: h
-          ? `Estimated: commission at ${(h.commissionRate * 100).toFixed(1)}% and shipping at the average of ${h.shipments} settled shipment${h.shipments === 1 ? "" : "s"}`
-          : "No settled history for this SKU yet - nothing to estimate from",
-        orderDate: new Date(order.orderDate).toISOString().slice(0, 10),
-        revenue,
-        commission,
-        shipping,
-        tax: 0,
-        otherFees,
-        netAmount: revenue + commission + shipping + otherFees,
-      });
-    }
-  }
-
-  return out;
 }
 
 /**
@@ -411,13 +200,13 @@ export function stockValue(
 export interface SkuStock {
   purchased: number; // from the cost lots you entered
   sold: number; // units on settled + estimated order lines
-  onHand: number | null; // Walmart's count, null if inventory wasn't loaded
+  onHand: number | null; // the source's count, null if inventory wasn't loaded
   /** purchased - sold: what your own records imply is left. */
   impliedOnHand: number;
   /**
-   * Your implied stock minus Walmart's. Non-zero means the two disagree
-   * - usually a missing or mistyped lot. Null when either side is
-   * unknown. Deliberately advisory: real drift happens (damage,
+   * Your implied stock minus the source's. Non-zero means the two
+   * disagree - usually a missing or mistyped lot. Null when either side
+   * is unknown. Deliberately advisory: real drift happens (damage,
    * returns, stock held but not listed), so this never blocks entry.
    */
   discrepancy: number | null;
@@ -444,7 +233,7 @@ export function reconcileStock(
  * The divisor carriers use to turn box volume into billable "dimensional
  * weight" - 139 is the common domestic ground figure. Shown so an
  * oversized box's shipping charge is explainable rather than mysterious;
- * it is an estimate, not what Walmart actually billed.
+ * it is an estimate, not what a marketplace actually billed.
  */
 export const DIM_DIVISOR = 139;
 
@@ -469,7 +258,7 @@ export interface MarginRow extends OrderLineSummary {
 
 /**
  * profit is correct even for a SKU with nothing entered yet (costs fall
- * back to 0) or an unrecognized Amount Type, since netAmount already
+ * back to 0) or an unrecognized fee category, since netAmount already
  * sums every row for the line regardless of category. Only the margin
  * percentage needs the revenue split.
  *

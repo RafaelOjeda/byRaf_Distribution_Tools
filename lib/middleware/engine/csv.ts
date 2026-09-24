@@ -1,5 +1,5 @@
-import type { CostLot, MarginRow, SkuInputs, SkuSummary } from "./margin";
-import { normalizeSku } from "./margin";
+import type { CostLot, MarginRow, SkuInputs, SkuSummary } from "./margins";
+import { normalizeSku } from "./types";
 
 type Cell = string | number | null;
 
@@ -7,8 +7,8 @@ const BOM = "﻿"; // so Excel reads UTF-8 (accented item names) correctly
 
 /**
  * Spreadsheets execute a cell starting with = + - @ tab or CR as a
- * formula. SKUs and item names come from Walmart's catalog, so string
- * cells get a leading apostrophe. Numbers are exempt: a legitimate
+ * formula. SKUs and item names come from a marketplace's catalog, so
+ * string cells get a leading apostrophe. Numbers are exempt: a legitimate
  * -12.50 must stay a number, not become text.
  */
 function guardFormula(s: string): string {

@@ -8,7 +8,7 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
-import type { PriceSeries } from "@/lib/prices";
+import type { PriceSeries } from "@/lib/middleware/engine/prices";
 
 /** Most series drawn at once; any others stay reachable in the table view. */
 const MAX_SERIES = 6;

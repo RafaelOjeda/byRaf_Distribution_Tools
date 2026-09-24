@@ -19,29 +19,28 @@ import {
   computeMargins,
   cubicInches,
   dimWeight,
-  groupReconRows,
-  normalizeSku,
   reconcileStock,
   sumMargins,
   summarizeBySku,
   assignSaleDates,
   stockValue,
   type CostLot,
-  type OrderLineSummary,
   type SkuInputs,
   type SkuSummary,
-} from "@/lib/margin";
+} from "@/lib/middleware/engine/margins";
+import { normalizeSku, type OrderLineSummary } from "@/lib/middleware/engine/types";
 import {
   costsToCsv,
   orderLinesToCsv,
   parseCostImportCsv,
   skuSummaryToCsv,
   type CostImportResult,
-} from "@/lib/csv";
-import { priceSeriesBySku } from "@/lib/prices";
-import type { InventoryItem } from "@/lib/walmart/inventory";
-import type { CatalogItem } from "@/lib/walmart/items";
-import type { ReconRow } from "@/lib/walmart/recon";
+} from "@/lib/middleware/engine/csv";
+import { priceSeriesBySku } from "@/lib/middleware/engine/prices";
+import { groupReconRows } from "@/lib/middleware/connectors/walmart/normalize";
+import type { InventoryItem } from "@/lib/middleware/connectors/walmart/inventory";
+import type { CatalogItem } from "@/lib/middleware/connectors/walmart/items";
+import type { ReconRow } from "@/lib/middleware/connectors/walmart/recon";
 import {
   listAvailableReports,
   loadInventory,

@@ -1,22 +1,27 @@
 "use server";
 
+import { buildSkuHistory, settlementKey } from "@/lib/middleware/engine/margins";
+import type { OrderLineSummary } from "@/lib/middleware/engine/types";
+import { fetchWalmartToken } from "@/lib/middleware/connectors/walmart/auth";
 import {
-  buildSkuHistory,
-  estimateUnsettled,
-  groupReconRows,
-  settlementKey,
-  type OrderLineSummary,
-} from "@/lib/margin";
-import { fetchWalmartToken } from "@/lib/walmart/auth";
-import { fetchInventory, type InventoryItem } from "@/lib/walmart/inventory";
-import { fetchCatalogPrices, type CatalogItem } from "@/lib/walmart/items";
-import { fetchOrdersSince } from "@/lib/walmart/orders";
+  fetchInventory,
+  type InventoryItem,
+} from "@/lib/middleware/connectors/walmart/inventory";
+import {
+  fetchCatalogPrices,
+  type CatalogItem,
+} from "@/lib/middleware/connectors/walmart/items";
+import { fetchOrdersSince } from "@/lib/middleware/connectors/walmart/orders";
 import {
   fetchAllAvailableRows,
   fetchRowsForDates,
   listAvailableReconFiles,
   type ReconRow,
-} from "@/lib/walmart/recon";
+} from "@/lib/middleware/connectors/walmart/recon";
+import {
+  estimateUnsettled,
+  groupReconRows,
+} from "@/lib/middleware/connectors/walmart/normalize";
 
 // Settlement runs ~2-3 weeks behind, so 60 days comfortably covers every
 // order that could still be unsettled.

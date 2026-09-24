@@ -1,12 +1,13 @@
 /**
- * Fixture checks for the cost CSV import/export in lib/csv.ts. No test
- * framework is set up in this repo, so this follows the same plain-tsx-
- * script convention as test-walmart-connection.ts.
+ * Fixture checks for the cost CSV import/export in
+ * lib/middleware/engine/csv.ts. No test framework is set up in this repo,
+ * so this follows the same plain-tsx-script convention as
+ * test-walmart-connection.ts.
  * Run with: npx tsx scripts/test-csv-import.ts
  */
 import assert from "node:assert/strict";
-import { costsToCsv, parseCostImportCsv } from "../lib/csv";
-import type { SkuInputs } from "../lib/margin";
+import { costsToCsv, parseCostImportCsv } from "../lib/middleware/engine/csv";
+import type { SkuInputs } from "../lib/middleware/engine/margins";
 
 let passed = 0;
 function check(name: string, fn: () => void) {
