@@ -8,7 +8,7 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
-import type { PriceSeries } from "@/lib/middleware/engine/prices";
+import type { PriceSeries } from "@/lib/middleware";
 
 /** Most series drawn at once; any others stay reachable in the table view. */
 const MAX_SERIES = 6;
@@ -405,8 +405,8 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
       {approx > 0 && (
         <p className="mt-2 text-xs" style={{ color: "var(--pc-ink-2)" }}>
           {approx} point{approx === 1 ? " is" : "s are"} placed on the settlement
-          posting date (about two days after the sale) because Walmart&apos;s
-          orders list only goes back 60 days.
+          posting date (about two days after the sale) because the
+          source&apos;s recent-orders list only goes back 60 days.
         </p>
       )}
     </div>

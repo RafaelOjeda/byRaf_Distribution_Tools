@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Walmart Margin Tracker",
-  description: "BYRAF Distribution — Walmart seller margin tracker",
+  title: "Margins Dashboard",
+  description: "BYRAF Distribution — multi-marketplace seller margin tracker",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

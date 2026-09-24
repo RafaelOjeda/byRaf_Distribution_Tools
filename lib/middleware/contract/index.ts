@@ -86,24 +86,82 @@ export interface SourceStatus {
   error?: string;
 }
 
+/**
+ * A charge that belongs to no single order line: storage, subscriptions,
+ * ads, adjustments. See docs/multi-marketplace-plan.md, "AccountCharge
+ * closes a known gap" - Walmart's recon report drops these today because
+ * `groupReconRows` only keeps rows with a Purchase Order #.
+ */
+export interface AccountCharge {
+  source: string;
+  periodId: string;
+  kind: "storage" | "subscription" | "advertising" | "adjustment" | "other";
+  description: string;
+  amount: number;
+}
+
 export interface ReportKpis {
   revenue: number;
+  revenueSettled: number;
   units: number;
-  net: number;
-  profit: number | null;
-  stockValue: number | null;
-  /** e.g. "settled" / "settled + estimated" - what the net/profit figures cover. */
-  coverage: string;
+  netSettled: number;
+  netEstimated: number;
+  profitSettled: number;
+  profitEstimated: number;
+  costedSettled: number;
+  costedEstimated: number;
+  uncosted: number;
+  stockValueAtCost: number | null;
+  stockedSkus: number;
+  costedSkus: number;
+  stockValueAtPrice: number | null;
+  pricedSkus: number;
 }
 
 /**
- * The Report shape is still evolving with the middleware build-out
- * (docs/multi-marketplace-plan.md, phases 2-4). What exists today:
- * sources + notes (phase 2 partial-failure visibility). bySku,
- * orderLines, priceSeries, stock and marketplaceFees land as buildReport
- * itself is implemented.
+ * Shaped for display: every figure is already computed, every "unknown"
+ * is null (rendered "—", never $0) and every total says what it covers.
+ * `bySku`/`orderLines`/`stock` reuse the engine's own row types rather
+ * than the flatter shape sketched in docs/multi-marketplace-plan.md -
+ * that sketch is illustrative, and the engine's rows already carry
+ * everything the dashboard renders.
  */
 export interface Report {
   sources: SourceStatus[];
   notes: string[];
+  kpis: ReportKpis;
+  bySku: import("../engine/margins").SkuSummary[];
+  orderLines: import("../engine/margins").MarginRow[];
+  priceSeries: import("../engine/prices").PriceSeries[];
+  stock: ReturnType<typeof import("../engine/margins").stockValue>;
+  /** Every SKU any connected source reports, including SKUs with nothing in stock right now - unlike `stock.rows`, which only lists what's on hand. */
+  inventory: { sku: string; onHand: number; availToSell: number; reserved: number }[];
+  marketplaceFees: AccountCharge[];
+  settledTotals: ReturnType<typeof import("../engine/margins").sumMargins>;
+  estimatedTotals: ReturnType<typeof import("../engine/margins").sumMargins>;
+  settledCount: number;
+  estimatedCount: number;
+  noEstimateCount: number;
+}
+
+/**
+ * Everything a source contributed, already normalized. This is the
+ * concrete shape hidden behind the `Snapshot` brand - the dashboard never
+ * imports this module's connector-facing types, but buildReport (engine
+ * code) needs the real fields.
+ */
+export interface SnapshotSource {
+  id: string;
+  label: string;
+  status: "ok" | "error";
+  error?: string;
+  lines: import("../engine/types").OrderLineSummary[];
+  charges: AccountCharge[];
+  orderDates: Record<string, string>;
+  inventory: { sku: string; onHand: number; availToSell: number; reserved: number }[];
+  catalog: { sku: string; price: number | null; publishedStatus: string }[];
+}
+
+export interface SnapshotData {
+  sources: SnapshotSource[];
 }

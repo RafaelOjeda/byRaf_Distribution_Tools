@@ -1,23 +1,8 @@
 import "server-only";
-import type { SourceDescriptor } from "../contract";
+import type { AccountCharge, SourceDescriptor } from "../contract";
 import type { OrderLineSummary } from "../engine/types";
 
-/**
- * Charges that belong to no single order line: storage, subscriptions,
- * ads, adjustments. Walmart's recon report has always carried some of
- * these (e.g. WFS storage fees), but `groupReconRows` drops any row with
- * no Purchase Order # because it doesn't belong to a line - so today
- * they're silently lost. Surfacing them as `AccountCharge`s is a known
- * gap (docs/multi-marketplace-plan.md, "AccountCharge closes a known
- * gap"), tracked for when a connector's snapshot() starts returning them.
- */
-export interface AccountCharge {
-  source: string;
-  periodId: string;
-  kind: "storage" | "subscription" | "advertising" | "adjustment" | "other";
-  description: string;
-  amount: number;
-}
+export type { AccountCharge };
 
 export interface SourceSnapshot {
   sourceId: string;
@@ -70,6 +55,14 @@ export abstract class MarketplaceConnector {
     session: unknown
   ): Promise<{ sku: string; price: number | null; publishedStatus: string }[]> {
     return this.unsupported("listings");
+  }
+
+  /** Authenticates from raw pasted credentials, then lists this source's settlement periods. */
+  async listPeriodsFor(
+    creds: Record<string, string>
+  ): Promise<{ id: string; label: string }[]> {
+    const session = await this.authenticate(creds);
+    return this.listPeriods(session);
   }
 
   /**
