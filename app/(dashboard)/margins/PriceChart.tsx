@@ -17,39 +17,21 @@ const PAD = 10;
 // Categorical slots in fixed order (blue, orange, aqua, yellow, magenta,
 // green). A SKU's colour comes from its position among the charted SKUs
 // and never changes with the values, so a colour always means one product.
-// Validated with the dataviz skill's validate_palette.js in both modes;
-// aqua/yellow/magenta sit under 3:1 on the light surface, which is why
-// the legend, end labels and table view all carry identity as well.
+// Validated with the dataviz skill's validate_palette.js against the
+// white card surface; aqua/yellow/magenta sit under 3:1 on it, which is
+// why the legend, end labels and table view all carry identity as well.
+// Light only, like the rest of the app.
 const CSS = `
 .pc {
-  color-scheme: light;
-  --pc-surface: #fcfcfb;
-  --pc-ink: #0b0b0b;
-  --pc-ink-2: #52514e;
+  --pc-surface: #ffffff;
+  --pc-ink: #0f1111;
+  --pc-ink-2: #565959;
   --pc-muted: #898781;
-  --pc-grid: #e1e0d9;
+  --pc-grid: #e7e7e7;
   --pc-axis: #c3c2b7;
-  --pc-border: rgba(11,11,11,0.10);
+  --pc-border: #d5d9d9;
   --pc-s1: #2a78d6; --pc-s2: #eb6834; --pc-s3: #1baf7a;
   --pc-s4: #eda100; --pc-s5: #e87ba4; --pc-s6: #008300;
-}
-@media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"])) .pc {
-    color-scheme: dark;
-    --pc-surface: #1a1a19; --pc-ink: #ffffff; --pc-ink-2: #c3c2b7;
-    --pc-muted: #898781; --pc-grid: #2c2c2a; --pc-axis: #383835;
-    --pc-border: rgba(255,255,255,0.10);
-    --pc-s1: #3987e5; --pc-s2: #d95926; --pc-s3: #199e70;
-    --pc-s4: #c98500; --pc-s5: #d55181; --pc-s6: #008300;
-  }
-}
-:root[data-theme="dark"] .pc {
-  color-scheme: dark;
-  --pc-surface: #1a1a19; --pc-ink: #ffffff; --pc-ink-2: #c3c2b7;
-  --pc-muted: #898781; --pc-grid: #2c2c2a; --pc-axis: #383835;
-  --pc-border: rgba(255,255,255,0.10);
-  --pc-s1: #3987e5; --pc-s2: #d95926; --pc-s3: #199e70;
-  --pc-s4: #c98500; --pc-s5: #d55181; --pc-s6: #008300;
 }
 .pc-svg:focus-visible { outline: 2px solid var(--pc-ink-2); outline-offset: 2px; border-radius: 6px; }
 `;
@@ -131,7 +113,7 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
 
   if (series.length === 0) {
     return (
-      <p className="text-sm text-black/60 dark:text-white/60">
+      <p className="text-sm text-sc-ink-2">
         No dated sales with a price yet.
       </p>
     );
@@ -174,7 +156,7 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
         });
 
   return (
-    <div className="pc rounded-lg border p-4" style={{ background: "var(--pc-surface)", borderColor: "var(--pc-border)", color: "var(--pc-ink)" }}>
+    <div className="pc" style={{ color: "var(--pc-ink)" }}>
       <style>{CSS}</style>
 
       <div className="mb-3 flex items-start justify-between gap-4">
@@ -188,8 +170,7 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
         </div>
         <button
           onClick={() => setTable((t) => !t)}
-          className="shrink-0 text-sm underline"
-          style={{ color: "var(--pc-ink-2)" }}
+          className="sc-link shrink-0 text-sm"
         >
           {table ? "Show chart" : "Show as table"}
         </button>
@@ -216,7 +197,9 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
       </ul>
 
       {!table && canChart && geo && (
-        <div className="relative">
+        // The SVG scales with its box; capping the width keeps axis and
+        // label text near its designed size on wide screens.
+        <div className="relative max-w-[900px]">
           <svg
             ref={svgRef}
             viewBox={`0 0 ${W} ${H}`}
@@ -343,29 +326,29 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
 
       {(table || !canChart) && (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm whitespace-nowrap">
+          <table className="sc-table w-full text-sm whitespace-nowrap">
             <thead>
               <tr className="border-b text-left" style={{ borderColor: "var(--pc-border)" }}>
-                <th className="py-1 pr-3">SKU</th>
-                <th className="py-1 pr-3">Date</th>
-                <th className="py-1 pr-3 text-right">Avg price</th>
-                <th className="py-1 pr-3 text-right">Lowest</th>
-                <th className="py-1 pr-3 text-right">Highest</th>
-                <th className="py-1 pr-3 text-right">Orders</th>
-                <th className="py-1 pr-3 text-right">Units</th>
+                <th className="pr-3">SKU</th>
+                <th className="pr-3">Date</th>
+                <th className="pr-3 text-right">Avg price</th>
+                <th className="pr-3 text-right">Lowest</th>
+                <th className="pr-3 text-right">Highest</th>
+                <th className="pr-3 text-right">Orders</th>
+                <th className="pr-3 text-right">Units</th>
               </tr>
             </thead>
             <tbody style={{ fontVariantNumeric: "tabular-nums" }}>
               {series.flatMap((s) =>
                 s.points.map((p) => (
                   <tr key={`${s.sku}-${p.date}`} className="border-b" style={{ borderColor: "var(--pc-border)" }}>
-                    <td className="py-1 pr-3">{s.sku}</td>
-                    <td className="py-1 pr-3">{fmtDate(p.date, true)}</td>
-                    <td className="py-1 pr-3 text-right font-medium">{usd(p.avg)}</td>
-                    <td className="py-1 pr-3 text-right">{usd(p.min)}</td>
-                    <td className="py-1 pr-3 text-right">{usd(p.max)}</td>
-                    <td className="py-1 pr-3 text-right">{p.orders}</td>
-                    <td className="py-1 pr-3 text-right">{p.units}</td>
+                    <td className="pr-3">{s.sku}</td>
+                    <td className="pr-3">{fmtDate(p.date, true)}</td>
+                    <td className="pr-3 text-right font-medium">{usd(p.avg)}</td>
+                    <td className="pr-3 text-right">{usd(p.min)}</td>
+                    <td className="pr-3 text-right">{usd(p.max)}</td>
+                    <td className="pr-3 text-right">{p.orders}</td>
+                    <td className="pr-3 text-right">{p.units}</td>
                   </tr>
                 ))
               )}

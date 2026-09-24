@@ -1,6 +1,13 @@
 "use client";
 
-import { Fragment, type FormEvent, useMemo, useState } from "react";
+import {
+  Fragment,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+  useMemo,
+  useState,
+} from "react";
 import {
   DIM_DIVISOR,
   SHIPPING_PCT_ALERT,
@@ -36,7 +43,10 @@ import {
 import PriceChart from "./PriceChart";
 
 const money = (n: number) =>
-  `${n < 0 ? "-" : ""}$${Math.abs(n).toFixed(2)}`;
+  `${n < 0 ? "-" : ""}$${Math.abs(n).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 
 /** Hands a string to the browser as a file. Nothing leaves the page. */
 function downloadCsv(prefix: string, csv: string) {
@@ -79,8 +89,11 @@ type LotDraft = { qty: string; unitCost: string };
 
 type Step = "credentials" | "reports" | "data";
 
+type Tab = "sku" | "orders" | "price" | "inventory" | "stock";
+
 export default function MarginsPage() {
   const [step, setStep] = useState<Step>("credentials");
+  const [tab, setTab] = useState<Tab>("sku");
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [reportDates, setReportDates] = useState<string[]>([]);
@@ -135,6 +148,18 @@ export default function MarginsPage() {
       ...prev,
       [sku]: (prev[sku] ?? []).filter((_, i) => i !== index),
     }));
+  }
+
+  // Arrow keys move between tabs, per the ARIA tabs pattern.
+  function onTabKey(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const order: Tab[] = ["sku", "orders", "price", "inventory", "stock"];
+    const i = order.indexOf(tab);
+    const next =
+      order[(i + (e.key === "ArrowRight" ? 1 : order.length - 1)) % order.length];
+    setTab(next);
+    document.getElementById(`tab-${next}`)?.focus();
   }
 
   function toggleExpanded(sku: string) {
@@ -323,36 +348,61 @@ export default function MarginsPage() {
   ).length;
   const noEstimateCount = margins.filter((m) => m.noEstimate).length;
 
+  // Summary tiles follow the tables' rules. Revenue and units are exact
+  // for every line, so they can be totalled. Fee-derived figures keep
+  // settled and estimated apart. Profit counts only lines with a cost
+  // entered - a line with no cost would otherwise add a profit that
+  // silently assumed the item was free.
+  const kpi = useMemo(() => {
+    const sum = (rows: typeof margins, f: (m: (typeof margins)[number]) => number) =>
+      rows.reduce((n, m) => n + f(m), 0);
+    const settled = margins.filter((m) => m.status === "settled");
+    const costedSettled = settled.filter((m) => m.hasCost);
+    const costedEstimated = margins.filter(
+      (m) => m.status === "estimated" && !m.noEstimate && m.hasCost
+    );
+    return {
+      revenue: sum(margins, (m) => m.revenue),
+      revenueSettled: sum(settled, (m) => m.revenue),
+      units: sum(margins, (m) => m.qty),
+      profitSettled: sum(costedSettled, (m) => m.profit),
+      profitEstimated: sum(costedEstimated, (m) => m.profit),
+      costedSettled: costedSettled.length,
+      costedEstimated: costedEstimated.length,
+      uncosted: margins.filter((m) => !m.noEstimate && !m.hasCost).length,
+    };
+  }, [margins]);
+
   if (step === "credentials") {
     return (
-      <div className="flex max-w-md flex-col gap-6">
+      <div className="sc-card mx-auto mt-8 flex w-full max-w-md flex-col gap-5 p-6">
         <div>
-          <h1 className="text-xl font-semibold">Margins</h1>
-          <p className="mt-1 text-sm text-black/60 dark:text-white/60">
-            Paste your Walmart Marketplace API credentials to see which
-            settlement reports are available. Nothing is saved anywhere —
-            refresh this page and it&apos;s gone.
+          <h1 className="text-[28px] leading-9 font-normal">Sign in with your API keys</h1>
+          <p className="mt-2 text-sm text-sc-ink-2">
+            Paste your Walmart Marketplace API credentials (from Seller
+            Center) to see which settlement reports are available. Nothing
+            is saved anywhere — refresh this page and it&apos;s gone.
           </p>
         </div>
         <form onSubmit={handleListReports} className="flex flex-col gap-3">
-          <label className="flex flex-col gap-1 text-sm">
+          <label className="flex flex-col gap-1 text-sm font-bold">
             Client ID
             <input
               type="text"
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
-              className="rounded border border-black/15 px-2 py-1 dark:border-white/20"
+              className="sc-input font-normal"
               autoComplete="off"
               required
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm">
+          <label className="flex flex-col gap-1 text-sm font-bold">
             Client Secret
             <input
               type="password"
               value={clientSecret}
               onChange={(e) => setClientSecret(e.target.value)}
-              className="rounded border border-black/15 px-2 py-1 dark:border-white/20"
+              className="sc-input font-normal"
               autoComplete="off"
               required
             />
@@ -360,7 +410,7 @@ export default function MarginsPage() {
           <button
             type="submit"
             disabled={loading}
-            className="rounded bg-black px-3 py-2 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-black"
+            className="sc-btn-primary mt-1 w-full"
           >
             {loading ? "Checking…" : "See available reports"}
           </button>
@@ -372,23 +422,23 @@ export default function MarginsPage() {
 
   if (step === "reports") {
     return (
-      <div className="flex max-w-md flex-col gap-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Settlement reports</h1>
-          <button onClick={startOver} className="text-sm underline">
+      <div className="sc-card mx-auto mt-8 flex w-full max-w-md flex-col gap-5 p-6">
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="text-[28px] leading-9 font-normal">Settlement reports</h1>
+          <button onClick={startOver} className="sc-link mt-2 shrink-0 text-sm">
             Start over
           </button>
         </div>
-        <p className="text-sm text-black/60 dark:text-white/60">
+        <p className="text-sm text-sc-ink-2">
           These are the same reports Walmart shows under Payments in Seller
           Center — one per settlement period, roughly every two weeks. Pick
           which to pull.
         </p>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col overflow-hidden rounded-lg border border-sc-line">
           {reportDates.map((date) => (
             <label
               key={date}
-              className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-black/5 dark:hover:bg-white/5"
+              className="flex cursor-pointer items-center gap-3 border-b border-sc-row px-3 py-2.5 text-sm last:border-b-0 hover:bg-sc-head"
             >
               <input
                 type="checkbox"
@@ -396,7 +446,7 @@ export default function MarginsPage() {
                 onChange={() => toggleDate(date)}
               />
               {formatReportDate(date)}
-              <span className="text-black/40 dark:text-white/40">
+              <span className="text-sc-ink-2/70">
                 ({date})
               </span>
             </label>
@@ -405,13 +455,13 @@ export default function MarginsPage() {
         <div className="flex gap-4 text-sm">
           <button
             onClick={() => setSelectedDates(new Set(reportDates))}
-            className="underline"
+            className="sc-link"
           >
             Select all
           </button>
           <button
             onClick={() => setSelectedDates(new Set())}
-            className="underline"
+            className="sc-link"
           >
             Select none
           </button>
@@ -419,7 +469,7 @@ export default function MarginsPage() {
         <button
           onClick={handleLoadSelected}
           disabled={loading || selectedDates.size === 0}
-          className="rounded bg-black px-3 py-2 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-black"
+          className="sc-btn-primary w-full"
         >
           {loading
             ? "Loading…"
@@ -431,12 +481,12 @@ export default function MarginsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold">Margins</h1>
-          <p className="text-sm text-black/60 dark:text-white/60">
-            Settled:{" "}
+          <h1 className="text-[28px] leading-9 font-normal">Margins dashboard</h1>
+          <p className="mt-1 text-sm text-sc-ink-2">
+            Settlement reports:{" "}
             {[...selectedDates]
               .sort()
               .map(formatReportDate)
@@ -450,54 +500,147 @@ export default function MarginsPage() {
             </p>
           )}
         </div>
-        <div className="flex gap-4">
+        <div className="flex gap-2">
           <button
             onClick={() => {
               clearData();
               setStep("reports");
             }}
-            className="text-sm underline"
+            className="sc-btn"
           >
             Change reports
           </button>
-          <button onClick={startOver} className="text-sm underline">
+          <button onClick={startOver} className="sc-btn">
             Start over
           </button>
         </div>
       </div>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="font-medium">1. Inventory and costs</h2>
-        <p className="text-sm text-black/60 dark:text-white/60">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <KpiTile label="Revenue" value={money(kpi.revenue)}>
+          {money(kpi.revenueSettled)} settled ·{" "}
+          {money(kpi.revenue - kpi.revenueSettled)} not yet settled
+        </KpiTile>
+        <KpiTile label="Units sold" value={kpi.units.toLocaleString("en-US")}>
+          {margins.length} order line{margins.length === 1 ? "" : "s"} ·{" "}
+          {skuSummaries.length} product{skuSummaries.length === 1 ? "" : "s"}
+        </KpiTile>
+        <KpiTile
+          label="Net after fees"
+          value={settledCount > 0 ? money(settledTotals.netAmount) : "—"}
+        >
+          settled
+          {estimatedCount > 0 &&
+            ` · + ${money(estimatedTotals.netAmount)} estimated`}
+          {noEstimateCount > 0 && ` · ${noEstimateCount} not estimable`}
+        </KpiTile>
+        <KpiTile
+          label="Profit"
+          value={kpi.costedSettled > 0 ? money(kpi.profitSettled) : "—"}
+        >
+          {kpi.costedSettled + kpi.costedEstimated === 0 ? (
+            <button onClick={() => setTab("inventory")} className="sc-link">
+              Enter purchase costs to see profit
+            </button>
+          ) : (
+            <>
+              settled
+              {kpi.costedEstimated > 0 &&
+                ` · + ${money(kpi.profitEstimated)} estimated`}
+              {kpi.uncosted > 0 && (
+                <span className="block text-amber-600">
+                  {kpi.uncosted} line{kpi.uncosted === 1 ? "" : "s"} with no
+                  cost left out
+                </span>
+              )}
+            </>
+          )}
+        </KpiTile>
+        <KpiTile
+          label="Stock value"
+          value={
+            stockVal.totals.costedSkus > 0 ? money(stockVal.totals.atCost) : "—"
+          }
+        >
+          at cost · {stockVal.totals.costedSkus} of{" "}
+          {stockVal.totals.stockedSkus} in-stock SKUs
+          {stockVal.totals.pricedSkus > 0 && (
+            <span className="block">
+              {money(stockVal.totals.atPrice)} at listed price
+            </span>
+          )}
+        </KpiTile>
+      </div>
+
+      <div className="sc-card">
+        <div
+          role="tablist"
+          aria-label="Dashboard views"
+          onKeyDown={onTabKey}
+          className="flex gap-6 overflow-x-auto border-b border-sc-line px-4 sm:px-6"
+        >
+          {(
+            [
+              ["sku", `By SKU (${skuSummaries.length})`],
+              ["orders", `Order lines (${margins.length})`],
+              ["price", "Price over time"],
+              ["inventory", `Inventory & costs (${skus.length})`],
+              ["stock", `Stock value (${stockVal.totals.stockedSkus})`],
+            ] as [Tab, string][]
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              id={`tab-${id}`}
+              role="tab"
+              aria-selected={tab === id}
+              aria-controls={`panel-${id}`}
+              tabIndex={tab === id ? 0 : -1}
+              onClick={() => setTab(id)}
+              className="sc-tab"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div
+          role="tabpanel"
+          id={`panel-${tab}`}
+          aria-labelledby={`tab-${tab}`}
+          className="flex flex-col gap-3 p-4 sm:p-6"
+        >
+      {tab === "inventory" && (
+      <>
+        <PanelHeader title="Inventory and costs">
           Not saved — re-enter each session. Add a batch for each price you
           bought an item at, including units already sold; cost per unit is
           the quantity-weighted average across batches. &ldquo;Left&rdquo;
           is purchased − sold and should match Walmart&apos;s on-hand
           count.
-        </p>
+        </PanelHeader>
         <div className="overflow-x-auto">
-          <table className="text-sm whitespace-nowrap">
+          <table className="sc-table w-full text-sm whitespace-nowrap">
             <thead>
-              <tr className="border-b border-black/10 text-left dark:border-white/10">
-                <th className="py-1 pr-3">SKU</th>
-                <th className="py-1 pr-3 text-right">On hand</th>
-                <th className="py-1 pr-3 text-right">Sold</th>
-                <th className="py-1 pr-3 text-right">Bought</th>
+              <tr className="border-b border-sc-line text-left">
+                <th className="pr-3">SKU</th>
+                <th className="pr-3 text-right">On hand</th>
+                <th className="pr-3 text-right">Sold</th>
+                <th className="pr-3 text-right">Bought</th>
                 <th
-                  className="py-1 pr-3 text-right"
+                  className="pr-3 text-right"
                   title="Purchased − sold. Amber when it disagrees with Walmart's on-hand count."
                 >
                   Left
                 </th>
-                <th className="py-1 pr-3 text-right">Avg cost</th>
+                <th className="pr-3 text-right">Avg cost</th>
                 {BOX_FIELDS.map((f) => (
-                  <th key={f.key} className="py-1 pr-3 text-right">
+                  <th key={f.key} className="pr-3 text-right">
                     {f.label}
                   </th>
                 ))}
-                <th className="py-1 pr-3 text-right">Cu in</th>
+                <th className="pr-3 text-right">Cu in</th>
                 <th
-                  className="py-1 pr-3 text-right"
+                  className="pr-3 text-right"
                   title={`Volume ÷ ${DIM_DIVISOR}. An estimate of billable dimensional weight — not what Walmart actually charged.`}
                 >
                   Dim wt
@@ -521,30 +664,30 @@ export default function MarginsPage() {
 
                 return (
                   <Fragment key={sku}>
-                    <tr className="border-b border-black/5 dark:border-white/5">
-                      <td className="py-1 pr-3">
+                    <tr className="border-b border-sc-row">
+                      <td className="pr-3">
                         <button
                           onClick={() => toggleExpanded(sku)}
-                          className="text-left hover:underline"
+                          className="sc-link text-left"
                           title={
                             drafts.length > 0
                               ? `${drafts.length} batch${drafts.length === 1 ? "" : "es"}`
                               : "Add a purchase batch"
                           }
                         >
-                          <span className="text-black/40 dark:text-white/40">
+                          <span className="text-sc-ink-2/70">
                             {isOpen ? "▾ " : "▸ "}
                           </span>
                           {sku}
                           {drafts.length > 0 && (
-                            <span className="text-black/40 dark:text-white/40">
+                            <span className="text-sc-ink-2/70">
                               {" "}
                               ({drafts.length})
                             </span>
                           )}
                         </button>
                       </td>
-                      <td className="py-1 pr-3 text-right">
+                      <td className="pr-3 text-right">
                         {inv ? (
                           <span
                             title={`${inv.availToSell} available to sell + ${inv.reserved} ordered but not shipped. The quantity last set on the listing is ${inv.fedQty}, but that number doesn't drop as units ship.`}
@@ -552,23 +695,23 @@ export default function MarginsPage() {
                             {inv.onHand}
                           </span>
                         ) : (
-                          <span className="text-black/40 dark:text-white/40">
+                          <span className="text-sc-ink-2/70">
                             —
                           </span>
                         )}
                       </td>
-                      <td className="py-1 pr-3 text-right">
+                      <td className="pr-3 text-right">
                         {soldBySku.get(sku) ?? 0}
                       </td>
-                      <td className="py-1 pr-3 text-right">
+                      <td className="pr-3 text-right">
                         {stock.purchased || (
-                          <span className="text-black/40 dark:text-white/40">
+                          <span className="text-sc-ink-2/70">
                             —
                           </span>
                         )}
                       </td>
                       <td
-                        className={`py-1 pr-3 text-right ${stock.discrepancy ? "text-amber-600" : ""}`}
+                        className={`pr-3 text-right ${stock.discrepancy ? "text-amber-600" : ""}`}
                         title={
                           stock.discrepancy
                             ? `Your batches imply ${stock.impliedOnHand} left, Walmart says ${stock.onHand}. Off by ${stock.discrepancy > 0 ? "+" : ""}${stock.discrepancy} — likely a missing or mistyped batch.`
@@ -576,14 +719,14 @@ export default function MarginsPage() {
                         }
                       >
                         {stock.purchased === 0 ? (
-                          <span className="text-black/40 dark:text-white/40">
+                          <span className="text-sc-ink-2/70">
                             —
                           </span>
                         ) : (
                           stock.impliedOnHand
                         )}
                       </td>
-                      <td className="py-1 pr-3 text-right font-medium">
+                      <td className="pr-3 text-right font-medium">
                         {avg === null ? (
                           <span className="text-amber-600">—</span>
                         ) : (
@@ -591,7 +734,7 @@ export default function MarginsPage() {
                         )}
                       </td>
                       {BOX_FIELDS.map((f) => (
-                        <td key={f.key} className="py-1 pr-3">
+                        <td key={f.key} className="pr-3">
                           <input
                             type="number"
                             step={f.step}
@@ -602,19 +745,19 @@ export default function MarginsPage() {
                             onChange={(e) =>
                               setField(sku, f.key, e.target.value)
                             }
-                            className="w-24 rounded border border-black/15 px-2 py-1 text-right dark:border-white/20"
+                            className="w-24 sc-input text-right"
                           />
                         </td>
                       ))}
-                      <td className="py-1 pr-3 text-right text-black/60 dark:text-white/60">
+                      <td className="pr-3 text-right text-sc-ink-2">
                         {cu === null ? "—" : cu.toFixed(0)}
                       </td>
-                      <td className="py-1 pr-3 text-right text-black/60 dark:text-white/60">
+                      <td className="pr-3 text-right text-sc-ink-2">
                         {dim === null ? "—" : `${dim.toFixed(1)} lb`}
                       </td>
                     </tr>
                     {isOpen && (
-                      <tr className="border-b border-black/5 bg-black/[0.02] dark:border-white/5 dark:bg-white/[0.03]">
+                      <tr className="border-b border-sc-row bg-sc-head">
                         <td colSpan={BOX_FIELDS.length + 8} className="px-3 py-3">
                           <CostLotsEditor
                             sku={sku}
@@ -635,7 +778,7 @@ export default function MarginsPage() {
                 <tr>
                   <td
                     colSpan={BOX_FIELDS.length + 8}
-                    className="py-3 text-black/60 dark:text-white/60"
+                    className="py-3 text-sc-ink-2"
                   >
                     No SKUs found in the returned data.
                   </td>
@@ -644,67 +787,77 @@ export default function MarginsPage() {
             </tbody>
           </table>
         </div>
-      </section>
+      </>
+      )}
 
-      <section className="flex flex-col gap-3">
-        <h2 className="font-medium">2. Stock value</h2>
-        <p className="text-sm text-black/60 dark:text-white/60">
+      {tab === "stock" && (
+      <>
+        <PanelHeader title="Stock value">
           What the units you have on hand are worth: at what they cost you
-          (your average across the batches entered above) and at the price
-          they&apos;re currently listed for. Only products in stock are
-          shown. Seller-fulfilled stock only — units in Walmart&apos;s
-          warehouses (WFS) aren&apos;t included yet.
-        </p>
+          (your average across the batches entered under Inventory &amp;
+          costs) and at the price they&apos;re currently listed for. Only
+          products in stock are shown. Seller-fulfilled stock only — units
+          in Walmart&apos;s warehouses (WFS) aren&apos;t included yet.
+        </PanelHeader>
         {catalogError && (
           <p className="text-sm text-amber-600">
             Couldn&apos;t load listed prices: {catalogError}
           </p>
         )}
         <StockValueTable stock={stockVal} />
-      </section>
+      </>
+      )}
 
-      <section className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between gap-4">
-          <h2 className="font-medium">3. By SKU</h2>
-          <button
-            onClick={() =>
-              downloadCsv("walmart-by-sku", skuSummaryToCsv(skuSummaries))
-            }
-            disabled={skuSummaries.length === 0}
-            className="text-sm underline disabled:opacity-40"
-            title="Downloads this table as a CSV. Estimated rows are included and marked in the Status/line-count columns; cells that aren't known are left blank."
-          >
-            Download CSV
-          </button>
-        </div>
-        <p className="text-sm text-black/60 dark:text-white/60">
+      {tab === "sku" && (
+      <>
+        <PanelHeader
+          title="By SKU"
+          action={
+            <button
+              onClick={() =>
+                downloadCsv("walmart-by-sku", skuSummaryToCsv(skuSummaries))
+              }
+              disabled={skuSummaries.length === 0}
+              className="sc-btn"
+              title="Downloads this table as a CSV. Estimated rows are included and marked in the Status/line-count columns; cells that aren't known are left blank."
+            >
+              Download CSV
+            </button>
+          }
+        >
           Settled and estimated order lines rolled up per product. A SKU
           with no settled history yet can&apos;t have its fees estimated,
           so its money columns show — rather than a misleading $0.00.
-        </p>
+        </PanelHeader>
         <SkuSummaryTable summaries={skuSummaries} />
-      </section>
+      </>
+      )}
 
-      <section className="flex flex-col gap-3">
-        <h2 className="font-medium">4. Price over time</h2>
+      {tab === "price" && (
+      <>
+        <PanelHeader title="Price over time" />
         <PriceChart series={priceSeries} />
-      </section>
+      </>
+      )}
 
-      <section className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between gap-4">
-          <h2 className="font-medium">5. Order lines</h2>
-          <button
-            onClick={() =>
-              downloadCsv("walmart-order-lines", orderLinesToCsv(margins))
-            }
-            disabled={margins.length === 0}
-            className="text-sm underline disabled:opacity-40"
-            title="Downloads this table as a CSV, one row per order line, with a Status column (Settled / Estimated / Not estimable). Excel shows the 15-digit purchase order numbers in scientific notation until you widen the column; the values are intact."
-          >
-            Download CSV
-          </button>
-        </div>
-        <p className="text-sm text-black/60 dark:text-white/60">
+      {tab === "orders" && (
+      <>
+        <PanelHeader
+          title="Order lines"
+          action={
+            <button
+              onClick={() =>
+                downloadCsv("walmart-order-lines", orderLinesToCsv(margins))
+              }
+              disabled={margins.length === 0}
+              className="sc-btn"
+              title="Downloads this table as a CSV, one row per order line, with a Status column (Settled / Estimated / Not estimable). Excel shows the 15-digit purchase order numbers in scientific notation until you widen the column; the values are intact."
+            >
+              Download CSV
+            </button>
+          }
+        />
+        <p className="text-sm text-sc-ink-2">
           Revenue − commission − shipping − other − your cost = profit. Fee
           columns are shown as Walmart reports them (negative = money out).
           <span className="italic"> Est.</span> rows are orders Walmart
@@ -713,22 +866,22 @@ export default function MarginsPage() {
           for details) and switch to exact figures once the order settles.
         </p>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm whitespace-nowrap">
+          <table className="sc-table w-full text-sm whitespace-nowrap">
             <thead>
-              <tr className="border-b border-black/10 text-left dark:border-white/10">
-                <th className="py-1 pr-3">Status</th>
-                <th className="py-1 pr-3">SKU</th>
-                <th className="py-1 pr-3">Item</th>
-                <th className="py-1 pr-3">Fulfillment</th>
-                <th className="py-1 pr-3 text-right">Qty</th>
-                <th className="py-1 pr-3 text-right">Revenue</th>
-                <th className="py-1 pr-3 text-right">Commission</th>
-                <th className="py-1 pr-3 text-right">Shipping</th>
-                <th className="py-1 pr-3 text-right">Other</th>
-                <th className="py-1 pr-3 text-right">Net</th>
-                <th className="py-1 pr-3 text-right">Cost</th>
-                <th className="py-1 pr-3 text-right">Profit</th>
-                <th className="py-1 pr-3 text-right">Margin</th>
+              <tr className="border-b border-sc-line text-left">
+                <th className="pr-3">Status</th>
+                <th className="pr-3">SKU</th>
+                <th className="pr-3">Item</th>
+                <th className="pr-3">Fulfillment</th>
+                <th className="pr-3 text-right">Qty</th>
+                <th className="pr-3 text-right">Revenue</th>
+                <th className="pr-3 text-right">Commission</th>
+                <th className="pr-3 text-right">Shipping</th>
+                <th className="pr-3 text-right">Other</th>
+                <th className="pr-3 text-right">Net</th>
+                <th className="pr-3 text-right">Cost</th>
+                <th className="pr-3 text-right">Profit</th>
+                <th className="pr-3 text-right">Margin</th>
               </tr>
             </thead>
             <tbody>
@@ -745,28 +898,28 @@ export default function MarginsPage() {
                 return (
                   <tr
                     key={`${m.status}-${m.purchaseOrderNo}-${m.purchaseOrderLine}`}
-                    className={`border-b border-black/5 dark:border-white/5 ${est ? "italic text-black/70 dark:text-white/70" : ""}`}
+                    className={`border-b border-sc-row ${est ? "italic text-sc-ink-2" : ""}`}
                   >
                     <td
-                      className="py-1 pr-3"
+                      className="pr-3"
                       title={
                         est ? `Ordered ${m.orderDate} · ${m.estimateNote}` : undefined
                       }
                     >
                       {est ? `Est. · ${m.orderDate?.slice(5)}` : "Settled"}
                     </td>
-                    <td className="py-1 pr-3">{m.sku}</td>
+                    <td className="pr-3">{m.sku}</td>
                     <td
-                      className="max-w-[16rem] truncate py-1 pr-3"
+                      className="max-w-[11rem] truncate pr-3"
                       title={m.itemName}
                     >
                       {m.itemName}
                     </td>
-                    <td className="py-1 pr-3">{m.fulfillmentType}</td>
-                    <td className="py-1 pr-3 text-right">{m.qty}</td>
-                    <td className="py-1 pr-3 text-right">{money(m.revenue)}</td>
+                    <td className="pr-3">{m.fulfillmentType}</td>
+                    <td className="pr-3 text-right">{m.qty}</td>
+                    <td className="pr-3 text-right">{money(m.revenue)}</td>
                     <td
-                      className="py-1 pr-3 text-right text-red-600 dark:text-red-400"
+                      className="pr-3 text-right text-red-600"
                       title={
                         est
                           ? m.estimateNote
@@ -778,22 +931,22 @@ export default function MarginsPage() {
                       {m.noEstimate ? noEst : money(m.commission)}
                     </td>
                     <td
-                      className="py-1 pr-3 text-right text-red-600 dark:text-red-400"
+                      className="pr-3 text-right text-red-600"
                       title={est ? m.estimateNote : undefined}
                     >
                       {m.noEstimate ? noEst : money(m.shipping)}
                     </td>
                     <td
-                      className="py-1 pr-3 text-right"
+                      className="pr-3 text-right"
                       title={`Tax collected/withheld: ${money(m.tax)}`}
                     >
                       {money(m.tax + m.otherFees)}
                     </td>
-                    <td className="py-1 pr-3 text-right">
+                    <td className="pr-3 text-right">
                       {m.noEstimate ? noEst : money(m.netAmount)}
                     </td>
                     <td
-                      className="py-1 pr-3 text-right"
+                      className="pr-3 text-right"
                       title={`Item ${money(m.itemCostTotal)} + box ${money(m.boxCostTotal)}`}
                     >
                       {m.costTotal !== 0 || m.hasCost ? (
@@ -802,10 +955,23 @@ export default function MarginsPage() {
                         <span className="text-amber-600">—</span>
                       )}
                     </td>
-                    <td className="py-1 pr-3 text-right font-medium">
-                      {m.noEstimate ? noEst : money(m.profit)}
+                    <td
+                      className="pr-3 text-right font-medium"
+                      title={
+                        !m.noEstimate && !m.hasCost
+                          ? "No cost entered for this SKU, so profit isn't known yet"
+                          : undefined
+                      }
+                    >
+                      {m.noEstimate ? (
+                        noEst
+                      ) : m.hasCost ? (
+                        money(m.profit)
+                      ) : (
+                        <span className="text-amber-600">—</span>
+                      )}
                     </td>
-                    <td className="py-1 pr-3 text-right">
+                    <td className="pr-3 text-right">
                       {m.noEstimate ? (
                         noEst
                       ) : !m.hasCost ? (
@@ -823,7 +989,7 @@ export default function MarginsPage() {
                 <tr>
                   <td
                     colSpan={13}
-                    className="py-3 text-black/60 dark:text-white/60"
+                    className="py-3 text-sc-ink-2"
                   >
                     No order lines found.
                   </td>
@@ -836,6 +1002,10 @@ export default function MarginsPage() {
                   <TotalsRow
                     label={`Settled · ${settledCount} line${settledCount === 1 ? "" : "s"}`}
                     totals={settledTotals}
+                    uncosted={
+                      margins.filter((m) => m.status === "settled" && !m.hasCost)
+                        .length
+                    }
                     first
                   />
                 )}
@@ -843,6 +1013,12 @@ export default function MarginsPage() {
                   <TotalsRow
                     label={`Estimated · ${estimatedCount} line${estimatedCount === 1 ? "" : "s"}${noEstimateCount > 0 ? ` (+${noEstimateCount} with no estimate, excluded)` : ""}`}
                     totals={estimatedTotals}
+                    uncosted={
+                      margins.filter(
+                        (m) =>
+                          m.status === "estimated" && !m.noEstimate && !m.hasCost
+                      ).length
+                    }
                     first={settledCount === 0}
                     italic
                   />
@@ -851,7 +1027,48 @@ export default function MarginsPage() {
             )}
           </table>
         </div>
-      </section>
+      </>
+      )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PanelHeader({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-bold">{title}</h2>
+        {action}
+      </div>
+      {children && <p className="text-sm text-sc-ink-2">{children}</p>}
+    </div>
+  );
+}
+
+function KpiTile({
+  label,
+  value,
+  children,
+}: {
+  label: string;
+  value: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="sc-card flex flex-col gap-1 p-4">
+      <div className="text-xs font-bold text-sc-ink-2">{label}</div>
+      <div className="text-2xl leading-8">{value}</div>
+      <div className="text-xs leading-4 text-sc-ink-2">{children}</div>
     </div>
   );
 }
@@ -862,11 +1079,11 @@ function StockValueTable({
   stock: ReturnType<typeof stockValue>;
 }) {
   const { rows, totals: t } = stock;
-  const dash = <span className="text-black/40 dark:text-white/40">—</span>;
+  const dash = <span className="text-sc-ink-2/70">—</span>;
 
   if (rows.length === 0) {
     return (
-      <p className="text-sm text-black/60 dark:text-white/60">
+      <p className="text-sm text-sc-ink-2">
         Nothing in stock right now.
       </p>
     );
@@ -881,11 +1098,11 @@ function StockValueTable({
           read as the whole picture. */}
       <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
         <div>
-          <div className="text-black/60 dark:text-white/60">At cost</div>
+          <div className="text-sc-ink-2">At cost</div>
           <div className="text-lg font-semibold">
             {t.costedSkus > 0 ? money(t.atCost) : "—"}
           </div>
-          <div className="text-xs text-black/60 dark:text-white/60">
+          <div className="text-xs text-sc-ink-2">
             {t.costedSkus} of {t.stockedSkus} stocked SKU
             {t.stockedSkus === 1 ? "" : "s"}
             {uncosted > 0 && (
@@ -897,13 +1114,13 @@ function StockValueTable({
           </div>
         </div>
         <div>
-          <div className="text-black/60 dark:text-white/60">
+          <div className="text-sc-ink-2">
             At current price
           </div>
           <div className="text-lg font-semibold">
             {t.pricedSkus > 0 ? money(t.atPrice) : "—"}
           </div>
-          <div className="text-xs text-black/60 dark:text-white/60">
+          <div className="text-xs text-sc-ink-2">
             {t.pricedSkus} of {t.stockedSkus} stocked SKU
             {t.stockedSkus === 1 ? "" : "s"}
             {t.unpublishedSkus > 0 && (
@@ -924,27 +1141,27 @@ function StockValueTable({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm whitespace-nowrap">
+        <table className="sc-table w-full text-sm whitespace-nowrap">
           <thead>
-            <tr className="border-b border-black/10 text-left dark:border-white/10">
-              <th className="py-1 pr-3">SKU</th>
-              <th className="py-1 pr-3 text-right">On hand</th>
-              <th className="py-1 pr-3 text-right">Avg cost</th>
-              <th className="py-1 pr-3 text-right">Listed price</th>
-              <th className="py-1 pr-3 text-right">Value at cost</th>
-              <th className="py-1 pr-3 text-right">Value at price</th>
+            <tr className="border-b border-sc-line text-left">
+              <th className="pr-3">SKU</th>
+              <th className="pr-3 text-right">On hand</th>
+              <th className="pr-3 text-right">Avg cost</th>
+              <th className="pr-3 text-right">Listed price</th>
+              <th className="pr-3 text-right">Value at cost</th>
+              <th className="pr-3 text-right">Value at price</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
               <tr
                 key={r.sku}
-                className="border-b border-black/5 dark:border-white/5"
+                className="border-b border-sc-row"
               >
-                <td className="py-1 pr-3">{r.sku}</td>
-                <td className="py-1 pr-3 text-right">{r.onHand}</td>
+                <td className="pr-3">{r.sku}</td>
+                <td className="pr-3 text-right">{r.onHand}</td>
                 <td
-                  className="py-1 pr-3 text-right"
+                  className="pr-3 text-right"
                   title={
                     r.avgCost === null
                       ? "No purchase batches entered for this SKU"
@@ -957,14 +1174,14 @@ function StockValueTable({
                     money(r.avgCost)
                   )}
                 </td>
-                <td className="py-1 pr-3 text-right">
+                <td className="pr-3 text-right">
                   {r.listedPrice === null ? dash : money(r.listedPrice)}
                 </td>
-                <td className="py-1 pr-3 text-right">
+                <td className="pr-3 text-right">
                   {r.valueAtCost === null ? dash : money(r.valueAtCost)}
                 </td>
                 <td
-                  className="py-1 pr-3 text-right"
+                  className="pr-3 text-right"
                   title={
                     r.valueAtPrice !== null && !r.isPublished
                       ? `Not currently sellable: listing status is ${r.publishedStatus}. Left out of the at-price total.`
@@ -1012,7 +1229,7 @@ function CostLotsEditor({
 
   return (
     <div className="flex flex-col items-start gap-2">
-      <span className="text-xs text-black/60 dark:text-white/60">
+      <span className="text-xs text-sc-ink-2">
         Purchase batches for {sku}
       </span>
 
@@ -1026,9 +1243,9 @@ function CostLotsEditor({
             aria-label={`Batch ${i + 1} quantity for ${sku}`}
             value={lot.qty}
             onChange={(e) => onUpdate(i, "qty", e.target.value)}
-            className="w-20 rounded border border-black/15 px-2 py-1 text-right dark:border-white/20"
+            className="w-20 sc-input text-right"
           />
-          <span className="text-black/40 dark:text-white/40">×</span>
+          <span className="text-sc-ink-2/70">×</span>
           <input
             type="number"
             min="0"
@@ -1037,9 +1254,9 @@ function CostLotsEditor({
             aria-label={`Batch ${i + 1} unit cost for ${sku}`}
             value={lot.unitCost}
             onChange={(e) => onUpdate(i, "unitCost", e.target.value)}
-            className="w-28 rounded border border-black/15 px-2 py-1 text-right dark:border-white/20"
+            className="w-28 sc-input text-right"
           />
-          <span className="w-24 text-right text-black/60 dark:text-white/60">
+          <span className="w-24 text-right text-sc-ink-2">
             {!Number.isNaN(parseFloat(lot.qty)) &&
             !Number.isNaN(parseFloat(lot.unitCost))
               ? money(parseFloat(lot.qty) * parseFloat(lot.unitCost))
@@ -1047,7 +1264,7 @@ function CostLotsEditor({
           </span>
           <button
             onClick={() => onRemove(i)}
-            className="text-black/40 hover:text-red-600 dark:text-white/40"
+            className="text-sc-ink-2/70 hover:text-red-600"
             aria-label={`Remove batch ${i + 1} for ${sku}`}
           >
             ✕
@@ -1056,11 +1273,11 @@ function CostLotsEditor({
       ))}
 
       <div className="flex items-center gap-4">
-        <button onClick={onAdd} className="text-sm underline">
+        <button onClick={onAdd} className="sc-link text-sm">
           + Add batch
         </button>
         {units > 0 && (
-          <span className="text-sm text-black/60 dark:text-white/60">
+          <span className="text-sm text-sc-ink-2">
             {units} unit{units === 1 ? "" : "s"} · {money(spent)} spent ·
             avg {avg === null ? "—" : money(avg)} each
           </span>
@@ -1071,31 +1288,31 @@ function CostLotsEditor({
 }
 
 function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
-  const dash = <span className="text-black/40 dark:text-white/40">—</span>;
+  const dash = <span className="text-sc-ink-2/70">—</span>;
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm whitespace-nowrap">
+      <table className="sc-table w-full text-sm whitespace-nowrap">
         <thead>
-          <tr className="border-b border-black/10 text-left dark:border-white/10">
-            <th className="py-1 pr-3">SKU</th>
-            <th className="py-1 pr-3">Item</th>
-            <th className="py-1 pr-3 text-right">Units</th>
-            <th className="py-1 pr-3 text-right">Lines</th>
-            <th className="py-1 pr-3 text-right">Avg price</th>
-            <th className="py-1 pr-3 text-right">Revenue</th>
-            <th className="py-1 pr-3 text-right">Commission</th>
-            <th className="py-1 pr-3 text-right">Shipping</th>
+          <tr className="border-b border-sc-line text-left">
+            <th className="pr-3">SKU</th>
+            <th className="pr-3">Item</th>
+            <th className="pr-3 text-right">Units</th>
+            <th className="pr-3 text-right">Lines</th>
+            <th className="pr-3 text-right">Avg price</th>
+            <th className="pr-3 text-right">Revenue</th>
+            <th className="pr-3 text-right">Commission</th>
+            <th className="pr-3 text-right">Shipping</th>
             <th
-              className="py-1 pr-3 text-right"
+              className="pr-3 text-right"
               title={`Shipping as a share of revenue. Amber above ${SHIPPING_PCT_WARN * 100}%, red above ${SHIPPING_PCT_ALERT * 100}%.`}
             >
               Ship %
             </th>
-            <th className="py-1 pr-3 text-right">Net</th>
-            <th className="py-1 pr-3 text-right">Cost</th>
-            <th className="py-1 pr-3 text-right">Profit</th>
-            <th className="py-1 pr-3 text-right">Margin</th>
+            <th className="pr-3 text-right">Net</th>
+            <th className="pr-3 text-right">Cost</th>
+            <th className="pr-3 text-right">Profit</th>
+            <th className="pr-3 text-right">Margin</th>
           </tr>
         </thead>
         <tbody>
@@ -1106,7 +1323,7 @@ function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
               pct === null
                 ? ""
                 : pct > SHIPPING_PCT_ALERT
-                  ? "text-red-600 dark:text-red-400 font-medium"
+                  ? "text-red-600 font-medium"
                   : pct > SHIPPING_PCT_WARN
                     ? "text-amber-600"
                     : "";
@@ -1117,57 +1334,57 @@ function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
             return (
               <tr
                 key={s.sku}
-                className="border-b border-black/5 dark:border-white/5"
+                className="border-b border-sc-row"
               >
-                <td className="py-1 pr-3">{s.sku}</td>
+                <td className="pr-3">{s.sku}</td>
                 <td
-                  className="max-w-[16rem] truncate py-1 pr-3"
+                  className="max-w-[11rem] truncate pr-3"
                   title={s.itemName}
                 >
                   {s.itemName}
                 </td>
-                <td className="py-1 pr-3 text-right">{s.units}</td>
+                <td className="pr-3 text-right">{s.units}</td>
                 <td
-                  className="py-1 pr-3 text-right"
+                  className="pr-3 text-right"
                   title={`${s.settledLines} settled, ${s.estimatedLines} estimated${s.noEstimateLines > 0 ? `, ${s.noEstimateLines} not estimable` : ""}`}
                 >
                   {s.lines}
                   {s.estimatedLines > 0 && (
-                    <span className="text-black/40 dark:text-white/40">
+                    <span className="text-sc-ink-2/70">
                       {" "}
                       ({s.estimatedLines} est.)
                     </span>
                   )}
                 </td>
-                <td className="py-1 pr-3 text-right" title={noMoneyTitle}>
+                <td className="pr-3 text-right" title={noMoneyTitle}>
                   {s.avgPrice === null ? dash : money(s.avgPrice)}
                 </td>
-                <td className="py-1 pr-3 text-right" title={noMoneyTitle}>
+                <td className="pr-3 text-right" title={noMoneyTitle}>
                   {s.hasMoney ? money(t.revenue) : dash}
                 </td>
                 <td
-                  className="py-1 pr-3 text-right text-red-600 dark:text-red-400"
+                  className="pr-3 text-right text-red-600"
                   title={noMoneyTitle}
                 >
                   {s.hasMoney ? money(t.commission) : dash}
                 </td>
                 <td
-                  className="py-1 pr-3 text-right text-red-600 dark:text-red-400"
+                  className="pr-3 text-right text-red-600"
                   title={noMoneyTitle}
                 >
                   {s.hasMoney ? money(t.shipping) : dash}
                 </td>
                 <td
-                  className={`py-1 pr-3 text-right ${pctClass}`}
+                  className={`pr-3 text-right ${pctClass}`}
                   title={noMoneyTitle}
                 >
                   {pct === null ? dash : `${(pct * 100).toFixed(1)}%`}
                 </td>
-                <td className="py-1 pr-3 text-right" title={noMoneyTitle}>
+                <td className="pr-3 text-right" title={noMoneyTitle}>
                   {s.hasMoney ? money(t.netAmount) : dash}
                 </td>
                 <td
-                  className="py-1 pr-3 text-right"
+                  className="pr-3 text-right"
                   title={
                     s.hasMoney
                       ? `Item ${money(t.itemCostTotal)} + box ${money(t.boxCostTotal)}`
@@ -1183,12 +1400,23 @@ function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                   )}
                 </td>
                 <td
-                  className="py-1 pr-3 text-right font-medium"
+                  className="pr-3 text-right font-medium"
                   title={noMoneyTitle}
                 >
-                  {s.hasMoney ? money(t.profit) : dash}
+                  {!s.hasMoney ? (
+                    dash
+                  ) : s.missingCost ? (
+                    <span
+                      className="text-amber-600"
+                      title="No cost entered for this SKU, so profit isn't known yet"
+                    >
+                      —
+                    </span>
+                  ) : (
+                    money(t.profit)
+                  )}
                 </td>
-                <td className="py-1 pr-3 text-right" title={noMoneyTitle}>
+                <td className="pr-3 text-right" title={noMoneyTitle}>
                   {!s.hasMoney ? (
                     dash
                   ) : s.missingCost ? (
@@ -1204,7 +1432,7 @@ function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
           })}
           {summaries.length === 0 && (
             <tr>
-              <td colSpan={13} className="py-3 text-black/60 dark:text-white/60">
+              <td colSpan={13} className="py-3 text-sc-ink-2">
                 No SKUs found.
               </td>
             </tr>
@@ -1218,26 +1446,38 @@ function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
 function TotalsRow({
   label,
   totals,
+  uncosted,
   first,
   italic,
 }: {
   label: string;
   totals: ReturnType<typeof sumMargins>;
+  /** Lines in this group with no cost entered. Any at all makes the
+   *  group's profit unknown rather than silently too high. */
+  uncosted: number;
   first?: boolean;
   italic?: boolean;
 }) {
+  const unknown = (
+    <span
+      className="text-amber-600"
+      title={`${uncosted} line${uncosted === 1 ? " has" : "s have"} no cost entered, so this total isn't known yet`}
+    >
+      —
+    </span>
+  );
   return (
     <tr
-      className={`font-medium ${first ? "border-t-2 border-black/20 dark:border-white/20" : ""} ${italic ? "italic" : ""}`}
+      className={`font-medium ${first ? "border-t-2 border-sc-line" : ""} ${italic ? "italic" : ""}`}
     >
       <td className="py-2 pr-3" colSpan={5}>
         {label}
       </td>
       <td className="py-2 pr-3 text-right">{money(totals.revenue)}</td>
-      <td className="py-2 pr-3 text-right text-red-600 dark:text-red-400">
+      <td className="py-2 pr-3 text-right text-red-600">
         {money(totals.commission)}
       </td>
-      <td className="py-2 pr-3 text-right text-red-600 dark:text-red-400">
+      <td className="py-2 pr-3 text-right text-red-600">
         {money(totals.shipping)}
       </td>
       <td className="py-2 pr-3 text-right">
@@ -1246,15 +1486,23 @@ function TotalsRow({
       <td className="py-2 pr-3 text-right">{money(totals.netAmount)}</td>
       <td
         className="py-2 pr-3 text-right"
-        title={`Item ${money(totals.itemCostTotal)} + box ${money(totals.boxCostTotal)}`}
+        title={
+          uncosted > 0
+            ? undefined
+            : `Item ${money(totals.itemCostTotal)} + box ${money(totals.boxCostTotal)}`
+        }
       >
-        {money(-totals.costTotal)}
+        {uncosted > 0 ? unknown : money(-totals.costTotal)}
       </td>
-      <td className="py-2 pr-3 text-right">{money(totals.profit)}</td>
       <td className="py-2 pr-3 text-right">
-        {totals.revenue !== 0
-          ? `${((totals.profit / totals.revenue) * 100).toFixed(1)}%`
-          : "—"}
+        {uncosted > 0 ? unknown : money(totals.profit)}
+      </td>
+      <td className="py-2 pr-3 text-right">
+        {uncosted > 0
+          ? unknown
+          : totals.revenue !== 0
+            ? `${((totals.profit / totals.revenue) * 100).toFixed(1)}%`
+            : "—"}
       </td>
     </tr>
   );

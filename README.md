@@ -12,17 +12,19 @@ Walmart Marketplace shows a seller their sale price and their fees, but has no p
 
 1. **Paste your Walmart API credentials** (Client ID and Secret, from Seller Center). Nothing is saved.
 2. **Pick which settlement reports to load.** These are the same periodic reports Walmart shows under Payments in Seller Center.
-3. The page pulls everything live and shows five sections:
+3. The page pulls everything live into a dashboard styled after Seller Central (the design language only; no Amazon branding). A row of summary tiles sits at the top: revenue, units sold, net after fees, profit and stock value. Below them, tabs switch between five views:
 
-| Section | What it shows |
+| Tab | What it shows |
 |---|---|
-| **1. Inventory and costs** | Every SKU you stock, with on-hand count. Enter purchase batches (quantity × price each) and box cost and dimensions. Average cost is quantity-weighted across batches. "Left" (bought − sold) turns amber when it disagrees with Walmart's count. |
-| **2. Stock value** | Units on hand at your average cost and at the listed price, with totals that say how many SKUs they cover. |
-| **3. By SKU** | One row per product: units, average price, revenue, commission, shipping, shipping % of revenue (amber above 15%, red above 25%), net, cost, profit, margin. |
-| **4. Price over time** | A line chart of average selling price per unit by order date, one line per product, with a tooltip, keyboard support and a table view. |
-| **5. Order lines** | One row per order line with revenue, commission, shipping, other fees, net, cost, profit and margin, plus settled and estimated totals. |
+| **By SKU** | One row per product: units, average price, revenue, commission, shipping, shipping % of revenue (amber above 15%, red above 25%), net, cost, profit, margin. |
+| **Order lines** | One row per order line with revenue, commission, shipping, other fees, net, cost, profit and margin, plus settled and estimated totals. |
+| **Price over time** | A line chart of average selling price per unit by order date, one line per product, with a tooltip, keyboard support and a table view. |
+| **Inventory & costs** | Every SKU you stock, with on-hand count. Enter purchase batches (quantity × price each) and box cost and dimensions. Average cost is quantity-weighted across batches. "Left" (bought − sold) turns amber when it disagrees with Walmart's count. |
+| **Stock value** | Units on hand at your average cost and at the listed price, with totals that say how many SKUs they cover. |
 
-Sections 3 and 5 each have a **Download CSV** link.
+By SKU and Order lines each have a **Download CSV** button. The app is light-mode only.
+
+**Profit is never shown for a product with no cost entered.** Tiles, table cells and totals show "—" instead, because a profit that assumed the item was free would look real.
 
 ### Settled vs. estimated
 

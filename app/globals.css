@@ -1,26 +1,148 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * Seller Central–style design language: navy top bar, white cards on a
+ * light gray page, orange primary buttons, teal links, dense tables.
+ * Borrowed look only - no Amazon logo, name or proprietary font.
+ *
+ * Light only, by choice: the app never restyles for device dark mode.
+ */
+@theme {
+  --color-sc-nav: #232f3e;
+  --color-sc-page: #eaeded;
+  --color-sc-line: #d5d9d9;
+  --color-sc-row: #e7e7e7;
+  --color-sc-head: #f7fafa;
+  --color-sc-ink: #0f1111;
+  --color-sc-ink-2: #565959;
+  --color-sc-link: #007185;
+  --color-sc-link-hover: #c7511f;
+  --color-sc-accent: #e77600;
+  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: light;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-sc-page);
+  color: var(--color-sc-ink);
+  font-family: var(--font-sans);
+}
+
+@layer components {
+  .sc-card {
+    background: #fff;
+    border: 1px solid var(--color-sc-line);
+    border-radius: 8px;
+  }
+
+  .sc-btn-primary,
+  .sc-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--color-sc-ink);
+    box-shadow: 0 2px 5px 0 rgba(213, 217, 217, 0.5);
+    cursor: pointer;
+  }
+  .sc-btn-primary {
+    background: #ffa41c;
+    border: 1px solid #ff8f00;
+  }
+  .sc-btn-primary:hover {
+    background: #fa8900;
+  }
+  .sc-btn {
+    background: #fff;
+    border: 1px solid var(--color-sc-line);
+  }
+  .sc-btn:hover {
+    background: var(--color-sc-head);
+  }
+  .sc-btn-primary:disabled,
+  .sc-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .sc-btn-primary:focus-visible,
+  .sc-btn:focus-visible,
+  .sc-link:focus-visible,
+  .sc-tab:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px #c8f3fa, 0 0 0 1px var(--color-sc-link);
+  }
+
+  .sc-link {
+    color: var(--color-sc-link);
+    cursor: pointer;
+  }
+  .sc-link:hover {
+    color: var(--color-sc-link-hover);
+    text-decoration: underline;
+  }
+  .sc-link:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    text-decoration: none;
+  }
+
+  .sc-input {
+    border: 1px solid #888c8c;
+    border-radius: 6px;
+    padding: 4px 8px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 17, 17, 0.15) inset;
+  }
+  .sc-input:focus {
+    outline: none;
+    border-color: var(--color-sc-link);
+    box-shadow:
+      0 0 0 3px #c8f3fa,
+      0 1px 2px rgba(15, 17, 17, 0.15) inset;
+  }
+
+  .sc-tab {
+    border-bottom: 3px solid transparent;
+    padding: 12px 4px 9px;
+    font-size: 14px;
+    color: var(--color-sc-ink-2);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .sc-tab:hover {
+    color: var(--color-sc-ink);
+  }
+  .sc-tab[aria-selected="true"] {
+    border-bottom-color: var(--color-sc-accent);
+    color: var(--color-sc-ink);
+    font-weight: 700;
+  }
+
+  /* Dense data tables: gray header row, hairline rows, hover highlight. */
+  .sc-table thead tr {
+    background: var(--color-sc-head);
+  }
+  .sc-table th {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-sc-ink);
+  }
+  .sc-table th,
+  .sc-table td {
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  .sc-table th:first-child,
+  .sc-table td:first-child {
+    padding-left: 12px;
+  }
+  .sc-table tbody tr:hover {
+    background: #f7fafa;
+  }
 }
