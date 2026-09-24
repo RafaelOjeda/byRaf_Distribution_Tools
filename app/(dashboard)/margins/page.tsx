@@ -14,20 +14,26 @@ import {
   reconcileStock,
   sumMargins,
   summarizeBySku,
+  assignSaleDates,
+  stockValue,
   type CostLot,
   type OrderLineSummary,
   type SkuInputs,
   type SkuSummary,
 } from "@/lib/margin";
 import { orderLinesToCsv, skuSummaryToCsv } from "@/lib/csv";
+import { priceSeriesBySku } from "@/lib/prices";
 import type { InventoryItem } from "@/lib/walmart/inventory";
+import type { CatalogItem } from "@/lib/walmart/items";
 import type { ReconRow } from "@/lib/walmart/recon";
 import {
   listAvailableReports,
   loadInventory,
+  loadListedPrices,
   loadUnsettledOrders,
   loadWalmartData,
 } from "./actions";
+import PriceChart from "./PriceChart";
 
 const money = (n: number) =>
   `${n < 0 ? "-" : ""}$${Math.abs(n).toFixed(2)}`;
@@ -83,6 +89,9 @@ export default function MarginsPage() {
   const [unsettled, setUnsettled] = useState<OrderLineSummary[]>([]);
   const [unsettledError, setUnsettledError] = useState<string | null>(null);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [orderDates, setOrderDates] = useState<Record<string, string>>({});
+  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   // Raw strings keyed by normalized SKU, so a half-typed "1." doesn't fight the input.
   const [inputs, setInputs] = useState<
     Record<string, Partial<Record<SkuField, string>>>
@@ -171,25 +180,35 @@ export default function MarginsPage() {
     setLoading(true);
     setError(null);
     setUnsettledError(null);
-    const [result, recent, stock] = await Promise.all([
+    setCatalogError(null);
+    const [result, recent, stock, prices] = await Promise.all([
       loadWalmartData(clientId, clientSecret, [...selectedDates]),
       loadUnsettledOrders(clientId, clientSecret),
       loadInventory(clientId, clientSecret),
+      loadListedPrices(clientId, clientSecret),
     ]);
     setLoading(false);
     if ("error" in result) {
       setError(result.error);
       return;
     }
-    // Recent orders and inventory are extras - if either fails, still
-    // show settled data rather than blocking the whole page.
+    // Recent orders, inventory and listed prices are extras - if any
+    // fails, still show settled data rather than blocking the whole page.
     if ("error" in recent) {
       setUnsettledError(recent.error);
       setUnsettled([]);
+      setOrderDates({});
     } else {
       setUnsettled(recent.lines);
+      setOrderDates(recent.orderDates);
     }
     setInventory("error" in stock ? [] : stock.inventory);
+    if ("error" in prices) {
+      setCatalogError(prices.error);
+      setCatalog([]);
+    } else {
+      setCatalog(prices.catalog);
+    }
     setRows(result.rows);
     setStep("data");
   }
@@ -199,6 +218,9 @@ export default function MarginsPage() {
     setUnsettled([]);
     setUnsettledError(null);
     setInventory([]);
+    setOrderDates({});
+    setCatalog([]);
+    setCatalogError(null);
     setInputs({});
     setLotDrafts({});
     setExpanded(new Set());
@@ -214,9 +236,15 @@ export default function MarginsPage() {
     setSelectedDates(new Set());
   }
 
+  // saleDate feeds the price chart; it lives beside orderDate/postedDate
+  // rather than replacing them, so the CSV export is unaffected.
   const lines = useMemo(
-    () => [...unsettled, ...(rows ? groupReconRows(rows) : [])],
-    [rows, unsettled]
+    () =>
+      assignSaleDates(
+        [...unsettled, ...(rows ? groupReconRows(rows) : [])],
+        orderDates
+      ),
+    [rows, unsettled, orderDates]
   );
 
   const parsedInputs = useMemo(() => {
@@ -262,6 +290,13 @@ export default function MarginsPage() {
   }, [lines, inventory]);
 
   const skuSummaries = useMemo(() => summarizeBySku(margins), [margins]);
+
+  const priceSeries = useMemo(() => priceSeriesBySku(lines), [lines]);
+
+  const stockVal = useMemo(
+    () => stockValue(inventory, catalog, parsedInputs),
+    [inventory, catalog, parsedInputs]
+  );
 
   const soldBySku = useMemo(() => {
     const m = new Map<string, number>();
@@ -612,8 +647,25 @@ export default function MarginsPage() {
       </section>
 
       <section className="flex flex-col gap-3">
+        <h2 className="font-medium">2. Stock value</h2>
+        <p className="text-sm text-black/60 dark:text-white/60">
+          What the units you have on hand are worth: at what they cost you
+          (your average across the batches entered above) and at the price
+          they&apos;re currently listed for. Only products in stock are
+          shown. Seller-fulfilled stock only — units in Walmart&apos;s
+          warehouses (WFS) aren&apos;t included yet.
+        </p>
+        {catalogError && (
+          <p className="text-sm text-amber-600">
+            Couldn&apos;t load listed prices: {catalogError}
+          </p>
+        )}
+        <StockValueTable stock={stockVal} />
+      </section>
+
+      <section className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between gap-4">
-          <h2 className="font-medium">2. By SKU</h2>
+          <h2 className="font-medium">3. By SKU</h2>
           <button
             onClick={() =>
               downloadCsv("walmart-by-sku", skuSummaryToCsv(skuSummaries))
@@ -634,8 +686,13 @@ export default function MarginsPage() {
       </section>
 
       <section className="flex flex-col gap-3">
+        <h2 className="font-medium">4. Price over time</h2>
+        <PriceChart series={priceSeries} />
+      </section>
+
+      <section className="flex flex-col gap-3">
         <div className="flex items-baseline justify-between gap-4">
-          <h2 className="font-medium">3. Order lines</h2>
+          <h2 className="font-medium">5. Order lines</h2>
           <button
             onClick={() =>
               downloadCsv("walmart-order-lines", orderLinesToCsv(margins))
@@ -795,6 +852,140 @@ export default function MarginsPage() {
           </table>
         </div>
       </section>
+    </div>
+  );
+}
+
+function StockValueTable({
+  stock,
+}: {
+  stock: ReturnType<typeof stockValue>;
+}) {
+  const { rows, totals: t } = stock;
+  const dash = <span className="text-black/40 dark:text-white/40">—</span>;
+
+  if (rows.length === 0) {
+    return (
+      <p className="text-sm text-black/60 dark:text-white/60">
+        Nothing in stock right now.
+      </p>
+    );
+  }
+
+  const uncosted = t.stockedSkus - t.costedSkus;
+  const unlisted = t.stockedSkus - t.pricedSkus - t.unpublishedSkus;
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Totals say how many SKUs they cover, so a partial total can't
+          read as the whole picture. */}
+      <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
+        <div>
+          <div className="text-black/60 dark:text-white/60">At cost</div>
+          <div className="text-lg font-semibold">
+            {t.costedSkus > 0 ? money(t.atCost) : "—"}
+          </div>
+          <div className="text-xs text-black/60 dark:text-white/60">
+            {t.costedSkus} of {t.stockedSkus} stocked SKU
+            {t.stockedSkus === 1 ? "" : "s"}
+            {uncosted > 0 && (
+              <span className="text-amber-600">
+                {" "}
+                · {uncosted} with no cost entered
+              </span>
+            )}
+          </div>
+        </div>
+        <div>
+          <div className="text-black/60 dark:text-white/60">
+            At current price
+          </div>
+          <div className="text-lg font-semibold">
+            {t.pricedSkus > 0 ? money(t.atPrice) : "—"}
+          </div>
+          <div className="text-xs text-black/60 dark:text-white/60">
+            {t.pricedSkus} of {t.stockedSkus} stocked SKU
+            {t.stockedSkus === 1 ? "" : "s"}
+            {t.unpublishedSkus > 0 && (
+              <span className="text-amber-600">
+                {" "}
+                · excludes {t.unpublishedSkus} unpublished (can&apos;t sell
+                right now)
+              </span>
+            )}
+            {unlisted > 0 && (
+              <span className="text-amber-600">
+                {" "}
+                · {unlisted} with no listed price
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm whitespace-nowrap">
+          <thead>
+            <tr className="border-b border-black/10 text-left dark:border-white/10">
+              <th className="py-1 pr-3">SKU</th>
+              <th className="py-1 pr-3 text-right">On hand</th>
+              <th className="py-1 pr-3 text-right">Avg cost</th>
+              <th className="py-1 pr-3 text-right">Listed price</th>
+              <th className="py-1 pr-3 text-right">Value at cost</th>
+              <th className="py-1 pr-3 text-right">Value at price</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr
+                key={r.sku}
+                className="border-b border-black/5 dark:border-white/5"
+              >
+                <td className="py-1 pr-3">{r.sku}</td>
+                <td className="py-1 pr-3 text-right">{r.onHand}</td>
+                <td
+                  className="py-1 pr-3 text-right"
+                  title={
+                    r.avgCost === null
+                      ? "No purchase batches entered for this SKU"
+                      : undefined
+                  }
+                >
+                  {r.avgCost === null ? (
+                    <span className="text-amber-600">no cost</span>
+                  ) : (
+                    money(r.avgCost)
+                  )}
+                </td>
+                <td className="py-1 pr-3 text-right">
+                  {r.listedPrice === null ? dash : money(r.listedPrice)}
+                </td>
+                <td className="py-1 pr-3 text-right">
+                  {r.valueAtCost === null ? dash : money(r.valueAtCost)}
+                </td>
+                <td
+                  className="py-1 pr-3 text-right"
+                  title={
+                    r.valueAtPrice !== null && !r.isPublished
+                      ? `Not currently sellable: listing status is ${r.publishedStatus}. Left out of the at-price total.`
+                      : undefined
+                  }
+                >
+                  {r.valueAtPrice === null ? (
+                    dash
+                  ) : r.isPublished ? (
+                    money(r.valueAtPrice)
+                  ) : (
+                    <span className="text-amber-600">
+                      {money(r.valueAtPrice)} unpublished
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

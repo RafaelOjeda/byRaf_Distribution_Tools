@@ -9,6 +9,7 @@ import {
 } from "@/lib/margin";
 import { fetchWalmartToken } from "@/lib/walmart/auth";
 import { fetchInventory, type InventoryItem } from "@/lib/walmart/inventory";
+import { fetchCatalogPrices, type CatalogItem } from "@/lib/walmart/items";
 import { fetchOrdersSince } from "@/lib/walmart/orders";
 import {
   fetchAllAvailableRows,
@@ -89,6 +90,20 @@ export async function loadInventory(
 }
 
 /**
+ * Each SKU's currently listed price and publish status. Stocked SKUs
+ * that have never sold have no sale price, so this is the only source of
+ * a "current price" for them.
+ */
+export async function loadListedPrices(
+  clientId: string,
+  clientSecret: string
+): Promise<Result<{ catalog: CatalogItem[] }>> {
+  return withToken(clientId, clientSecret, async (token) => ({
+    catalog: await fetchCatalogPrices(token),
+  }));
+}
+
+/**
  * Orders Walmart hasn't settled yet, with commission and shipping
  * estimated from each SKU's settled history. Reads every available
  * report (not just the selected ones) so "settled" and the history mean
@@ -98,7 +113,13 @@ export async function loadInventory(
 export async function loadUnsettledOrders(
   clientId: string,
   clientSecret: string
-): Promise<Result<{ lines: OrderLineSummary[] }>> {
+): Promise<
+  Result<{
+    lines: OrderLineSummary[];
+    /** settlementKey(po, sku) -> order date, for EVERY order in the window. */
+    orderDates: Record<string, string>;
+  }>
+> {
   return withToken(clientId, clientSecret, async (token) => {
     const since = new Date(Date.now() - UNSETTLED_LOOKBACK_DAYS * 86_400_000)
       .toISOString()
@@ -114,8 +135,21 @@ export async function loadUnsettledOrders(
       settled.map((l) => settlementKey(l.purchaseOrderNo, l.sku))
     );
 
+    // Settled lines only carry a posting date (about 2 days after the
+    // sale). The orders fetched above include settled ones, so hand back
+    // their true order dates too. PO, SKU and a date - no customer data.
+    const orderDates: Record<string, string> = {};
+    for (const order of orders) {
+      const date = new Date(order.orderDate).toISOString().slice(0, 10);
+      for (const line of order.orderLines?.orderLine ?? []) {
+        orderDates[settlementKey(order.purchaseOrderId, line.item?.sku ?? "")] =
+          date;
+      }
+    }
+
     return {
       lines: estimateUnsettled(orders, settledKeys, buildSkuHistory(settled)),
+      orderDates,
     };
   });
 }

@@ -21,6 +21,15 @@ export interface OrderLineSummary {
   estimateNote?: string;
   orderDate?: string; // YYYY-MM-DD, estimated lines only
   postedDate?: string; // YYYY-MM-DD settlement posting date, settled lines only
+  /**
+   * The date a sale is placed on for trend charts: the real order date
+   * where the Orders API has it, else the settlement posting date (which
+   * runs a couple of days after the sale). saleDateBasis says which.
+   * Kept separate from orderDate/postedDate so the CSV export's meaning
+   * of those two columns doesn't change.
+   */
+  saleDate?: string;
+  saleDateBasis?: "order" | "posted";
 
   // Components. Every row lands in exactly one of these, so they always
   // sum to netAmount - nothing is silently dropped.
@@ -180,6 +189,28 @@ export function settlementKey(purchaseOrderNo: string, sku: string): string {
 }
 
 /**
+ * Places every line on a sale date. Estimated lines already carry their
+ * real order date. Settled lines look theirs up in orderDates (built
+ * from the Orders API, keyed with settlementKey); ones older than the
+ * Orders API window fall back to the settlement posting date and are
+ * marked "posted" so the approximation is visible, not silent.
+ */
+export function assignSaleDates(
+  lines: OrderLineSummary[],
+  orderDates: Record<string, string>
+): OrderLineSummary[] {
+  return lines.map((l) => {
+    const fromOrders = orderDates[settlementKey(l.purchaseOrderNo, l.sku)];
+    const date = l.orderDate ?? fromOrders;
+    if (date) return { ...l, saleDate: date, saleDateBasis: "order" as const };
+    if (l.postedDate) {
+      return { ...l, saleDate: l.postedDate, saleDateBasis: "posted" as const };
+    }
+    return l;
+  });
+}
+
+/**
  * Turns orders Walmart hasn't settled yet into estimated line summaries.
  * Lines already in a recon report (settledKeys, built with
  * settlementKey) and fully cancelled lines are skipped. Tax is left at
@@ -292,6 +323,89 @@ export function averageUnitCost(lots: CostLot[] | undefined): number | null {
   const units = valid.reduce((n, l) => n + l.qty, 0);
   if (units === 0) return null;
   return valid.reduce((sum, l) => sum + l.qty * l.unitCost, 0) / units;
+}
+
+export interface StockValueRow {
+  sku: string;
+  onHand: number;
+  avgCost: number | null; // null = no batches entered
+  listedPrice: number | null; // null = catalog gave no price
+  publishedStatus: string | null; // null = SKU not found in the catalog
+  isPublished: boolean;
+  valueAtCost: number | null;
+  valueAtPrice: number | null;
+}
+
+export interface StockValueTotals {
+  stockedSkus: number;
+  costedSkus: number;
+  atCost: number; // over costedSkus only
+  pricedSkus: number;
+  atPrice: number; // over pricedSkus only - published SKUs with a price
+  unpublishedSkus: number; // stocked, priced, but can't currently sell
+}
+
+/**
+ * What the stock on hand is worth, at what it cost and at what it's
+ * listed for. Only SKUs actually in stock (onHand > 0) appear.
+ *
+ * Cost is the quantity-weighted average across every batch entered, not
+ * FIFO: batches carry no dates, and an average is what's wanted.
+ *
+ * A missing figure is null, never 0, and the totals cover only the SKUs
+ * that have one - the counts say how many, so a total can't silently
+ * understate. Unpublished SKUs (e.g. blocked by a policy violation) show
+ * their price but are left out of the at-price total: that stock can't
+ * sell right now, so counting it would overstate what's realisable.
+ */
+export function stockValue(
+  inventory: { sku: string; onHand: number }[],
+  catalog: { sku: string; price: number | null; publishedStatus: string }[],
+  inputs: Record<string, SkuInputs>
+): { rows: StockValueRow[]; totals: StockValueTotals } {
+  const cat = new Map(catalog.map((c) => [normalizeSku(c.sku), c]));
+
+  const rows: StockValueRow[] = inventory
+    .filter((i) => i.onHand > 0)
+    .map((i) => {
+      const key = normalizeSku(i.sku);
+      const item = cat.get(key);
+      const avgCost = averageUnitCost(inputs[key]?.lots);
+      const listedPrice = item?.price ?? null;
+      return {
+        sku: i.sku,
+        onHand: i.onHand,
+        avgCost,
+        listedPrice,
+        publishedStatus: item?.publishedStatus ?? null,
+        isPublished: item?.publishedStatus === "PUBLISHED",
+        valueAtCost: avgCost === null ? null : i.onHand * avgCost,
+        valueAtPrice: listedPrice === null ? null : i.onHand * listedPrice,
+      };
+    })
+    // Biggest money first; SKUs with no figure sink to the bottom.
+    .sort(
+      (a, b) =>
+        (b.valueAtPrice ?? b.valueAtCost ?? -1) -
+          (a.valueAtPrice ?? a.valueAtCost ?? -1) || a.sku.localeCompare(b.sku)
+    );
+
+  const costed = rows.filter((r) => r.valueAtCost !== null);
+  const priced = rows.filter((r) => r.valueAtPrice !== null && r.isPublished);
+
+  return {
+    rows,
+    totals: {
+      stockedSkus: rows.length,
+      costedSkus: costed.length,
+      atCost: costed.reduce((n, r) => n + (r.valueAtCost ?? 0), 0),
+      pricedSkus: priced.length,
+      atPrice: priced.reduce((n, r) => n + (r.valueAtPrice ?? 0), 0),
+      unpublishedSkus: rows.filter(
+        (r) => r.valueAtPrice !== null && !r.isPublished
+      ).length,
+    },
+  };
 }
 
 export interface SkuStock {
