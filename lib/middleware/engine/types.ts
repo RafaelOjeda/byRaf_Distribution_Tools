@@ -7,6 +7,9 @@
  * For now this is exactly what `lib/margin.ts`'s `OrderLineSummary` was.
  */
 export interface OrderLineSummary {
+  /** Set by MarketplaceConnector.snapshot() - which connected source this line came from. */
+  source?: string;
+  sourceLabel?: string;
   purchaseOrderNo: string;
   purchaseOrderLine: string;
   sku: string;

@@ -75,7 +75,7 @@ type LotDraft = { qty: string; unitCost: string };
 
 type Step = "connect" | "periods" | "data";
 
-type Tab = "sku" | "orders" | "price" | "inventory" | "stock";
+type Tab = "sku" | "orders" | "price" | "inventory" | "stock" | "fees";
 
 export default function DashboardClient({
   sources,
@@ -95,6 +95,7 @@ export default function DashboardClient({
     {}
   );
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<string[] | "all">("all");
   // Raw strings keyed by normalized SKU, so a half-typed "1." doesn't fight the input.
   const [inputs, setInputs] = useState<
     Record<string, Partial<Record<SkuField, string>>>
@@ -202,7 +203,7 @@ export default function DashboardClient({
   function onTabKey(e: KeyboardEvent<HTMLDivElement>) {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     e.preventDefault();
-    const order: Tab[] = ["sku", "orders", "price", "inventory", "stock"];
+    const order: Tab[] = ["sku", "orders", "price", "inventory", "stock", "fees"];
     const i = order.indexOf(tab);
     const next =
       order[(i + (e.key === "ArrowRight" ? 1 : order.length - 1)) % order.length];
@@ -283,6 +284,7 @@ export default function DashboardClient({
 
   function clearData() {
     setSnapshot(null);
+    setSourceFilter("all");
     setInputs({});
     setLotDrafts({});
     setExpanded(new Set());
@@ -324,8 +326,8 @@ export default function DashboardClient({
   // buildReport (pure, no network), so this stays instant.
   const liveReport = useMemo(() => {
     if (!snapshot) return null;
-    return buildReport(snapshot, parsedInputs, { sourceFilter: "all" });
-  }, [snapshot, parsedInputs]);
+    return buildReport(snapshot, parsedInputs, { sourceFilter });
+  }, [snapshot, parsedInputs, sourceFilter]);
 
   const inventoryBySku = useMemo(() => {
     const m = new Map<string, Report["inventory"][number]>();
@@ -503,6 +505,34 @@ export default function DashboardClient({
         </div>
       </div>
 
+      {r.sources.filter((s) => s.status === "ok").length > 1 && (
+        <div className="flex flex-wrap gap-2" aria-label="Filter by source">
+          <button
+            onClick={() => setSourceFilter("all")}
+            className={sourceFilter === "all" ? "sc-btn-primary" : "sc-btn"}
+            aria-pressed={sourceFilter === "all"}
+          >
+            All
+          </button>
+          {r.sources
+            .filter((s) => s.status === "ok")
+            .map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setSourceFilter([s.id])}
+                className={
+                  sourceFilter !== "all" && sourceFilter.includes(s.id)
+                    ? "sc-btn-primary"
+                    : "sc-btn"
+                }
+                aria-pressed={sourceFilter !== "all" && sourceFilter.includes(s.id)}
+              >
+                {s.label}
+              </button>
+            ))}
+        </div>
+      )}
+
       {/* Phone: one swipeable row, so the data isn't pushed a screen and a
             half down by five stacked tiles. Grid from sm up. */}
       <div
@@ -572,6 +602,7 @@ export default function DashboardClient({
               ["price", "Price over time"],
               ["inventory", `Inventory & costs (${skus.length})`],
               ["stock", `Stock value (${stockVal.totals.stockedSkus})`],
+              ["fees", `Marketplace fees (${r.marketplaceFees.length})`],
             ] as [Tab, string][]
           ).map(([id, label]) => (
             <button
@@ -866,6 +897,17 @@ export default function DashboardClient({
       </>
       )}
 
+      {tab === "fees" && (
+      <>
+        <PanelHeader title="Marketplace fees">
+          Charges that belong to no single order line - storage,
+          subscriptions, ads, adjustments - so they never appear in the
+          order-line or by-SKU totals above.
+        </PanelHeader>
+        <MarketplaceFeesTable fees={r.marketplaceFees} />
+      </>
+      )}
+
       {tab === "sku" && (
       <>
         <PanelHeader
@@ -958,6 +1000,7 @@ export default function DashboardClient({
             <thead>
               <tr className="border-b border-sc-line text-left">
                 <th className="pr-3">Status</th>
+                <th className="pr-3">Source</th>
                 <th className="pr-3">SKU</th>
                 <th className="pr-3">Item</th>
                 <th className="pr-3">Fulfillment</th>
@@ -996,6 +1039,7 @@ export default function DashboardClient({
                     >
                       {est ? `Est. · ${m.orderDate?.slice(5)}` : "Settled"}
                     </td>
+                    <td className="pr-3">{m.sourceLabel ?? "—"}</td>
                     <td className="pr-3">{m.sku}</td>
                     <td
                       className="max-w-[11rem] truncate pr-3"
@@ -1076,7 +1120,7 @@ export default function DashboardClient({
               {margins.length === 0 && (
                 <tr>
                   <td
-                    colSpan={13}
+                    colSpan={14}
                     className="py-3 text-sc-ink-2"
                   >
                     No order lines found.
@@ -1397,6 +1441,51 @@ function StockValueTable({ stock }: { stock: Report["stock"] }) {
   );
 }
 
+function MarketplaceFeesTable({ fees }: { fees: Report["marketplaceFees"] }) {
+  if (fees.length === 0) {
+    return (
+      <p className="text-sm text-sc-ink-2">
+        No account-level charges for the selected periods.
+      </p>
+    );
+  }
+  const total = fees.reduce((n, f) => n + f.amount, 0);
+  return (
+    <div className="overflow-x-auto">
+      <table className="sc-table w-full text-sm whitespace-nowrap">
+        <thead>
+          <tr className="border-b border-sc-line text-left">
+            <th className="pr-3">Source</th>
+            <th className="pr-3">Period</th>
+            <th className="pr-3">Kind</th>
+            <th className="pr-3">Description</th>
+            <th className="pr-3 text-right">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {fees.map((f, i) => (
+            <tr key={i} className="border-b border-sc-row">
+              <td className="pr-3">{f.source}</td>
+              <td className="pr-3">{f.periodId}</td>
+              <td className="pr-3 capitalize">{f.kind}</td>
+              <td className="pr-3">{f.description}</td>
+              <td className="pr-3 text-right text-red-600">{money(f.amount)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="border-t-2 border-sc-line font-medium">
+            <td className="py-2 pr-3" colSpan={4}>
+              Total
+            </td>
+            <td className="py-2 pr-3 text-right">{money(total)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 /** A small label-over-value pair for the phone cards. */
 function Fig({
   label,
@@ -1645,6 +1734,13 @@ function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
               <div className="min-w-0">
                 <div className="font-bold break-words">{s.sku}</div>
                 <div className="truncate text-xs text-sc-ink-2">{s.itemName}</div>
+                {s.bySource.length > 1 && (
+                  <div className="truncate text-xs text-sc-ink-2">
+                    {s.bySource
+                      .map((b) => `${b.sourceLabel} ${b.units}`)
+                      .join(" · ")}
+                  </div>
+                )}
               </div>
               <div className="shrink-0 text-right">
                 <div className="text-xs text-sc-ink-2">Profit</div>
@@ -1762,7 +1858,19 @@ function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                 key={s.sku}
                 className="border-b border-sc-row"
               >
-                <td className="pr-3">{s.sku}</td>
+                <td
+                  className="pr-3"
+                  title={
+                    s.bySource.length > 1
+                      ? s.bySource.map((b) => `${b.sourceLabel}: ${b.units} units`).join(" · ")
+                      : undefined
+                  }
+                >
+                  {s.sku}
+                  {s.bySource.length > 1 && (
+                    <span className="text-sc-ink-2/70"> ({s.bySource.length} sources)</span>
+                  )}
+                </td>
                 <td
                   className="max-w-[11rem] truncate pr-3"
                   title={s.itemName}
@@ -1881,6 +1989,7 @@ function OrderLineCard({ m }: { m: MarginRow }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className={`text-xs ${est ? "italic text-sc-ink-2" : "text-sc-ink-2"}`}>
+            {m.sourceLabel ? `${m.sourceLabel} · ` : ""}
             {est ? `Estimated · ordered ${m.orderDate}` : `Settled · ${m.postedDate ?? ""}`}
           </div>
           <div className="font-bold break-words">{m.sku}</div>
@@ -1999,7 +2108,7 @@ function TotalsRow({
     <tr
       className={`font-medium ${first ? "border-t-2 border-sc-line" : ""} ${italic ? "italic" : ""}`}
     >
-      <td className="py-2 pr-3" colSpan={5}>
+      <td className="py-2 pr-3" colSpan={6}>
         {label}
       </td>
       <td className="py-2 pr-3 text-right">{money(totals.revenue)}</td>

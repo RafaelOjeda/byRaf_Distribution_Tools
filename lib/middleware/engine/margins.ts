@@ -312,6 +312,8 @@ export interface SkuSummary {
   margin: number | null;
   missingCost: boolean;
   totals: ReturnType<typeof sumMargins>;
+  /** How many units/how much revenue each connected source contributed. Sorted units descending. */
+  bySource: { source: string; sourceLabel: string; units: number; revenue: number }[];
 }
 
 /**
@@ -342,6 +344,24 @@ export function summarizeBySku(rows: MarginRow[]): SkuSummary[] {
     const unitsCounted = counted.reduce((n, r) => n + r.qty, 0);
     const hasMoney = counted.length > 0;
 
+    const bySourceMap = new Map<
+      string,
+      { source: string; sourceLabel: string; units: number; revenue: number }
+    >();
+    for (const r of group) {
+      const source = r.source ?? "unknown";
+      const entry = bySourceMap.get(source) ?? {
+        source,
+        sourceLabel: r.sourceLabel ?? source,
+        units: 0,
+        revenue: 0,
+      };
+      entry.units += r.qty;
+      entry.revenue += r.revenue;
+      bySourceMap.set(source, entry);
+    }
+    const bySource = [...bySourceMap.values()].sort((a, b) => b.units - a.units);
+
     summaries.push({
       sku,
       itemName: group.find((r) => r.itemName)?.itemName ?? "",
@@ -360,6 +380,7 @@ export function summarizeBySku(rows: MarginRow[]): SkuSummary[] {
       margin: totals.revenue !== 0 ? totals.profit / totals.revenue : null,
       missingCost: counted.some((r) => !r.hasCost),
       totals,
+      bySource,
     });
   }
 

@@ -104,9 +104,15 @@ export abstract class MarketplaceConnector {
         : Promise.resolve([]),
     ]);
 
+    const tag = (l: OrderLineSummary): OrderLineSummary => ({
+      ...l,
+      source: this.descriptor.id,
+      sourceLabel: this.descriptor.label,
+    });
+
     return {
       sourceId: this.descriptor.id,
-      lines: [...settled.lines, ...recent.lines],
+      lines: [...settled.lines.map(tag), ...recent.lines.map(tag)],
       charges: settled.charges,
       orderDates: recent.orderDates,
       inventory,
