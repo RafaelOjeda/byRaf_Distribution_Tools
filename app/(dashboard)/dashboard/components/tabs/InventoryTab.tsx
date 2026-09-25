@@ -12,7 +12,7 @@ import {
   type SkuInputs,
 } from "@/lib/middleware";
 import { BOX_FIELDS, type LotDraft, type SkuField } from "../../types";
-import { downloadCsv, money } from "../../utils/format";
+import { downloadCsv, money, plural } from "../../utils/format";
 import { PanelHeader } from "../shared/PanelHeader";
 import { ImportPreviewCard } from "../shared/ImportPreviewCard";
 import { InventoryCard } from "../InventoryCard";
@@ -200,7 +200,7 @@ export function InventoryTab({
                         className="sc-link text-left"
                         title={
                           drafts.length > 0
-                            ? `${drafts.length} batch${drafts.length === 1 ? "" : "es"}`
+                            ? plural(drafts.length, "batch", "batches")
                             : "Add a purchase batch"
                         }
                       >

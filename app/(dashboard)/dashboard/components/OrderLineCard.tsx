@@ -1,5 +1,5 @@
 import type { MarginRow } from "@/lib/middleware";
-import { money } from "../utils/format";
+import { money, pct } from "../utils/format";
 import { Fig } from "./shared/Fig";
 
 export function OrderLineCard({ m }: { m: MarginRow }) {
@@ -36,7 +36,7 @@ export function OrderLineCard({ m }: { m: MarginRow }) {
             {m.noEstimate ? null : !m.hasCost ? (
               <span className="text-amber-600">no cost</span>
             ) : m.margin === null ? null : (
-              `${(m.margin * 100).toFixed(1)}% margin`
+              `${pct(m.margin)} margin`
             )}
           </div>
         </div>

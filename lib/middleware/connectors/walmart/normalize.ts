@@ -11,6 +11,11 @@ function toIsoDate(mdy: string | undefined): string | undefined {
 
 type Component = "revenue" | "commission" | "shipping" | "tax" | "otherFees";
 
+/** A fraction as a 1-decimal percent number-string, e.g. 0.153 -> "15.3" - no "%", callers append their own. */
+function pct1(fraction: number): string {
+  return (fraction * 100).toFixed(1);
+}
+
 /**
  * Categories confirmed against live settlement data 2026-09-23. Shipping
  * is matched on description rather than Amount Type, because Walmart
@@ -143,11 +148,11 @@ export function estimateUnsettled(
           SHIP_NODE_LABELS[order.shipNode?.type ?? ""] ??
           order.shipNode?.type ??
           "",
-        commissionRate: h ? (h.commissionRate * 100).toFixed(1) : "",
+        commissionRate: h ? pct1(h.commissionRate) : "",
         status: "estimated",
         noEstimate: !h,
         estimateNote: h
-          ? `Estimated: commission at ${(h.commissionRate * 100).toFixed(1)}% and shipping at the average of ${h.shipments} settled shipment${h.shipments === 1 ? "" : "s"}`
+          ? `Estimated: commission at ${pct1(h.commissionRate)}% and shipping at the average of ${h.shipments} settled shipment${h.shipments === 1 ? "" : "s"}`
           : "No settled history for this SKU yet - nothing to estimate from",
         orderDate: new Date(order.orderDate).toISOString().slice(0, 10),
         revenue,

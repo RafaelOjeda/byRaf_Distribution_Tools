@@ -1,5 +1,5 @@
 import { SHIPPING_PCT_ALERT, SHIPPING_PCT_WARN, type SkuSummary } from "@/lib/middleware";
-import { money } from "../utils/format";
+import { money, pct, plural } from "../utils/format";
 import { shipPctClass } from "../utils/shipping";
 import { Fig } from "./shared/Fig";
 
@@ -49,15 +49,14 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                   {!s.hasMoney ? null : unknownProfit ? (
                     <span className="text-amber-600">no cost</span>
                   ) : s.margin === null ? null : (
-                    `${(s.margin * 100).toFixed(1)}% margin`
+                    `${pct(s.margin)} margin`
                   )}
                 </div>
               </div>
             </div>
 
             <p className="mt-2 text-xs text-sc-ink-2">
-              {s.units} unit{s.units === 1 ? "" : "s"} · {s.lines} line
-              {s.lines === 1 ? "" : "s"}
+              {plural(s.units, "unit")} · {plural(s.lines, "line")}
               {s.estimatedLines > 0 && ` (${s.estimatedLines} est.)`}
               {s.noEstimateLines > 0 && ` · ${s.noEstimateLines} not estimable`}
             </p>
@@ -79,7 +78,7 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                   <span className="text-red-600">{money(t.shipping)}</span>
                   {s.shippingPct !== null && (
                     <span className={`block text-xs ${shipPctClass(s.shippingPct) || "text-sc-ink-2"}`}>
-                      {(s.shippingPct * 100).toFixed(1)}% of revenue
+                      {pct(s.shippingPct)} of revenue
                     </span>
                   )}
                 </Fig>
@@ -132,8 +131,8 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
         <tbody>
           {summaries.map((s) => {
             const t = s.totals;
-            const pct = s.shippingPct;
-            const pctClass = shipPctClass(pct);
+            const shipPct = s.shippingPct;
+            const pctClass = shipPctClass(shipPct);
             const noMoneyTitle = s.hasMoney
               ? undefined
               : "No settled history for this SKU yet, so its fees can't be estimated";
@@ -204,7 +203,7 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                   className={`pr-3 text-right ${pctClass}`}
                   title={noMoneyTitle}
                 >
-                  {pct === null ? dash : `${(pct * 100).toFixed(1)}%`}
+                  {shipPct === null ? dash : pct(shipPct)}
                 </td>
                 <td className="pr-3 text-right" title={noMoneyTitle}>
                   {s.hasMoney ? money(t.netAmount) : dash}
@@ -250,7 +249,7 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                   ) : s.margin === null ? (
                     dash
                   ) : (
-                    `${(s.margin * 100).toFixed(1)}%`
+                    pct(s.margin)
                   )}
                 </td>
               </tr>

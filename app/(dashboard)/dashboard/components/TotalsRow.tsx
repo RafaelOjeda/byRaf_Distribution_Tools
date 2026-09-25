@@ -1,5 +1,5 @@
 import type { Report } from "@/lib/middleware";
-import { money } from "../utils/format";
+import { money, pct } from "../utils/format";
 import { Fig } from "./shared/Fig";
 
 export function TotalsCard({
@@ -99,7 +99,7 @@ export function TotalsRow({
         {uncosted > 0
           ? unknown
           : totals.revenue !== 0
-            ? `${((totals.profit / totals.revenue) * 100).toFixed(1)}%`
+            ? pct(totals.profit / totals.revenue)
             : "—"}
       </td>
     </tr>

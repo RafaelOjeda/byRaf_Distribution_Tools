@@ -1,4 +1,5 @@
 import type { CostImportResult } from "@/lib/middleware";
+import { plural } from "../../utils/format";
 
 export function ImportPreviewCard({
   preview,
@@ -16,16 +17,14 @@ export function ImportPreviewCard({
     <div className="sc-card flex flex-col gap-3 border-2 border-sc-line p-4">
       <h3 className="text-base font-bold">Review import</h3>
       <p className="text-sm text-sc-ink-2">
-        {stats.skus} SKU{stats.skus === 1 ? "" : "s"} — {stats.batches}{" "}
-        purchase batch{stats.batches === 1 ? "" : "es"}, {stats.boxed} with
+        {plural(stats.skus, "SKU")} — {plural(stats.batches, "purchase batch", "purchase batches")}, {stats.boxed} with
         box info, {stats.aliased} with alias SKUs.
         {stats.skippedRows > 0 &&
-          ` ${stats.skippedRows} row${stats.skippedRows === 1 ? "" : "s"} skipped, see below.`}
+          ` ${plural(stats.skippedRows, "row")} skipped, see below.`}
       </p>
       {existingSkuCount > 0 && (
         <p className="text-sm text-amber-600">
-          This replaces your current entries for {existingSkuCount} SKU
-          {existingSkuCount === 1 ? "" : "s"}.
+          This replaces your current entries for {plural(existingSkuCount, "SKU")}.
         </p>
       )}
       {warnings.length > 0 && (

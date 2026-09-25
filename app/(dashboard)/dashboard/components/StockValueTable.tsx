@@ -1,5 +1,5 @@
 import type { Report } from "@/lib/middleware";
-import { money } from "../utils/format";
+import { money, plural } from "../utils/format";
 import { Fig } from "./shared/Fig";
 
 export function StockValueTable({ stock }: { stock: Report["stock"] }) {
@@ -21,7 +21,7 @@ export function StockValueTable({ stock }: { stock: Report["stock"] }) {
     <div className="flex flex-col gap-3">
       {t.oversellSkus > 0 && (
         <p className="text-sm text-amber-600">
-          {t.oversellSkus} SKU{t.oversellSkus === 1 ? "" : "s"} where a source
+          {plural(t.oversellSkus, "SKU")} where a source
           reports more on hand than your purchase records support - see
           &ldquo;On hand&rdquo; below.
         </p>
@@ -35,8 +35,7 @@ export function StockValueTable({ stock }: { stock: Report["stock"] }) {
             {t.costedSkus > 0 ? money(t.atCost) : "—"}
           </div>
           <div className="text-xs text-sc-ink-2">
-            {t.costedSkus} of {t.stockedSkus} stocked SKU
-            {t.stockedSkus === 1 ? "" : "s"}
+            {t.costedSkus} of {plural(t.stockedSkus, "stocked SKU")}
             {uncosted > 0 && (
               <span className="text-amber-600">
                 {" "}
@@ -53,8 +52,7 @@ export function StockValueTable({ stock }: { stock: Report["stock"] }) {
             {t.pricedSkus > 0 ? money(t.atPrice) : "—"}
           </div>
           <div className="text-xs text-sc-ink-2">
-            {t.pricedSkus} of {t.stockedSkus} stocked SKU
-            {t.stockedSkus === 1 ? "" : "s"}
+            {t.pricedSkus} of {plural(t.stockedSkus, "stocked SKU")}
             {t.unpublishedSkus > 0 && (
               <span className="text-amber-600">
                 {" "}

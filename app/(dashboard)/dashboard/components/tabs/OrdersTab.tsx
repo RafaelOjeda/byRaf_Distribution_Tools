@@ -1,5 +1,5 @@
 import { orderLinesToCsv, type MarginRow, type Report } from "@/lib/middleware";
-import { downloadCsv, money } from "../../utils/format";
+import { downloadCsv, money, pct, plural } from "../../utils/format";
 import { PanelHeader } from "../shared/PanelHeader";
 import { OrderLineCard } from "../OrderLineCard";
 import { TotalsCard, TotalsRow } from "../TotalsRow";
@@ -55,7 +55,7 @@ export function OrdersTab({
         )}
         {settledCount > 0 && (
           <TotalsCard
-            label={`Settled · ${settledCount} line${settledCount === 1 ? "" : "s"}`}
+            label={`Settled · ${plural(settledCount, "line")}`}
             totals={settledTotals}
             uncosted={
               margins.filter((m) => m.status === "settled" && !m.hasCost).length
@@ -64,7 +64,7 @@ export function OrdersTab({
         )}
         {estimatedCount > 0 && (
           <TotalsCard
-            label={`Estimated · ${estimatedCount} line${estimatedCount === 1 ? "" : "s"}${noEstimateCount > 0 ? ` (+${noEstimateCount} not estimable, excluded)` : ""}`}
+            label={`Estimated · ${plural(estimatedCount, "line")}${noEstimateCount > 0 ? ` (+${noEstimateCount} not estimable, excluded)` : ""}`}
             totals={estimatedTotals}
             uncosted={
               margins.filter(
@@ -192,7 +192,7 @@ export function OrdersTab({
                     ) : m.margin === null ? (
                       "—"
                     ) : (
-                      `${(m.margin * 100).toFixed(1)}%`
+                      pct(m.margin)
                     )}
                   </td>
                 </tr>
@@ -213,7 +213,7 @@ export function OrdersTab({
             <tfoot>
               {settledCount > 0 && (
                 <TotalsRow
-                  label={`Settled · ${settledCount} line${settledCount === 1 ? "" : "s"}`}
+                  label={`Settled · ${plural(settledCount, "line")}`}
                   totals={settledTotals}
                   uncosted={
                     margins.filter((m) => m.status === "settled" && !m.hasCost)
@@ -224,7 +224,7 @@ export function OrdersTab({
               )}
               {estimatedCount > 0 && (
                 <TotalsRow
-                  label={`Estimated · ${estimatedCount} line${estimatedCount === 1 ? "" : "s"}${noEstimateCount > 0 ? ` (+${noEstimateCount} with no estimate, excluded)` : ""}`}
+                  label={`Estimated · ${plural(estimatedCount, "line")}${noEstimateCount > 0 ? ` (+${noEstimateCount} with no estimate, excluded)` : ""}`}
                   totals={estimatedTotals}
                   uncosted={
                     margins.filter(

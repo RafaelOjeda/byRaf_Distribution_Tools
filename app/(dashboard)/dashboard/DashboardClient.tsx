@@ -21,7 +21,7 @@ import {
 } from "@/lib/middleware";
 import { fetchSnapshot, listPeriods } from "@/lib/middleware/actions";
 import InstallPrompt from "./InstallPrompt";
-import { money } from "./utils/format";
+import { money, plural } from "./utils/format";
 import { KpiTile } from "./components/shared/KpiTile";
 import { InventoryTab } from "./components/tabs/InventoryTab";
 import { StockTab } from "./components/tabs/StockTab";
@@ -496,8 +496,8 @@ export default function DashboardClient({
           {money(kpi.revenue - kpi.revenueSettled)} not yet settled
         </KpiTile>
         <KpiTile label="Units sold" value={kpi.units.toLocaleString("en-US")}>
-          {margins.length} order line{margins.length === 1 ? "" : "s"} ·{" "}
-          {skuSummaries.length} product{skuSummaries.length === 1 ? "" : "s"}
+          {plural(margins.length, "order line")} ·{" "}
+          {plural(skuSummaries.length, "product")}
         </KpiTile>
         <KpiTile
           label="Net after fees"
@@ -522,7 +522,7 @@ export default function DashboardClient({
                 ` · + ${money(kpi.profitEstimated)} estimated`}
               {kpi.uncosted > 0 && (
                 <span className="block text-amber-600">
-                  {kpi.uncosted} line{kpi.uncosted === 1 ? "" : "s"} with no
+                  {plural(kpi.uncosted, "line")} with no
                   cost left out
                 </span>
               )}

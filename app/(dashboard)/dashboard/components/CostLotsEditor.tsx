@@ -1,6 +1,6 @@
 import { averageUnitCost, type CostLot } from "@/lib/middleware";
 import type { LotDraft } from "../types";
-import { money } from "../utils/format";
+import { money, plural } from "../utils/format";
 
 export function CostLotsEditor({
   sku,
@@ -79,7 +79,7 @@ export function CostLotsEditor({
         </button>
         {units > 0 && (
           <span className="text-sm text-sc-ink-2">
-            {units} unit{units === 1 ? "" : "s"} · {money(spent)} spent ·
+            {plural(units, "unit")} · {money(spent)} spent ·
             avg {avg === null ? "—" : money(avg)} each
           </span>
         )}

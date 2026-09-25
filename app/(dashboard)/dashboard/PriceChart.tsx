@@ -9,6 +9,7 @@ import {
   type PointerEvent,
 } from "react";
 import type { PriceSeries } from "@/lib/middleware";
+import { plural } from "./utils/format";
 
 /** Most series drawn at once; any others stay reachable in the table view. */
 const MAX_SERIES = 6;
@@ -221,7 +222,7 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
                 ? `${usd(s.first.avg)} → ${usd(s.last.avg)} (${pctText(s.changePct ?? 0)})`
                 : `${usd(s.last.avg)} · 1 sale day`}
               {" · "}
-              {s.units} unit{s.units === 1 ? "" : "s"}
+              {plural(s.units, "unit")}
             </span>
           </li>
         ))}
@@ -353,7 +354,7 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
                     <span style={{ color: "var(--pc-ink-2)" }}>{short(s.sku, 26)}</span>
                   </div>
                   <div className="whitespace-nowrap pl-[22px]" style={{ color: "var(--pc-muted)" }}>
-                    {p.orders} order{p.orders === 1 ? "" : "s"}
+                    {plural(p.orders, "order")}
                     {p.min !== p.max ? ` · ${usd(p.min)}–${usd(p.max)}` : ""}
                   </div>
                 </div>

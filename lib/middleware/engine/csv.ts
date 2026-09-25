@@ -31,8 +31,17 @@ export function toCsv(headers: string[], rows: Cell[][]): string {
   );
 }
 
+/**
+ * CSV cells are raw numbers, not display strings - a spreadsheet applies
+ * its own formatting, and a "$"-prefixed or "%"-suffixed string would sort
+ * and sum wrong once imported. Not the same contract as the dashboard's
+ * `money()`/`pct()` (app/(dashboard)/dashboard/utils/format.ts), which
+ * return formatted strings for on-screen display - don't import one into
+ * the other despite the shared names.
+ */
 /** 2-decimal number, or null. Keeps cents from becoming 0.1 + 0.2 noise. */
 const money = (n: number): number => Math.round(n * 100) / 100;
+/** Fraction as a 1-decimal percent *number* (0.153 -> 15.3), or null. */
 const pct = (fraction: number | null): number | null =>
   fraction === null ? null : Math.round(fraction * 1000) / 10;
 
