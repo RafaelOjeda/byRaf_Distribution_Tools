@@ -2,7 +2,7 @@
 
 Status: **agreed direction, 2026-09-24.** Decisions are recorded at the bottom. Phase 1 can start.
 
-**Progress (2026-09-24):** Phases 1–4 are implemented on `claude/multi-marketplace-plan-m42xak` - the middleware carve-out, the dashboard on the contract, the demo connector with multi-source UI, and SKU aliasing/stock pooling. Phases 5–6 (Amazon, eBay) need real developer-registered API credentials that don't exist in this environment - see the "Amazon developer registration" risk below - so only the connector scaffolding pattern is proven (`docs/adding-a-marketplace.md`), not an actual working connector. Phase 7 (persistence) stays deferred per the decision below.
+**Progress (2026-09-25):** Phases 1–4 are merged to `main` - the middleware carve-out, the dashboard on the contract, the demo connector with multi-source UI, and SKU aliasing/stock pooling. Phase 5 (Amazon) is now planned in detail (`docs/amazon-connector-plan.md`) but not implemented: it needs real developer-registered SP-API credentials that don't exist in this environment - see the "Amazon developer registration" risk below - and the plan surfaces a stock-pooling gap (FBA vs. merchant stock) that phase 4 didn't cover, with a scoped engine fix recommended alongside phase 5. Phase 6 (eBay) hasn't been planned yet. Phase 7 (persistence) stays deferred per the decision below.
 
 ## Goal
 
@@ -206,7 +206,7 @@ Each phase ships on its own, and the app works at every step.
 | 2 | **Dashboard onto the contract** | Add `actions.ts` (describeSources/listPeriods/fetchSnapshot) and `buildReport`. The page renders the generic credential form and a `Report`. Add the lint rule and `check:boundary`. **After this phase `app/` has zero marketplace references.** | Looks the same; copy becomes neutral |
 | 3 | **Demo connector + multiple sources** | Fixture-backed demo connector, connecting several sources at once, filter chips, the source column, partial-failure notes, and a "Marketplace fees" panel for `AccountCharge`s. | Unified view (Walmart + Demo) |
 | 4 | **Product identity + shared stock** | Engine work only: SKU aliasing and the stock-pool rules below. | Costs entered once per product, and stock isn't double-counted |
-| 5 | **Amazon connector** | SP-API: settlement reports, orders, merchant/FBA inventory, listings. Adds `docs/amazon-api-notes.md`. | Amazon appears. No dashboard change |
+| 5 | **Amazon connector** | SP-API: settlement reports, orders, merchant/FBA inventory, listings. Adds `docs/amazon-api-notes.md`. Detailed plan (blockers, SP-API-to-contract mapping, a stock-pooling gap phase 4 didn't cover): `docs/amazon-connector-plan.md`. | Amazon appears. No dashboard change |
 | 6 | **eBay connector** | Finances API payouts as periods, plus Fulfillment and Inventory APIs. Adds `docs/ebay-api-notes.md`. | eBay appears. No dashboard change |
 | 7 | **Persistence / login** | Deferred by decision. Revisit once three marketplaces' credentials are being pasted every visit. | Saved costs and connections |
 
