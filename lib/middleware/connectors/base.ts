@@ -1,6 +1,7 @@
 import "server-only";
 import type { AccountCharge, SourceDescriptor, StockItem } from "../contract";
 import type { OrderLineSummary } from "../engine/types";
+import { paginate } from "./pagination";
 
 export type { AccountCharge };
 
@@ -137,24 +138,12 @@ export abstract class MarketplaceConnector {
     );
   }
 
-  /**
-   * Cursor pagination with a hard page cap, shared by any connector that
-   * walks a cursor-paged list endpoint. Throws rather than returning a
-   * partial list on either a fetch failure or an exhausted page cap, so
-   * a truncated read never silently reads as "nothing here".
-   */
-  protected async paginate<T>(
+  /** See `paginate` in ./pagination - kept as a method so a connector can call it as `this.paginate(...)`. */
+  protected paginate<T>(
     fetchPage: (cursor: string | null) => Promise<{ items: T[]; nextCursor: string | null }>,
-    maxPages: number
+    maxPages: number,
+    label?: string
   ): Promise<T[]> {
-    const items: T[] = [];
-    let cursor: string | null = null;
-    for (let page = 0; page < maxPages; page++) {
-      const result = await fetchPage(cursor);
-      items.push(...result.items);
-      if (!result.nextCursor) return items;
-      cursor = result.nextCursor;
-    }
-    throw new Error(`exceeded ${maxPages} pages - refusing to loop further`);
+    return paginate(fetchPage, maxPages, label);
   }
 }

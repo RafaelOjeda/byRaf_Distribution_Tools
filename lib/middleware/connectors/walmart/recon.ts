@@ -1,16 +1,6 @@
-import { walmartBaseHeaders } from "./auth";
+import { walmartHeaders } from "./auth";
 
 const BASE_URL = "https://marketplace.walmartapis.com/v3/report/reconreport";
-
-function walmartHeaders(token: string) {
-  return {
-    Accept: "application/json",
-    // Walmart's regular API calls authenticate via this custom header,
-    // not a standard `Authorization: Bearer` header.
-    "WM_SEC.ACCESS_TOKEN": token,
-    ...walmartBaseHeaders(),
-  };
-}
 
 export interface AvailableReconFiles {
   // Confirmed against a live response 2026-09-22 - Walmart's docs never

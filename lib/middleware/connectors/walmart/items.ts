@@ -1,4 +1,5 @@
-import { walmartBaseHeaders } from "./auth";
+import { walmartHeaders } from "./auth";
+import { paginate } from "../pagination";
 
 export interface CatalogItem {
   sku: string;
@@ -42,56 +43,51 @@ export async function fetchCatalogPrices(
   token: string,
   pageSize = PAGE_SIZE
 ): Promise<CatalogItem[]> {
-  const headers = {
-    Accept: "application/json",
-    "WM_SEC.ACCESS_TOKEN": token,
-    ...walmartBaseHeaders(),
-  };
+  const headers = walmartHeaders(token);
+  const seen = new Set<string>(); // defensive: never double-count a SKU across pages
+  let page = 0;
 
-  const items: CatalogItem[] = [];
-  const seen = new Set<string>();
-  let cursor = "*";
+  return paginate<CatalogItem>(
+    async (cursor) => {
+      page++;
+      const url = `${BASE}?limit=${pageSize}&nextCursor=${encodeURIComponent(cursor ?? "*")}`;
+      const res = await fetch(url, { headers });
 
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const url = `${BASE}?limit=${pageSize}&nextCursor=${encodeURIComponent(cursor)}`;
-    const res = await fetch(url, { headers });
-
-    if (!res.ok) {
-      const body = await res.text();
-      // End of data, not a failure: when the last page fills exactly,
-      // Walmart still hands back a cursor and the next request 404s with
-      // CONTENT_NOT_FOUND (also what an account with no items returns).
-      // Found when a page size of 1 over 10 items failed on page 11.
-      if (res.status === 404 && body.includes("CONTENT_NOT_FOUND")) {
-        return items;
+      if (!res.ok) {
+        const body = await res.text();
+        // End of data, not a failure: when the last page fills exactly,
+        // Walmart still hands back a cursor and the next request 404s with
+        // CONTENT_NOT_FOUND (also what an account with no items returns).
+        // Found when a page size of 1 over 10 items failed on page 11.
+        if (res.status === 404 && body.includes("CONTENT_NOT_FOUND")) {
+          return { items: [], nextCursor: null };
+        }
+        // Anything else throws rather than returning partial data: a
+        // truncated catalog would read as "no listed price" for the
+        // missing SKUs.
+        throw new Error(
+          `items failed (page ${page}): ${res.status} ${res.statusText} - ${body}`
+        );
       }
-      // Anything else throws rather than returning partial data: a
-      // truncated catalog would read as "no listed price" for the
-      // missing SKUs.
-      throw new Error(
-        `items failed (page ${page + 1}): ${res.status} ${res.statusText} - ${body}`
-      );
-    }
 
-    const data: ItemsResponse = await res.json();
-    for (const i of data.ItemResponse ?? []) {
-      if (seen.has(i.sku)) continue; // defensive: never double-count a SKU
-      seen.add(i.sku);
-      items.push({
-        sku: i.sku,
-        price:
-          typeof i.price?.amount === "number" && Number.isFinite(i.price.amount)
-            ? i.price.amount
-            : null,
-        publishedStatus: i.publishedStatus ?? "UNKNOWN",
-      });
-    }
+      const data: ItemsResponse = await res.json();
+      const items: CatalogItem[] = [];
+      for (const i of data.ItemResponse ?? []) {
+        if (seen.has(i.sku)) continue;
+        seen.add(i.sku);
+        items.push({
+          sku: i.sku,
+          price:
+            typeof i.price?.amount === "number" && Number.isFinite(i.price.amount)
+              ? i.price.amount
+              : null,
+          publishedStatus: i.publishedStatus ?? "UNKNOWN",
+        });
+      }
 
-    if (!data.nextCursor) return items;
-    cursor = data.nextCursor;
-  }
-
-  throw new Error(
-    `items exceeded ${MAX_PAGES} pages - refusing to loop further`
+      return { items, nextCursor: data.nextCursor ?? null };
+    },
+    MAX_PAGES,
+    "items"
   );
 }

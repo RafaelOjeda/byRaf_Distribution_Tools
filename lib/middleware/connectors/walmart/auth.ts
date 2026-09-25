@@ -4,8 +4,6 @@ const TOKEN_URL = "https://marketplace.walmartapis.com/v3/token";
 // never gets caught mid-request with a token that just died.
 const EXPIRY_BUFFER_MS = 60_000;
 
-let cachedToken: { value: string; expiresAt: number } | null = null;
-
 function correlationId() {
   return crypto.randomUUID();
 }
@@ -14,6 +12,17 @@ export function walmartBaseHeaders() {
   return {
     "WM_SVC.NAME": "Walmart Margin Tracker",
     "WM_QOS.CORRELATION_ID": correlationId(),
+  };
+}
+
+/** Headers for every authenticated Walmart API call (not the token exchange itself). */
+export function walmartHeaders(token: string) {
+  return {
+    Accept: "application/json",
+    // Walmart's regular API calls authenticate via this custom header,
+    // not a standard `Authorization: Bearer` header.
+    "WM_SEC.ACCESS_TOKEN": token,
+    ...walmartBaseHeaders(),
   };
 }
 
@@ -53,24 +62,32 @@ export async function fetchWalmartToken(
 }
 
 /**
- * Env-var-credentialed variant, cached for the life of this process.
- * For a future single-tenant background job (cron/sync), not the
- * per-request multi-tenant flow above.
+ * Env-var-credentialed variant, cached for the life of the instance.
+ * For a single-tenant background job (cron/sync) or CLI script, not the
+ * per-request multi-tenant flow above - each instance owns its own
+ * cache, so nothing can accidentally share or reset another caller's.
  */
-export async function getWalmartToken(): Promise<string> {
-  if (cachedToken && cachedToken.expiresAt > Date.now()) {
-    return cachedToken.value;
-  }
+export class WalmartAuthService {
+  private cachedToken: { value: string; expiresAt: number } | null = null;
 
-  const clientId = process.env.WALMART_CLIENT_ID;
-  const clientSecret = process.env.WALMART_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
-    throw new Error(
-      "WALMART_CLIENT_ID / WALMART_CLIENT_SECRET are not set (check .env.local)"
-    );
-  }
+  async getToken(): Promise<string> {
+    if (this.cachedToken && this.cachedToken.expiresAt > Date.now()) {
+      return this.cachedToken.value;
+    }
 
-  const value = await fetchWalmartToken(clientId, clientSecret);
-  cachedToken = { value, expiresAt: Date.now() + 15 * 60_000 - EXPIRY_BUFFER_MS };
-  return value;
+    const clientId = process.env.WALMART_CLIENT_ID;
+    const clientSecret = process.env.WALMART_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      throw new Error(
+        "WALMART_CLIENT_ID / WALMART_CLIENT_SECRET are not set (check .env.local)"
+      );
+    }
+
+    const value = await fetchWalmartToken(clientId, clientSecret);
+    this.cachedToken = {
+      value,
+      expiresAt: Date.now() + 15 * 60_000 - EXPIRY_BUFFER_MS,
+    };
+    return value;
+  }
 }

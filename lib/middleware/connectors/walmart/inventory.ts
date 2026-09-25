@@ -1,4 +1,5 @@
-import { walmartBaseHeaders } from "./auth";
+import { walmartHeaders } from "./auth";
+import { paginate } from "../pagination";
 
 export interface InventoryItem {
   sku: string;
@@ -75,35 +76,28 @@ export async function fetchInventory(
   token: string,
   pageSize = PAGE_SIZE
 ): Promise<InventoryItem[]> {
-  const headers = {
-    Accept: "application/json",
-    "WM_SEC.ACCESS_TOKEN": token,
-    ...walmartBaseHeaders(),
-  };
+  const headers = walmartHeaders(token);
+  let page = 0;
 
-  const items: InventoryItem[] = [];
-  let cursor: string | null | undefined;
-  let url = `${BASE}?limit=${pageSize}`;
+  return paginate<InventoryItem>(
+    async (cursor) => {
+      page++;
+      const url = cursor
+        ? `${BASE}?limit=${pageSize}&nextCursor=${encodeURIComponent(cursor)}`
+        : `${BASE}?limit=${pageSize}`;
+      const res = await fetch(url, { headers });
+      // Throw rather than return partial data: silently truncated
+      // inventory would read as "SKU not stocked" in the UI.
+      if (!res.ok) {
+        throw new Error(
+          `inventories failed (page ${page}): ${res.status} ${res.statusText} - ${await res.text()}`
+        );
+      }
 
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const res = await fetch(url, { headers });
-    // Throw rather than return partial data: silently truncated
-    // inventory would read as "SKU not stocked" in the UI.
-    if (!res.ok) {
-      throw new Error(
-        `inventories failed (page ${page + 1}): ${res.status} ${res.statusText} - ${await res.text()}`
-      );
-    }
-
-    const data: InventoriesResponse = await res.json();
-    items.push(...toItems(data));
-
-    cursor = data.meta?.nextCursor;
-    if (!cursor) return items;
-    url = `${BASE}?limit=${pageSize}&nextCursor=${encodeURIComponent(cursor)}`;
-  }
-
-  throw new Error(
-    `inventories exceeded ${MAX_PAGES} pages - refusing to loop further`
+      const data: InventoriesResponse = await res.json();
+      return { items: toItems(data), nextCursor: data.meta?.nextCursor ?? null };
+    },
+    MAX_PAGES,
+    "inventories"
   );
 }

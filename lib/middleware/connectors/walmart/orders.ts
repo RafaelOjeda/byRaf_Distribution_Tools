@@ -1,4 +1,4 @@
-import { walmartBaseHeaders } from "./auth";
+import { walmartHeaders } from "./auth";
 
 const ORDERS_URL = "https://marketplace.walmartapis.com/v3/orders";
 
@@ -44,11 +44,7 @@ export async function fetchOrdersSince(
   token: string,
   createdStartDate: string // YYYY-MM-DD
 ): Promise<Order[]> {
-  const headers = {
-    Accept: "application/json",
-    "WM_SEC.ACCESS_TOKEN": token,
-    ...walmartBaseHeaders(),
-  };
+  const headers = walmartHeaders(token);
 
   const orders: Order[] = [];
   let url: string | null =
