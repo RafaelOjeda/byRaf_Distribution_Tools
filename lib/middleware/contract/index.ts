@@ -87,6 +87,8 @@ export interface StockItem {
   reserved: number;
   source?: string;
   sourceLabel?: string;
+  /** Physically separate stock held in a marketplace's own fulfillment network (e.g. FBA/WFS) - added on top of the merchant pool, never compared against it. Omitted means merchant-fulfilled. */
+  fulfillment?: "merchant" | "marketplace";
 }
 
 export interface SourceStatus {

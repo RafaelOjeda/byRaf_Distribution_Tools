@@ -1,5 +1,20 @@
 # Amazon SP-API connector — plan (phase 5)
 
+**Status (2026-09-25):** the connector is built
+(`lib/middleware/connectors/amazon/`) from public SP-API documentation,
+with `npm run test:engine`/`test:csv`/`check:boundary`/lint/build all
+passing - but it is **deliberately not registered** in
+`lib/middleware/connectors/registry.ts`. This is a live, production app
+a real business pastes real credentials into; registering unverified
+financial-data code would put "Amazon" in front of a real user before a
+single real API call has confirmed any of it works. Register it (one
+line) only after `npm run test:amazon` and a manual pass against a real
+account confirm the fee mapping, stock split and listings price are
+actually correct - see "Implementation checklist" below, steps 1 and 8.
+The stock-pooling engine fix (`StockItem.fulfillment`) *is* shipped and
+covered by `test:engine`, since it's marketplace-neutral and doesn't
+depend on Amazon at all.
+
 Companion to `docs/multi-marketplace-plan.md` (phase 5) and
 `docs/adding-a-marketplace.md` (the generic checklist). This is a plan,
 not an implementation: nothing here has been verified against a live

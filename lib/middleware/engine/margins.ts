@@ -120,16 +120,25 @@ export function averageUnitCost(lots: CostLot[] | undefined): number | null {
 export interface StockValueRow {
   sku: string;
   /**
-   * The quantity valuation is based on: the pool figure (purchased −
-   * sold, from cost batches) once any batch is entered, else the
-   * largest count reported by a single source - see `onHandIsEstimate`.
+   * The quantity valuation is based on: merchant-fulfilled pool (purchased
+   * − sold, from cost batches) once any batch is entered, else the
+   * largest merchant-fulfilled count reported by a single source - see
+   * `onHandIsEstimate` - **plus** `marketplaceHeld`, added on top rather
+   * than pooled, because those units are physically separate.
    */
   onHand: number;
-  /** true => `onHand` is a fallback (no cost batches entered yet), not the real pool figure. */
+  /** true => the merchant-fulfilled part of `onHand` is a fallback (no cost batches entered yet), not the real pool figure. */
   onHandIsEstimate: boolean;
-  /** Every source's own reported count - never summed, because it's the same physical units seen twice. */
-  bySource: { source: string; sourceLabel: string; onHand: number }[];
-  /** A source reports more on hand than your own purchase records support. */
+  /** Units held in a marketplace's own fulfillment network (e.g. FBA/WFS) - a genuinely separate physical pool from merchant stock, so it's summed across sources rather than pooled with them. */
+  marketplaceHeld: number;
+  /** Every source's own reported count - merchant counts are never summed with each other (same physical units seen twice), only with marketplaceHeld above. */
+  bySource: {
+    source: string;
+    sourceLabel: string;
+    onHand: number;
+    fulfillment: "merchant" | "marketplace";
+  }[];
+  /** A source reports more merchant-fulfilled stock on hand than your own purchase records support. Never compares marketplace-held stock, which isn't pooled. */
   oversellRisk: boolean;
   avgCost: number | null; // null = no batches entered
   listedPrice: number | null; // null = catalog gave no price
@@ -156,12 +165,16 @@ export interface StockValueTotals {
  * Merchant stock is one pool, never summed across sources - the same
  * physical units are what every source's own inventory count describes.
  * `bySource` shows each source's count; `onHand` (the valuation
- * quantity) is the pool figure - purchased minus sold, from the cost
- * batches entered - once any batch exists for the SKU. With none
- * entered it falls back to the largest count across sources, marked
- * `onHandIsEstimate`. A source claiming more than the pool implies is
- * `oversellRisk`, advisory only (see docs/multi-marketplace-plan.md,
- * "Stock across channels").
+ * quantity) is the merchant pool figure - purchased minus sold, from the
+ * cost batches entered - once any batch exists for the SKU. With none
+ * entered it falls back to the largest merchant-fulfilled count across
+ * sources, marked `onHandIsEstimate`. A source claiming more
+ * merchant-fulfilled stock than the pool implies is `oversellRisk`,
+ * advisory only (see docs/multi-marketplace-plan.md, "Stock across
+ * channels"). Marketplace-held stock (a source's inventory item with
+ * `fulfillment: "marketplace"`, e.g. FBA/WFS) is physically separate -
+ * it's summed as `marketplaceHeld` and added on top of the merchant
+ * pool for `onHand`, never compared against it for oversell risk.
  *
  * Cost is the quantity-weighted average across every batch entered, not
  * FIFO: batches carry no dates, and an average is what's wanted.
@@ -178,6 +191,8 @@ export function stockValue(
     onHand: number;
     source?: string;
     sourceLabel?: string;
+    /** Physically separate stock held in a marketplace's own fulfillment network (e.g. FBA/WFS). Omitted/undefined means merchant-fulfilled, today's only case. */
+    fulfillment?: "merchant" | "marketplace";
   }[],
   catalog: { sku: string; price: number | null; publishedStatus: string }[],
   inputs: Record<string, SkuInputs>,
@@ -199,13 +214,19 @@ export function stockValue(
         source: i.source ?? "unknown",
         sourceLabel: i.sourceLabel ?? i.source ?? "unknown",
         onHand: i.onHand,
+        fulfillment: i.fulfillment ?? ("merchant" as const),
       }));
-      const maxSourceOnHand = Math.max(0, ...bySource.map((b) => b.onHand));
+      const merchantSources = bySource.filter((b) => b.fulfillment === "merchant");
+      const maxMerchantOnHand = Math.max(0, ...merchantSources.map((b) => b.onHand));
+      const marketplaceHeld = bySource
+        .filter((b) => b.fulfillment === "marketplace")
+        .reduce((n, b) => n + b.onHand, 0);
 
       const purchased = totalPurchased(inputs[key]?.lots);
       const poolOnHand = purchased - (sold[key] ?? 0);
       const onHandIsEstimate = purchased === 0;
-      const onHand = onHandIsEstimate ? maxSourceOnHand : poolOnHand;
+      const merchantOnHand = onHandIsEstimate ? maxMerchantOnHand : poolOnHand;
+      const onHand = merchantOnHand + marketplaceHeld;
 
       const item = cat.get(key);
       const avgCost = averageUnitCost(inputs[key]?.lots);
@@ -214,8 +235,9 @@ export function stockValue(
         sku: items[0].sku,
         onHand,
         onHandIsEstimate,
+        marketplaceHeld,
         bySource,
-        oversellRisk: !onHandIsEstimate && maxSourceOnHand > poolOnHand,
+        oversellRisk: !onHandIsEstimate && maxMerchantOnHand > poolOnHand,
         avgCost,
         listedPrice,
         publishedStatus: item?.publishedStatus ?? null,

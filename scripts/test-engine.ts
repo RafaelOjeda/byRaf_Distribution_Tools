@@ -369,7 +369,9 @@ check("stockValue pools quantity across sources and flags oversell risk", () => 
   // Pool: purchased 10 - sold 3 = 7. Not the raw inventory count (8).
   assert.equal(a.onHand, 7);
   assert.equal(a.onHandIsEstimate, false);
-  assert.deepEqual(a.bySource, [{ source: "s1", sourceLabel: "Source 1", onHand: 8 }]);
+  assert.deepEqual(a.bySource, [
+    { source: "s1", sourceLabel: "Source 1", onHand: 8, fulfillment: "merchant" },
+  ]);
   // A source claims 8 on hand but the pool only supports 7.
   assert.equal(a.oversellRisk, true);
   assert.equal(cents(a.valueAtCost ?? 0), 35); // 7 * 5
@@ -400,6 +402,29 @@ check("stockValue pools quantity across sources and flags oversell risk", () => 
   assert.equal(stock.purchased, 10);
   assert.equal(stock.impliedOnHand, 7);
   assert.equal(stock.discrepancy, -1);
+});
+
+check("stockValue adds marketplace-held stock on top instead of pooling it", () => {
+  const inventory = [
+    // Merchant-fulfilled, same pool as the cost batches below.
+    { sku: "widget-a", onHand: 6, source: "s1", sourceLabel: "Source 1", fulfillment: "merchant" as const },
+    // A marketplace's own fulfillment network (e.g. FBA) - physically
+    // separate units. Deliberately larger than the merchant pool, which
+    // must NOT trip oversellRisk (it isn't the same pile).
+    { sku: "widget-a", onHand: 40, source: "s2", sourceLabel: "Source 2", fulfillment: "marketplace" as const },
+  ];
+  const soldA = skuSummaries.find((s) => s.sku === "WIDGET-A")!.units; // 3
+  const { rows } = stockValue(inventory, [], costs, { "WIDGET-A": soldA });
+
+  const a = rows.find((r) => r.sku === "widget-a")!;
+  // Merchant pool: purchased 10 - sold 3 = 7. Plus 40 marketplace-held.
+  assert.equal(a.marketplaceHeld, 40);
+  assert.equal(a.onHand, 47);
+  assert.equal(a.onHandIsEstimate, false);
+  // The merchant source (6) is under the pool (7); the marketplace source
+  // (40) is never compared against it, so no oversell flag either way.
+  assert.equal(a.oversellRisk, false);
+  assert.equal(cents(a.valueAtCost ?? 0), 235); // 47 * 5
 });
 
 check("buildAliasIndex/resolveSku merge an alias SKU into its canonical key", () => {

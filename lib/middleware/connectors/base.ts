@@ -46,7 +46,7 @@ export abstract class MarketplaceConnector {
   fetchStock(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars -- overridden by connectors that support stock
     session: unknown
-  ): Promise<{ sku: string; onHand: number; availToSell: number; reserved: number }[]> {
+  ): Promise<Omit<StockItem, "source" | "sourceLabel">[]> {
     return this.unsupported("stock");
   }
 
