@@ -1,150 +1,138 @@
 @import "tailwindcss";
 
 /*
- * Seller Central–style design language: navy top bar, white cards on a
- * light gray page, orange primary buttons, teal links, dense tables.
- * Borrowed look only - no Amazon logo, name or proprietary font.
+ * Classic Mac OS–style design language: the black-and-white System 1 look —
+ * white windows with square-cornered black hairlines, a pinstriped title
+ * bar, pill-shaped outlined buttons that invert on press, folder-tab
+ * panels, and a dithered gray desktop behind it all. Borrowed look only -
+ * no Apple logo, name, or proprietary system font.
  *
- * Light only, by choice: the app never restyles for device dark mode.
+ * Every component class below is expressed with Tailwind's @apply so the
+ * theme stays in Tailwind's own utility vocabulary - the two exceptions are
+ * the dithered background image and the ::-webkit-scrollbar rules, which
+ * have no Tailwind utility equivalent.
+ *
+ * Light only, by choice: the app never restyles for device dark mode (the
+ * original had no such concept either).
  */
 @theme {
-  --color-sc-nav: #232f3e;
-  --color-sc-page: #eaeded;
-  --color-sc-line: #d5d9d9;
-  --color-sc-row: #e7e7e7;
-  --color-sc-head: #f7fafa;
-  --color-sc-ink: #0f1111;
-  --color-sc-ink-2: #565959;
-  --color-sc-link: #007185;
-  --color-sc-link-hover: #c7511f;
-  --color-sc-accent: #e77600;
-  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --color-sc-nav: #ffffff;
+  --color-sc-page: #d6d6d6;
+  --color-sc-line: #000000;
+  --color-sc-row: #c7c7c7;
+  --color-sc-head: #ececec;
+  --color-sc-ink: #000000;
+  --color-sc-ink-2: #4d4d4d;
+  --color-sc-link: #000000;
+  --color-sc-link-hover: #000000;
+  --color-sc-accent: #000000;
+  --font-sans: "ChicagoFLF", "Chicago", Geneva, "Segoe UI", ui-sans-serif, Helvetica, Arial, sans-serif;
+
+  --radius-md: 3px;
+  --radius-lg: 6px;
+  --radius-xl: 6px;
 }
 
 html {
-  color-scheme: light;
+  @apply [color-scheme:light];
 }
 
 body {
-  background: var(--color-sc-page);
-  color: var(--color-sc-ink);
-  font-family: var(--font-sans);
+  @apply text-sc-ink font-sans antialiased;
+  text-rendering: optimizeLegibility;
+  /* A fine black/white dither standing in for the classic desktop pattern -
+     visible in the margins around the centered window below. Tailwind's
+     arbitrary-value syntax can't hold a data URI this shaped, so this one
+     stays as plain CSS. */
+  background-color: var(--color-sc-page);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='4' height='4' fill='%23ffffff'/%3E%3Crect width='2' height='2' fill='%23000000'/%3E%3Crect x='2' y='2' width='2' height='2' fill='%23000000'/%3E%3C/svg%3E");
+  background-size: 4px 4px;
 }
 
 @layer components {
   .sc-card {
-    background: #fff;
-    border: 1px solid var(--color-sc-line);
-    border-radius: 8px;
+    @apply bg-white border border-sc-line rounded-lg shadow-[3px_3px_0_0_rgba(0,0,0,0.9)];
   }
 
   .sc-btn-primary,
   .sc-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
-    padding: 6px 14px;
-    font-size: 14px;
-    line-height: 20px;
-    color: var(--color-sc-ink);
-    box-shadow: 0 2px 5px 0 rgba(213, 217, 217, 0.5);
-    cursor: pointer;
+    @apply inline-flex items-center justify-center rounded-[10px] px-4 py-1.5 text-sm leading-5
+      text-sc-ink bg-white border-[1.5px] border-sc-ink cursor-pointer
+      hover:bg-sc-ink hover:text-white
+      disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-white disabled:text-sc-ink;
   }
   .sc-btn-primary {
-    background: #ffa41c;
-    border: 1px solid #ff8f00;
-  }
-  .sc-btn-primary:hover {
-    background: #fa8900;
-  }
-  .sc-btn {
-    background: #fff;
-    border: 1px solid var(--color-sc-line);
-  }
-  .sc-btn:hover {
-    background: var(--color-sc-head);
-  }
-  .sc-btn-primary:disabled,
-  .sc-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+    /* The classic "default button" cue: a thin outlined ring with a gap
+       around the pill, rather than a filled color. */
+    @apply outline outline-1 outline-sc-ink outline-offset-2 font-bold;
   }
   .sc-btn-primary:focus-visible,
   .sc-btn:focus-visible,
   .sc-link:focus-visible,
   .sc-tab:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 3px #c8f3fa, 0 0 0 1px var(--color-sc-link);
+    @apply outline-2 outline-dashed outline-sc-ink outline-offset-[3px];
   }
 
   .sc-link {
-    color: var(--color-sc-link);
-    cursor: pointer;
-  }
-  .sc-link:hover {
-    color: var(--color-sc-link-hover);
-    text-decoration: underline;
-  }
-  .sc-link:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    text-decoration: none;
+    @apply text-sc-ink underline underline-offset-2 cursor-pointer
+      hover:bg-sc-ink hover:text-white hover:no-underline
+      disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-transparent disabled:text-sc-ink disabled:no-underline;
   }
 
   .sc-input {
-    border: 1px solid #888c8c;
-    border-radius: 6px;
-    padding: 4px 8px;
-    background: #fff;
-    box-shadow: 0 1px 2px rgba(15, 17, 17, 0.15) inset;
-  }
-  .sc-input:focus {
-    outline: none;
-    border-color: var(--color-sc-link);
-    box-shadow:
-      0 0 0 3px #c8f3fa,
-      0 1px 2px rgba(15, 17, 17, 0.15) inset;
+    @apply border-[1.5px] border-sc-ink rounded-[2px] px-2 py-1 bg-white
+      focus:outline-2 focus:outline-dashed focus:outline-sc-ink focus:outline-offset-2;
   }
 
   .sc-tab {
-    border-bottom: 3px solid transparent;
-    padding: 12px 4px 9px;
-    font-size: 14px;
-    color: var(--color-sc-ink-2);
-    white-space: nowrap;
-    cursor: pointer;
-  }
-  .sc-tab:hover {
-    color: var(--color-sc-ink);
-  }
-  .sc-tab[aria-selected="true"] {
-    border-bottom-color: var(--color-sc-accent);
-    color: var(--color-sc-ink);
-    font-weight: 700;
+    @apply relative border-[1.5px] border-b-0 border-sc-ink rounded-t-lg -mb-[1.5px]
+      pt-[9px] px-[14px] pb-2 text-sm bg-sc-head text-sc-ink-2 whitespace-nowrap cursor-pointer
+      hover:text-sc-ink
+      aria-selected:bg-white aria-selected:text-sc-ink aria-selected:font-bold aria-selected:z-10;
   }
 
-  /* Dense data tables: gray header row, hairline rows, hover highlight. */
+  /* Dense data tables: gray header rule, hairline rows, gray hover highlight.
+     The header rule needs the important modifier because each <thead> row
+     also carries a plain `border-b border-sc-line` utility in the markup,
+     and Tailwind's utility layer otherwise wins over this components layer. */
   .sc-table thead tr {
-    background: var(--color-sc-head);
+    @apply bg-sc-head border-b-2! border-sc-ink!;
   }
   .sc-table th {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--color-sc-ink);
+    @apply text-xs font-bold text-sc-ink;
   }
   .sc-table th,
   .sc-table td {
-    padding-top: 8px;
-    padding-bottom: 8px;
+    @apply py-2;
   }
   .sc-table th:first-child,
   .sc-table td:first-child {
-    padding-left: 12px;
+    @apply pl-3;
   }
   .sc-table tbody tr:hover {
-    background: #f7fafa;
+    @apply bg-sc-head;
   }
+}
+
+/* A boxy, square-cornered scrollbar in the spirit of the old Platinum
+   scrollbar - white thumb, black outline, dithered track. Chromium/WebKit
+   only; other browsers just keep their native bar. No Tailwind utility
+   targets these pseudo-elements, so they stay as plain CSS. */
+::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-sc-head);
+  border-left: 1px solid #000;
+}
+::-webkit-scrollbar-thumb {
+  background: #fff;
+  border: 1px solid #000;
+  border-radius: 0;
+}
+::-webkit-scrollbar-corner {
+  background: var(--color-sc-head);
 }
 
 /*
@@ -157,31 +145,28 @@ body {
  * keeps the denser 14px look.
  */
 html {
-  touch-action: manipulation; /* no double-tap zoom, no tap delay */
+  @apply [touch-action:manipulation]; /* no double-tap zoom, no tap delay */
 }
 @media (max-width: 767px) {
   input,
   select,
   textarea {
-    font-size: 16px;
+    @apply text-base;
   }
   input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
   select {
-    min-height: 44px;
+    @apply min-h-11;
   }
   input[type="checkbox"],
   input[type="radio"] {
-    width: 22px;
-    height: 22px;
+    @apply w-[22px] h-[22px];
   }
   .sc-btn,
   .sc-btn-primary,
   .sc-tab {
-    min-height: 44px;
+    @apply min-h-11;
   }
   .sc-link {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
+    @apply inline-flex items-center min-h-11;
   }
 }
