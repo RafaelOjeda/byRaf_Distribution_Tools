@@ -12,6 +12,7 @@
     "test:walmart": "dotenv -e .env.local -- tsx scripts/test-walmart-connection.ts",
     "test:csv": "tsx scripts/test-csv-import.ts",
     "test:engine": "tsx scripts/test-engine.ts",
+    "test:connectors": "tsx scripts/test-connectors.ts",
     "check:boundary": "tsx scripts/check-boundary.ts"
   },
   "dependencies": {
