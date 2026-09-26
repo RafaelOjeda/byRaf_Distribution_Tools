@@ -1,6 +1,7 @@
 import { orderLinesToCsv, type MarginRow, type Report } from "@/lib/middleware";
 import { downloadCsv, money, pct, plural } from "../../utils/format";
 import { PanelHeader } from "../shared/PanelHeader";
+import { Unset } from "../shared/Unset";
 import { OrderLineCard } from "../OrderLineCard";
 import { TotalsCard, TotalsRow } from "../TotalsRow";
 
@@ -165,7 +166,7 @@ export function OrdersTab({
                     {m.costTotal !== 0 || m.hasCost ? (
                       money(-m.costTotal)
                     ) : (
-                      <span className="text-amber-600">—</span>
+                      <Unset variant="warn" />
                     )}
                   </td>
                   <td
@@ -181,7 +182,7 @@ export function OrdersTab({
                     ) : m.hasCost ? (
                       money(m.profit)
                     ) : (
-                      <span className="text-amber-600">—</span>
+                      <Unset variant="warn" />
                     )}
                   </td>
                   <td className="pr-3 text-right">

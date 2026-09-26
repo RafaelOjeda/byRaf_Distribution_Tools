@@ -1,4 +1,4 @@
-import { Fragment, type ChangeEvent, type Dispatch, type RefObject, type SetStateAction } from "react";
+import { Fragment, type ChangeEvent, type RefObject } from "react";
 import {
   DIM_DIVISOR,
   averageUnitCost,
@@ -15,6 +15,7 @@ import { BOX_FIELDS, type LotDraft, type SkuField } from "../../types";
 import { downloadCsv, money, plural } from "../../utils/format";
 import { PanelHeader } from "../shared/PanelHeader";
 import { ImportPreviewCard } from "../shared/ImportPreviewCard";
+import { Unset } from "../shared/Unset";
 import { InventoryCard } from "../InventoryCard";
 import { CostLotsEditor } from "../CostLotsEditor";
 
@@ -34,7 +35,7 @@ export function InventoryTab({
   updateLot,
   removeLot,
   toggleExpanded,
-  setAliasDrafts,
+  updateAliasDraft,
   handleImportFile,
   applyImport,
   cancelImport,
@@ -54,7 +55,7 @@ export function InventoryTab({
   updateLot: (sku: string, index: number, field: keyof LotDraft, value: string) => void;
   removeLot: (sku: string, index: number) => void;
   toggleExpanded: (sku: string) => void;
-  setAliasDrafts: Dispatch<SetStateAction<Record<string, string>>>;
+  updateAliasDraft: (sku: string, value: string) => void;
   handleImportFile: (e: ChangeEvent<HTMLInputElement>) => void;
   applyImport: () => void;
   cancelImport: () => void;
@@ -136,9 +137,7 @@ export function InventoryTab({
               onUpdate={(i, field, value) => updateLot(sku, i, field, value)}
               onRemove={(i) => removeLot(sku, i)}
               aliasValue={aliasDrafts[sku] ?? ""}
-              onAliasChange={(value) =>
-                setAliasDrafts((prev) => ({ ...prev, [sku]: value }))
-              }
+              onAliasChange={(value) => updateAliasDraft(sku, value)}
             />
           );
         })}
@@ -224,20 +223,14 @@ export function InventoryTab({
                           {inv.onHand}
                         </span>
                       ) : (
-                        <span className="text-sc-ink-2/70">
-                          —
-                        </span>
+                        <Unset />
                       )}
                     </td>
                     <td className="pr-3 text-right">
                       {soldBySku.get(sku) ?? 0}
                     </td>
                     <td className="pr-3 text-right">
-                      {stock.purchased || (
-                        <span className="text-sc-ink-2/70">
-                          —
-                        </span>
-                      )}
+                      {stock.purchased || <Unset />}
                     </td>
                     <td
                       className={`pr-3 text-right ${stock.discrepancy ? "text-amber-600" : ""}`}
@@ -247,17 +240,11 @@ export function InventoryTab({
                           : undefined
                       }
                     >
-                      {stock.purchased === 0 ? (
-                        <span className="text-sc-ink-2/70">
-                          —
-                        </span>
-                      ) : (
-                        stock.impliedOnHand
-                      )}
+                      {stock.purchased === 0 ? <Unset /> : stock.impliedOnHand}
                     </td>
                     <td className="pr-3 text-right font-medium">
                       {avg === null ? (
-                        <span className="text-amber-600">—</span>
+                        <Unset variant="warn" />
                       ) : (
                         money(avg)
                       )}
@@ -298,9 +285,7 @@ export function InventoryTab({
                           }
                           onRemove={(i) => removeLot(sku, i)}
                           aliasValue={aliasDrafts[sku] ?? ""}
-                          onAliasChange={(value) =>
-                            setAliasDrafts((prev) => ({ ...prev, [sku]: value }))
-                          }
+                          onAliasChange={(value) => updateAliasDraft(sku, value)}
                         />
                       </td>
                     </tr>

@@ -2,6 +2,7 @@ import { reconcileStock } from "@/lib/middleware";
 import { BOX_FIELDS, type LotDraft, type SkuField } from "../types";
 import { money } from "../utils/format";
 import { Fig } from "./shared/Fig";
+import { Unset } from "./shared/Unset";
 import { CostLotsEditor } from "./CostLotsEditor";
 
 export function InventoryCard({
@@ -41,7 +42,7 @@ export function InventoryCard({
   aliasValue: string;
   onAliasChange: (value: string) => void;
 }) {
-  const muted = <span className="text-sc-ink-2/70">—</span>;
+  const muted = <Unset />;
   return (
     <li className="rounded-lg border border-sc-line p-3">
       <div className="flex items-start justify-between gap-3">

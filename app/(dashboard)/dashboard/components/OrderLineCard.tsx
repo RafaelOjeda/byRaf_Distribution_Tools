@@ -1,6 +1,7 @@
 import type { MarginRow } from "@/lib/middleware";
 import { money, pct } from "../utils/format";
 import { Fig } from "./shared/Fig";
+import { Unset } from "./shared/Unset";
 
 export function OrderLineCard({ m }: { m: MarginRow }) {
   const est = m.status === "estimated";
@@ -29,7 +30,7 @@ export function OrderLineCard({ m }: { m: MarginRow }) {
             ) : m.hasCost ? (
               money(m.profit)
             ) : (
-              <span className="text-amber-600">—</span>
+              <Unset variant="warn" />
             )}
           </div>
           <div className="text-xs">
@@ -54,7 +55,7 @@ export function OrderLineCard({ m }: { m: MarginRow }) {
           {m.hasCost || m.costTotal !== 0 ? (
             money(-m.costTotal)
           ) : (
-            <span className="text-amber-600">—</span>
+            <Unset variant="warn" />
           )}
         </Fig>
         <Fig label="Other">{money(m.tax + m.otherFees)}</Fig>

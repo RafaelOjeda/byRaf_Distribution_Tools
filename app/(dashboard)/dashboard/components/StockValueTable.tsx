@@ -1,10 +1,11 @@
 import type { Report } from "@/lib/middleware";
 import { money, plural } from "../utils/format";
 import { Fig } from "./shared/Fig";
+import { Unset } from "./shared/Unset";
 
 export function StockValueTable({ stock }: { stock: Report["stock"] }) {
   const { rows, totals: t } = stock;
-  const dash = <span className="text-sc-ink-2/70">—</span>;
+  const dash = <Unset />;
 
   if (rows.length === 0) {
     return (

@@ -2,9 +2,10 @@ import { SHIPPING_PCT_ALERT, SHIPPING_PCT_WARN, type SkuSummary } from "@/lib/mi
 import { money, pct, plural } from "../utils/format";
 import { shipPctClass } from "../utils/shipping";
 import { Fig } from "./shared/Fig";
+import { Unset } from "./shared/Unset";
 
 export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
-  const dash = <span className="text-sc-ink-2/70">—</span>;
+  const dash = <Unset />;
 
   return (
     <>
@@ -40,7 +41,7 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                   {!s.hasMoney ? (
                     dash
                   ) : unknownProfit ? (
-                    <span className="text-amber-600">—</span>
+                    <Unset variant="warn" />
                   ) : (
                     money(t.profit)
                   )}
@@ -84,7 +85,7 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                 </Fig>
                 <Fig label="Cost">
                   {s.missingCost ? (
-                    <span className="text-amber-600">—</span>
+                    <Unset variant="warn" />
                   ) : (
                     money(-t.costTotal)
                   )}
@@ -219,7 +220,7 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                   {!s.hasMoney ? (
                     dash
                   ) : s.missingCost ? (
-                    <span className="text-amber-600">—</span>
+                    <Unset variant="warn" />
                   ) : (
                     money(-t.costTotal)
                   )}
@@ -231,12 +232,10 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                   {!s.hasMoney ? (
                     dash
                   ) : s.missingCost ? (
-                    <span
-                      className="text-amber-600"
+                    <Unset
+                      variant="warn"
                       title="No cost entered for this SKU, so profit isn't known yet"
-                    >
-                      —
-                    </span>
+                    />
                   ) : (
                     money(t.profit)
                   )}

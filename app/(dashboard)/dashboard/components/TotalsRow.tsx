@@ -1,6 +1,7 @@
 import type { Report } from "@/lib/middleware";
 import { money, pct } from "../utils/format";
 import { Fig } from "./shared/Fig";
+import { Unset } from "./shared/Unset";
 
 export function TotalsCard({
   label,
@@ -13,7 +14,7 @@ export function TotalsCard({
   uncosted: number;
   italic?: boolean;
 }) {
-  const unknown = <span className="text-amber-600">—</span>;
+  const unknown = <Unset variant="warn" />;
   return (
     <li className={`rounded-lg border-2 border-sc-line bg-sc-head p-3 ${italic ? "italic" : ""}`}>
       <div className="text-sm font-bold">{label}</div>
@@ -57,12 +58,10 @@ export function TotalsRow({
   italic?: boolean;
 }) {
   const unknown = (
-    <span
-      className="text-amber-600"
+    <Unset
+      variant="warn"
       title={`${uncosted} line${uncosted === 1 ? " has" : "s have"} no cost entered, so this total isn't known yet`}
-    >
-      —
-    </span>
+    />
   );
   return (
     <tr
