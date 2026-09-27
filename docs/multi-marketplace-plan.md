@@ -2,13 +2,13 @@
 
 Status: **agreed direction, 2026-09-24.** Decisions are recorded at the bottom. Phase 1 can start.
 
-**Progress (2026-09-24):** Phases 1–4 are implemented on `claude/multi-marketplace-plan-m42xak` - the middleware carve-out, the dashboard on the contract, the demo connector with multi-source UI, and SKU aliasing/stock pooling. Phases 5–6 (Amazon, eBay) need real developer-registered API credentials that don't exist in this environment - see the "Amazon developer registration" risk below - so only the connector scaffolding pattern is proven (`docs/adding-a-marketplace.md`), not an actual working connector. Phase 7 (persistence) stays deferred per the decision below.
+**Progress (2026-09-24):** Phases 1–4 are implemented on `claude/multi-marketplace-plan-m42xak` - the gateway carve-out, the dashboard on the contract, the demo connector with multi-source UI, and SKU aliasing/stock pooling. Phases 5–6 (Amazon, eBay) need real developer-registered API credentials that don't exist in this environment - see the "Amazon developer registration" risk below - so only the connector scaffolding pattern is proven (`docs/adding-a-marketplace.md`), not an actual working connector. Phase 7 (persistence) stays deferred per the decision below.
 
 ## Goal
 
 One dashboard that shows sales, fees, profit, inventory and stock value across every marketplace BYRAF sells on.
 
-**The dashboard is never connected to a marketplace.** It talks only to a middleware layer. The middleware owns every marketplace connection, all normalization and all of the math, and gives the dashboard finished figures. Adding a marketplace means adding one connector inside the middleware. The dashboard doesn't change.
+**The dashboard is never connected to a marketplace.** It talks only to a gateway layer. The gateway owns every marketplace connection, all normalization and all of the math, and gives the dashboard finished figures. Adding a marketplace means adding one connector inside the gateway. The dashboard doesn't change.
 
 ## Two layers
 
@@ -17,8 +17,8 @@ One dashboard that shows sales, fees, profit, inventory and stock value across e
 │  Renders forms, tables, tiles, the chart. Holds what the user typed.        │
 │  No marketplace names, fee vocabulary, credential fields or arithmetic.    │
 └──────────────┬──────────────────────────────────────────▲───────────────────┘
-               │ middleware contract only (lib/middleware/index.ts, actions.ts)
-┌──────────────▼──────────────────── lib/middleware/ ──────┴──────────────────┐
+               │ gateway contract only (lib/gateway/index.ts, actions.ts)
+┌──────────────▼──────────────────── lib/gateway/ ──────┴──────────────────┐
 │  contract/    public types: SourceDescriptor, Snapshot, CostInputs, Report  │
 │  actions.ts   server actions: describeSources, listPeriods, fetchSnapshot   │
 │  engine/      all math: estimates, margins, per-SKU, stock pool, prices     │
@@ -28,27 +28,27 @@ One dashboard that shows sales, fees, profit, inventory and stock value across e
                           Walmart · Amazon · eBay APIs
 ```
 
-The middleware lives in this repo, at `lib/middleware/` rather than a top-level `middleware/`. That keeps it clear of Next.js's reserved root `middleware.ts`/`proxy.ts` file convention.
+The gateway lives in this repo, at `lib/gateway/`, alongside the rest of the library code (`lib/db/`, etc.). It was originally named `lib/middleware/` and nested under `lib/` specifically to avoid Next.js's reserved root `middleware.ts`/`proxy.ts` file convention — a collision that no longer applies now that it's called `gateway`, but the `lib/` nesting was kept for consistency with the rest of the codebase.
 
-**Rule:** code in `app/` may import only `@/lib/middleware` (the public index) and `@/lib/middleware/actions`. It may not import connectors, the engine or anything marketplace-specific. This is enforced mechanically (see "Keeping the boundary honest").
+**Rule:** code in `app/` may import only `@/lib/gateway` (the public index) and `@/lib/gateway/actions`. It may not import connectors, the engine or anything marketplace-specific. This is enforced mechanically (see "Keeping the boundary honest").
 
 ## Where the code is coupled to Walmart today
 
-Everything in this table moves behind the middleware boundary or gets replaced by data from the middleware:
+Everything in this table moves behind the gateway boundary or gets replaced by data from the gateway:
 
 | Place | Walmart assumption | Goes to |
 |---|---|---|
-| `lib/walmart/*` | The API clients | `lib/middleware/connectors/walmart/` |
+| `lib/walmart/*` | The API clients | `lib/gateway/connectors/walmart/` |
 | `lib/margin.ts` `groupReconRows`, `classify`, `estimateUnsettled`, `SHIP_NODE_LABELS` | Raw recon-row and order shapes, Walmart fee vocabulary | Walmart connector (normalization) |
-| The rest of `lib/margin.ts`, `lib/prices.ts` | Neutral math | `lib/middleware/engine/` |
-| Cost CSV parsing/export in `lib/csv.ts` | Defines the cost input format | `lib/middleware/engine/` (the middleware owns the `CostInputs` format) |
-| `app/(dashboard)/margins/actions.ts` | Takes `clientId`/`clientSecret` and calls Walmart | Replaced by `lib/middleware/actions.ts` |
+| The rest of `lib/margin.ts`, `lib/prices.ts` | Neutral math | `lib/gateway/engine/` |
+| Cost CSV parsing/export in `lib/csv.ts` | Defines the cost input format | `lib/gateway/engine/` (the gateway owns the `CostInputs` format) |
+| `app/(dashboard)/margins/actions.ts` | Takes `clientId`/`clientSecret` and calls Walmart | Replaced by `lib/gateway/actions.ts` |
 | `page.tsx` | Imports Walmart types, hard-codes the Client ID/Secret form, parses `MMDDYYYY`, calls `computeMargins`/`stockValue`/etc. directly | Renders a `Report` and a generic credential form built from `SourceDescriptor`s |
-| `layout.tsx`, CSV filenames, UI copy | "Walmart Margin Tracker", `walmart-by-sku.csv`, "Walmart says N on hand" | Neutral copy. Source names come from the middleware as data |
+| `layout.tsx`, CSV filenames, UI copy | "Walmart Margin Tracker", `walmart-by-sku.csv`, "Walmart says N on hand" | Neutral copy. Source names come from the gateway as data |
 
-## The middleware contract
+## The gateway contract
 
-This is everything the dashboard can see. All of it is plain serializable JSON, so the middleware could later be split into its own service without redesigning the contract (see "Later: a separate service").
+This is everything the dashboard can see. All of it is plain serializable JSON, so the gateway could later be split into its own service without redesigning the contract (see "Later: a separate service").
 
 ### Sources and credentials (passthrough)
 
@@ -65,28 +65,28 @@ interface SourceDescriptor {
 type Connections = Record<string /* source id */, Record<string, string>>;
 ```
 
-Credentials stay **pasted each visit and passed through**. The dashboard keeps them in tab state and sends them with each middleware call. The middleware uses them for that one request only and never stores, caches or logs them. This is the current security model, generalized.
+Credentials stay **pasted each visit and passed through**. The dashboard keeps them in tab state and sends them with each gateway call. The gateway uses them for that one request only and never stores, caches or logs them. This is the current security model, generalized.
 
 ### Two steps: fetch, then compute
 
-Today, typing a cost updates profit instantly because the math runs in the browser. Now that the middleware computes everything, a cost edit mustn't trigger a refetch from three marketplaces. So the middleware exposes two kinds of call:
+Today, typing a cost updates profit instantly because the math runs in the browser. Now that the gateway computes everything, a cost edit mustn't trigger a refetch from three marketplaces. So the gateway exposes two kinds of call:
 
 ```ts
-// lib/middleware/actions.ts   ("use server": talks to marketplaces)
+// lib/gateway/actions.ts   ("use server": talks to marketplaces)
 describeSources(): Promise<SourceDescriptor[]>;
 listPeriods(c: Connections): Promise<Record<string, PeriodList>>;       // labels pre-formatted, no MMDDYYYY in the UI
 fetchSnapshot(c: Connections, periods: Record<string, string[]>): Promise<Snapshot>;
 
-// lib/middleware/index.ts     (pure: no network, no secrets)
+// lib/gateway/index.ts     (pure: no network, no secrets)
 buildReport(s: Snapshot, costs: CostInputs, view: ReportView): Report;
-parseCostCsv(text: string): CostImportResult;   // the middleware defines the cost input format
+parseCostCsv(text: string): CostImportResult;   // the gateway defines the cost input format
 exportCsv(r: Report, table: "bySku" | "orderLines" | "costs"): string;
 ```
 
 - **`fetchSnapshot`** is the expensive call. It connects to every source, normalizes the results and runs fee estimation for unsettled orders, and returns a `Snapshot`. The `Snapshot` is typed as an **opaque branded type**: the dashboard stores it and hands it back, but never reads a field from it.
-- **`buildReport`** is middleware code that does all the math. It turns snapshot + costs + view (source filter, date range) into finished rows: KPIs, by-SKU, order lines, price series, stock and stock value, marketplace fees, and per-source status. It's a pure function, so the dashboard calls it on every cost edit and the result is still instant. It needs no network access and no credentials.
+- **`buildReport`** is gateway code that does all the math. It turns snapshot + costs + view (source filter, date range) into finished rows: KPIs, by-SKU, order lines, price series, stock and stock value, marketplace fees, and per-source status. It's a pure function, so the dashboard calls it on every cost edit and the result is still instant. It needs no network access and no credentials.
 
-The dashboard's only jobs are to hold the user's input (`Connections`, `CostInputs`, `ReportView`), call the middleware, and render the `Report`.
+The dashboard's only jobs are to hold the user's input (`Connections`, `CostInputs`, `ReportView`), call the gateway, and render the `Report`.
 
 ### What the report looks like
 
@@ -105,9 +105,9 @@ interface Report {
 }
 ```
 
-Tooltip text like today's "Estimated: commission at 6.4%…" is produced by the middleware too, so the dashboard never learns fee vocabulary.
+Tooltip text like today's "Estimated: commission at 6.4%…" is produced by the gateway too, so the dashboard never learns fee vocabulary.
 
-## Inside the middleware
+## Inside the gateway
 
 ### Canonical model (`engine/types.ts`, internal)
 
@@ -167,7 +167,7 @@ Fee estimation for unsettled orders stays in the engine, keyed by `(source, sku)
 ### Folder layout
 
 ```
-lib/middleware/
+lib/gateway/
   index.ts              public, client-safe: buildReport, parseCostCsv, exportCsv, contract types
   actions.ts            public, "use server": describeSources, listPeriods, fetchSnapshot
   contract/             SourceDescriptor, Connections, Snapshot (branded), CostInputs, ReportView, Report
@@ -184,7 +184,7 @@ docs/adding-a-marketplace.md connector checklist
 
 ### Keeping the boundary honest
 
-- **ESLint `no-restricted-imports`** for `app/**`: only `@/lib/middleware` and `@/lib/middleware/actions` are allowed. Imports of `@/lib/middleware/*/**` are errors.
+- **ESLint `no-restricted-imports`** for `app/**`: only `@/lib/gateway` and `@/lib/gateway/actions` are allowed. Imports of `@/lib/gateway/*/**` are errors.
 - **`server-only`** is imported by everything under `connectors/`, so connector code can never end up in the browser bundle.
 - **`npm run check:boundary`** fails if `app/` contains a marketplace name (`walmart`, `amazon`, `ebay`, case-insensitive) outside comments. It's crude, but it catches copy like "Walmart says…".
 - The **demo connector** is the living test. If the dashboard works fully against it with no dashboard-side special cases, the abstraction holds.
@@ -193,7 +193,7 @@ docs/adding-a-marketplace.md connector checklist
 
 - **Connect:** one card per `SourceDescriptor`, each with its own fields. Connect one or several.
 - **Periods:** a picker per connected source, because settlement cycles don't line up across marketplaces.
-- **Dashboard:** source filter chips (All · each connected source) above the existing tiles and tabs. Tables gain a source column. By SKU rows expand into a per-source breakdown. The filter is part of `ReportView`, so filtering is also computed by the middleware.
+- **Dashboard:** source filter chips (All · each connected source) above the existing tiles and tabs. Tables gain a source column. By SKU rows expand into a per-source breakdown. The filter is part of `ReportView`, so filtering is also computed by the gateway.
 - **Partial failure is visible.** If one source fails, the others still show. The report's `sources` and `notes` say which failed and what the totals cover.
 
 ## Phases
@@ -202,7 +202,7 @@ Each phase ships on its own, and the app works at every step.
 
 | # | Phase | Output | Behaviour change |
 |---|---|---|---|
-| 1 | **Carve out the middleware** | Create `lib/middleware/`. Move the Walmart clients into `connectors/walmart/` behind `MarketplaceConnector`, and split `margin.ts`/`prices.ts` into connector normalization + `engine/`. Before moving anything, add a fixture regression script (`npm run test:engine`, same style as `test:csv`) that pins today's numbers, and prove they're identical after. | None |
+| 1 | **Carve out the gateway** | Create `lib/gateway/`. Move the Walmart clients into `connectors/walmart/` behind `MarketplaceConnector`, and split `margin.ts`/`prices.ts` into connector normalization + `engine/`. Before moving anything, add a fixture regression script (`npm run test:engine`, same style as `test:csv`) that pins today's numbers, and prove they're identical after. | None |
 | 2 | **Dashboard onto the contract** | Add `actions.ts` (describeSources/listPeriods/fetchSnapshot) and `buildReport`. The page renders the generic credential form and a `Report`. Add the lint rule and `check:boundary`. **After this phase `app/` has zero marketplace references.** | Looks the same; copy becomes neutral |
 | 3 | **Demo connector + multiple sources** | Fixture-backed demo connector, connecting several sources at once, filter chips, the source column, partial-failure notes, and a "Marketplace fees" panel for `AccountCharge`s. | Unified view (Walmart + Demo) |
 | 4 | **Product identity + shared stock** | Engine work only: SKU aliasing and the stock-pool rules below. | Costs entered once per product, and stock isn't double-counted |
@@ -210,7 +210,7 @@ Each phase ships on its own, and the app works at every step.
 | 6 | **eBay connector** | Finances API payouts as periods, plus Fulfillment and Inventory APIs. Adds `docs/ebay-api-notes.md`. | eBay appears. No dashboard change |
 | 7 | **Persistence / login** | Deferred by decision. Revisit once three marketplaces' credentials are being pasted every visit. | Saved costs and connections |
 
-Phases 5 and 6 are the proof of the design: each should touch only `lib/middleware/connectors/` plus one registry line.
+Phases 5 and 6 are the proof of the design: each should touch only `lib/gateway/connectors/` plus one registry line.
 
 ### Product identity (phase 4, engine)
 
@@ -238,7 +238,7 @@ Amazon and eBay both let a seller authorize their own app once and get a long-li
 
 ## Later: a separate service
 
-Because the contract is plain JSON and the dashboard only calls `actions.ts` and `index.ts`, the middleware can move to its own deploy later with no dashboard redesign. The three server actions become HTTP endpoints, and `buildReport` either stays as a shared package or becomes a fourth endpoint. Nothing in this plan needs that now.
+Because the contract is plain JSON and the dashboard only calls `actions.ts` and `index.ts`, the gateway can move to its own deploy later with no dashboard redesign. The three server actions become HTTP endpoints, and `buildReport` either stays as a shared package or becomes a fourth endpoint. Nothing in this plan needs that now.
 
 ## Risks
 
@@ -254,9 +254,9 @@ Because the contract is plain JSON and the dashboard only calls `actions.ts` and
 2. **SKU identity:** mostly the same SKU everywhere. Auto-match by normalized SKU, with alias overrides.
 3. **Inventory:** all self-fulfilled today, so one shared pool. WFS/FBA later.
 4. **Persistence:** stay stateless for now.
-5. **The dashboard never connects to a marketplace.** A middleware layer owns every connection.
-6. **The middleware lives in this repo** as `lib/middleware/`, with a lint-enforced boundary.
-7. **Credentials are pasted in the dashboard and passed through** the middleware per request, never stored.
-8. **The middleware computes everything.** The dashboard only renders. Instant recompute on cost edits comes from the pure `buildReport` step, which reuses the snapshot and doesn't refetch.
+5. **The dashboard never connects to a marketplace.** A gateway layer owns every connection.
+6. **The gateway lives in this repo** as `lib/gateway/`, with a lint-enforced boundary.
+7. **Credentials are pasted in the dashboard and passed through** the gateway per request, never stored.
+8. **The gateway computes everything.** The dashboard only renders. Instant recompute on cost edits comes from the pure `buildReport` step, which reuses the snapshot and doesn't refetch.
 9. **Endpoints (assumed):** server actions, not a public REST API, until something outside this dashboard needs the data.
 10. **Currency (assumed):** USD only. `currency` is carried on every line so this can change later.

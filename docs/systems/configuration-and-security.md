@@ -10,7 +10,7 @@ This app's security model is unusually simple to state, because almost everythin
 
 | Variable | Required for | Read by | Notes |
 |---|---|---|---|
-| `WALMART_CLIENT_ID` / `WALMART_CLIENT_SECRET` | `npm run test:walmart` only | `getWalmartToken()` in [`connectors/walmart/auth.ts`](../../lib/middleware/connectors/walmart/auth.ts) | **The running dashboard never reads these.** Sellers paste their own Client ID/Secret into the browser form; only the connectivity-check script uses env-var credentials. |
+| `WALMART_CLIENT_ID` / `WALMART_CLIENT_SECRET` | `npm run test:walmart` only | `getWalmartToken()` in [`connectors/walmart/auth.ts`](../../lib/gateway/connectors/walmart/auth.ts) | **The running dashboard never reads these.** Sellers paste their own Client ID/Secret into the browser form; only the connectivity-check script uses env-var credentials. |
 | `DATABASE_URL` | `npm run db:push` / `db:studio` only | `lib/db/index.ts`'s `getDb()`, `drizzle.config.ts` | Injected automatically by the Vercel Neon integration. **Not read by any code path the running app exercises** — see [Data Model](./data-model.md). |
 
 Copy [`.env.example`](../../.env.example) to `.env.local` to run any script locally; `.env.local` is gitignored and must never be committed. **No configuration is needed to run the dashboard itself** — `npm run dev` works with zero environment variables set, because credentials are pasted into the page at runtime, not read from the environment.
@@ -27,21 +27,21 @@ flowchart LR
     end
 ```
 
-## The middleware import boundary
+## The gateway import boundary
 
-`app/` may import **only** `@/lib/middleware` (the public `index.ts`) and `@/lib/middleware/actions` — never a connector, never `engine/*` directly, never `contract/` directly. This is the mechanism that keeps the dashboard marketplace-neutral (see [Architecture Overview](./architecture.md) and [Frontend](./frontend.md)). It's enforced three separate ways, each catching something the others might miss:
+`app/` may import **only** `@/lib/gateway` (the public `index.ts`) and `@/lib/gateway/actions` — never a connector, never `engine/*` directly, never `contract/` directly. This is the mechanism that keeps the dashboard marketplace-neutral (see [Architecture Overview](./architecture.md) and [Frontend](./frontend.md)). It's enforced three separate ways, each catching something the others might miss:
 
 1. **ESLint `no-restricted-imports`** ([`eslint.config.mjs`](../../eslint.config.mjs)), scoped to `files: ["app/**/*.{ts,tsx}"]`:
    ```js
-   patterns: [{ group: ["@/lib/middleware/*/**", "!@/lib/middleware/actions"], message: "app/ may only import '@/lib/middleware' and '@/lib/middleware/actions' ..." }]
+   patterns: [{ group: ["@/lib/gateway/*/**", "!@/lib/gateway/actions"], message: "app/ may only import '@/lib/gateway' and '@/lib/gateway/actions' ..." }]
    ```
    Catches any deep import path at lint time.
-2. **`import "server-only";`** at the top of every connector file (and any middleware file not also exercised by a `scripts/test-*.ts` script). This is a build-time guarantee, independent of the lint rule: if connector code were somehow imported into a client bundle, the build fails outright rather than silently shipping credentials-handling code (or, worse, actual secret-adjacent logic) to the browser.
+2. **`import "server-only";`** at the top of every connector file (and any gateway file not also exercised by a `scripts/test-*.ts` script). This is a build-time guarantee, independent of the lint rule: if connector code were somehow imported into a client bundle, the build fails outright rather than silently shipping credentials-handling code (or, worse, actual secret-adjacent logic) to the browser.
 3. **`npm run check:boundary`** ([`scripts/check-boundary.ts`](../../scripts/check-boundary.ts)) — a small script that strips comments from every `.ts`/`.tsx` file under `app/` and fails if it finds the literal words "walmart", "amazon", or "ebay" outside a comment. This is a blunter, text-level check that catches something the import rule can't: **UI copy** like `"Walmart says 3 on hand"` creeping back into a component even without any import at all.
 
 ```mermaid
 flowchart TD
-    Edit["Someone edits a file under app/"] --> Lint{"ESLint:\ndeep lib/middleware/* import?"}
+    Edit["Someone edits a file under app/"] --> Lint{"ESLint:\ndeep lib/gateway/* import?"}
     Lint -->|yes| LintFail["Lint error"]
     Lint -->|no| Build{"Build:\nconnector code reachable\nfrom a client bundle?"}
     Build -->|yes| BuildFail["Build fails\n(server-only import)"]
@@ -66,13 +66,13 @@ There is no login. Vercel Authentication (deployment protection) was enabled onc
 
 ### Credentials are used per request, never cached or logged server-side
 
-- **Token fetching is deliberately not shared between requests.** `fetchWalmartToken()` in [`connectors/walmart/auth.ts`](../../lib/middleware/connectors/walmart/auth.ts) makes a fresh token request every call — no cache — specifically so one seller's session can never reach another seller's request. (Contrast with `getWalmartToken()`, the *env-var-credentialed* variant used only by the connectivity script, which *does* cache — appropriate there because it's always the same single account. See [Connectors](./connectors.md#two-token-fetch-paths-deliberately-not-shared).)
+- **Token fetching is deliberately not shared between requests.** `fetchWalmartToken()` in [`connectors/walmart/auth.ts`](../../lib/gateway/connectors/walmart/auth.ts) makes a fresh token request every call — no cache — specifically so one seller's session can never reach another seller's request. (Contrast with `getWalmartToken()`, the *env-var-credentialed* variant used only by the connectivity script, which *does* cache — appropriate there because it's always the same single account. See [Connectors](./connectors.md#two-token-fetch-paths-deliberately-not-shared).)
 - **Next.js's dev server logs every Server Action call with its arguments by default** — which would print a seller's Client Secret in plaintext to the terminal, since credentials are passed as Server Action arguments (`listPeriods(connections)`, `fetchSnapshot(connections, periods)`). [`next.config.ts`](../../next.config.ts) turns this off explicitly:
   ```ts
   logging: { serverFunctions: false }
   ```
   Production was verified (per the README) to never log these regardless, by testing against `next start` with fake credentials — the dev-only logging config is a belt-and-suspenders fix for local development, not a production gap that was found and patched.
-- Error messages from connectors are built by `describeError()` in [`connectors/base.ts`](../../lib/middleware/connectors/base.ts), which includes the connector label and the failing part's name but never the credential values — credentials never reach that deep into the call stack in the first place, so this is structural rather than a filter that could leak.
+- Error messages from connectors are built by `describeError()` in [`connectors/base.ts`](../../lib/gateway/connectors/base.ts), which includes the connector label and the failing part's name but never the credential values — credentials never reach that deep into the call stack in the first place, so this is structural rather than a filter that could leak.
 
 ### Customer data stays on the server
 
@@ -80,11 +80,11 @@ Walmart's Orders API includes customer names and addresses (`fetchOrdersSince` i
 
 ### CSV formula-injection guard
 
-Exports (`orderLinesToCsv`, `skuSummaryToCsv`, `costsToCsv` in [`engine/csv.ts`](../../lib/middleware/engine/csv.ts)) prefix any string cell that starts with `=`, `+`, `-`, `@`, tab, or carriage return with a leading apostrophe (`guardFormula`), so a spreadsheet application can't execute it as a formula when the SKU or item name — both sourced from a marketplace's catalog, i.e. untrusted input from the app's own perspective — happens to look like one. Numbers are exempt (a legitimate `-12.50` must stay numeric, not become text). The cost-import parser (`parseCostImportCsv`) strips that same leading apostrophe back off before parsing (`stripApostrophe`), so a round trip through export → edit → import isn't corrupted by the guard. See [Engine — CSV shapes](./engine.md#csv-shapes-csvts).
+Exports (`orderLinesToCsv`, `skuSummaryToCsv`, `costsToCsv` in [`engine/csv.ts`](../../lib/gateway/engine/csv.ts)) prefix any string cell that starts with `=`, `+`, `-`, `@`, tab, or carriage return with a leading apostrophe (`guardFormula`), so a spreadsheet application can't execute it as a formula when the SKU or item name — both sourced from a marketplace's catalog, i.e. untrusted input from the app's own perspective — happens to look like one. Numbers are exempt (a legitimate `-12.50` must stay numeric, not become text). The cost-import parser (`parseCostImportCsv`) strips that same leading apostrophe back off before parsing (`stripApostrophe`), so a round trip through export → edit → import isn't corrupted by the guard. See [Engine — CSV shapes](./engine.md#csv-shapes-csvts).
 
 ### Server actions are public endpoints
 
-`describeSources`, `listPeriods`, and `fetchSnapshot` in [`lib/middleware/actions.ts`](../../lib/middleware/actions.ts) are Next.js Server Actions marked `"use server"`, which makes each one a public HTTP POST endpoint at the framework level — anyone who can reach the deployed app can call them directly, not just through the rendered UI. This is accepted as-is (documented in [`multi-marketplace-plan.md`](../multi-marketplace-plan.md)'s "Risks" section) because they're only useful with valid marketplace credentials the caller must already possess, and connector error messages are designed to never echo a credential back (see above).
+`describeSources`, `listPeriods`, and `fetchSnapshot` in [`lib/gateway/actions.ts`](../../lib/gateway/actions.ts) are Next.js Server Actions marked `"use server"`, which makes each one a public HTTP POST endpoint at the framework level — anyone who can reach the deployed app can call them directly, not just through the rendered UI. This is accepted as-is (documented in [`multi-marketplace-plan.md`](../multi-marketplace-plan.md)'s "Risks" section) because they're only useful with valid marketplace credentials the caller must already possess, and connector error messages are designed to never echo a credential back (see above).
 
 ### Import size limits
 

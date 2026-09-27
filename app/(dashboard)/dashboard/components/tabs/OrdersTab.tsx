@@ -1,4 +1,4 @@
-import { orderLinesToCsv, type MarginRow, type Report } from "@/lib/middleware";
+import { orderLinesToCsv, type MarginRow, type Report } from "@/lib/gateway";
 import { downloadCsv, money } from "../../utils/format";
 import { PanelHeader } from "../shared/PanelHeader";
 import { OrderLineCard } from "../OrderLineCard";

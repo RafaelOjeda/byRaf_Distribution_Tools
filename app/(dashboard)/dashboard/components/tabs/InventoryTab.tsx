@@ -10,7 +10,7 @@ import {
   type CostInputs,
   type Report,
   type SkuInputs,
-} from "@/lib/middleware";
+} from "@/lib/gateway";
 import { BOX_FIELDS, type LotDraft, type SkuField } from "../../types";
 import { downloadCsv, money } from "../../utils/format";
 import { PanelHeader } from "../shared/PanelHeader";

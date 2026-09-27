@@ -18,8 +18,8 @@ import {
   type SkuCostInputs,
   type Snapshot,
   type SourceDescriptor,
-} from "@/lib/middleware";
-import { fetchSnapshot, listPeriods } from "@/lib/middleware/actions";
+} from "@/lib/gateway";
+import { fetchSnapshot, listPeriods } from "@/lib/gateway/actions";
 import InstallPrompt from "./InstallPrompt";
 import { money } from "./utils/format";
 import { KpiTile } from "./components/shared/KpiTile";
@@ -271,7 +271,7 @@ export default function DashboardClient({
     return out;
   }, [inputs, lotDrafts, aliasDrafts]);
 
-  // The middleware fetched the snapshot once; a cost edit only re-runs
+  // The gateway fetched the snapshot once; a cost edit only re-runs
   // buildReport (pure, no network), so this stays instant.
   const liveReport = useMemo(() => {
     if (!snapshot) return null;

@@ -14,10 +14,10 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
   ]),
   {
-    // The middleware boundary (docs/multi-marketplace-plan.md, "Keeping
+    // The gateway boundary (docs/multi-marketplace-plan.md, "Keeping
     // the boundary honest"): app/ may see the public contract and the
     // server actions, never a connector, the engine internals, or any
-    // other lib/middleware/* subpath directly.
+    // other lib/gateway/* subpath directly.
     files: ["app/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": [
@@ -26,11 +26,11 @@ const eslintConfig = defineConfig([
           patterns: [
             {
               group: [
-                "@/lib/middleware/*/**",
-                "!@/lib/middleware/actions",
+                "@/lib/gateway/*/**",
+                "!@/lib/gateway/actions",
               ],
               message:
-                "app/ may only import '@/lib/middleware' and '@/lib/middleware/actions' - see docs/multi-marketplace-plan.md.",
+                "app/ may only import '@/lib/gateway' and '@/lib/gateway/actions' - see docs/multi-marketplace-plan.md.",
             },
           ],
         },

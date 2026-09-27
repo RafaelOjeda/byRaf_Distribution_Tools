@@ -1,7 +1,7 @@
 /**
  * Fixture regression check for the margin/price/stock engine. Pins the
  * dollar figures the app produces today against a hand-built fixture, so
- * the lib/middleware/ carve-out (docs/multi-marketplace-plan.md, phase 1)
+ * the lib/gateway/ carve-out (docs/multi-marketplace-plan.md, phase 1)
  * can be proven to change zero numbers.
  *
  * All fixture amounts are chosen so the arithmetic has no floating-point
@@ -20,15 +20,15 @@ import {
   summarizeBySku,
   sumMargins,
   type SkuInputs,
-} from "../lib/middleware/engine/margins";
-import { priceSeriesBySku } from "../lib/middleware/engine/prices";
-import { buildAliasIndex, findPossibleDuplicates, resolveSku } from "../lib/middleware/engine/identity";
+} from "../lib/gateway/engine/margins";
+import { priceSeriesBySku } from "../lib/gateway/engine/prices";
+import { buildAliasIndex, findPossibleDuplicates, resolveSku } from "../lib/gateway/engine/identity";
 import {
   estimateUnsettled,
   groupReconRows,
-} from "../lib/middleware/connectors/walmart/normalize";
-import type { Order } from "../lib/middleware/connectors/walmart/orders";
-import type { ReconRow } from "../lib/middleware/connectors/walmart/recon";
+} from "../lib/gateway/connectors/walmart/normalize";
+import type { Order } from "../lib/gateway/connectors/walmart/orders";
+import type { ReconRow } from "../lib/gateway/connectors/walmart/recon";
 
 let passed = 0;
 function check(name: string, fn: () => void) {

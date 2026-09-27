@@ -1,4 +1,4 @@
-import type { SkuCostInputs } from "@/lib/middleware";
+import type { SkuCostInputs } from "@/lib/gateway";
 
 export type SkuField = Exclude<keyof SkuCostInputs, "lots" | "aliasSkus">;
 

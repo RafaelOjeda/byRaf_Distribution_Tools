@@ -1,4 +1,4 @@
-import type { Report } from "@/lib/middleware";
+import type { Report } from "@/lib/gateway";
 import { PanelHeader } from "../shared/PanelHeader";
 import { StockValueTable } from "../StockValueTable";
 

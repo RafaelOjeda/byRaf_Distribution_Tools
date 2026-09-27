@@ -1,4 +1,4 @@
-import type { PriceSeries } from "@/lib/middleware";
+import type { PriceSeries } from "@/lib/gateway";
 import { PanelHeader } from "../shared/PanelHeader";
 import PriceChart from "../../PriceChart";
 

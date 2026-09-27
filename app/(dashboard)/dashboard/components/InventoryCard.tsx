@@ -1,4 +1,4 @@
-import { reconcileStock } from "@/lib/middleware";
+import { reconcileStock } from "@/lib/gateway";
 import { BOX_FIELDS, type LotDraft, type SkuField } from "../types";
 import { money } from "../utils/format";
 import { Fig } from "./shared/Fig";

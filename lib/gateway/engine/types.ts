@@ -2,7 +2,7 @@
  * Working line-item shape shared by every connector's normalization code
  * and by the engine math below. Not yet the fully marketplace-neutral
  * `OrderLine` the plan's canonical model calls for (see
- * docs/multi-marketplace-plan.md, "Inside the middleware") - that lands
+ * docs/multi-marketplace-plan.md, "Inside the gateway") - that lands
  * once a second connector exists and forces the vocabulary to generalize.
  * For now this is exactly what `lib/margin.ts`'s `OrderLineSummary` was.
  */

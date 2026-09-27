@@ -13,11 +13,11 @@ There is **no test framework configured** in this repository (no Jest, Vitest, P
 | `npm run dev` | `next dev` | Local dev server, `http://localhost:3000/margins` → redirects to `/dashboard` |
 | `npm run build` | `next build` | Production build |
 | `npm run start` | `next start` | Serve a production build locally |
-| `npm run lint` | `eslint` | Includes the `app/**` import-boundary rule — see [Configuration & Security](./configuration-and-security.md#the-middleware-import-boundary) |
+| `npm run lint` | `eslint` | Includes the `app/**` import-boundary rule — see [Configuration & Security](./configuration-and-security.md#the-gateway-import-boundary) |
 | `npm run test:walmart` | `dotenv -e .env.local -- tsx scripts/test-walmart-connection.ts` | Live connectivity check: fetches a token and lists settlement periods against real Walmart credentials in `.env.local` |
 | `npm run test:csv` | `tsx scripts/test-csv-import.ts` | Fixture checks for the cost CSV import/export parser (`engine/csv.ts`) |
 | `npm run test:engine` | `tsx scripts/test-engine.ts` | Fixture regression check pinning the margin/price/stock engine's dollar figures |
-| `npm run check:boundary` | `tsx scripts/check-boundary.ts` | Fails if `app/` names a marketplace outside a comment — see [Configuration & Security](./configuration-and-security.md#the-middleware-import-boundary) |
+| `npm run check:boundary` | `tsx scripts/check-boundary.ts` | Fails if `app/` names a marketplace outside a comment — see [Configuration & Security](./configuration-and-security.md#the-gateway-import-boundary) |
 | `npm run db:push` | `dotenv -e .env.local -- drizzle-kit push` | Applies the Drizzle schema to Neon — see [Data Model](./data-model.md) |
 | `npm run db:studio` | `dotenv -e .env.local -- drizzle-kit studio` | Opens Drizzle Studio against Neon |
 
@@ -46,10 +46,10 @@ flowchart TD
     end
 ```
 
-- **`test:engine`** exists specifically to prove that the middleware carve-out (moving `lib/margin.ts`/`lib/prices.ts` into `lib/middleware/engine/` — phase 1 of [`multi-marketplace-plan.md`](../multi-marketplace-plan.md)) changed **zero** dollar figures. Fixture amounts are deliberately chosen to avoid floating-point rounding surprises (`cents()` rounds every comparison to the nearest cent). This is the closest thing in the repo to a regression suite for the app's actual business logic — see [Engine — Testing](./engine.md#testing).
+- **`test:engine`** exists specifically to prove that the gateway carve-out (moving `lib/margin.ts`/`lib/prices.ts` into `lib/gateway/engine/` — phase 1 of [`multi-marketplace-plan.md`](../multi-marketplace-plan.md)) changed **zero** dollar figures. Fixture amounts are deliberately chosen to avoid floating-point rounding surprises (`cents()` rounds every comparison to the nearest cent). This is the closest thing in the repo to a regression suite for the app's actual business logic — see [Engine — Testing](./engine.md#testing).
 - **`test:csv`** is a fixture suite for `engine/csv.ts`'s import/export parser — the only area with edge-case-heavy, error-recovery logic (conflicting values, malformed rows, missing columns).
 - **`test:walmart`** is a *live* connectivity check, not a fixture test — it makes a real HTTP call to Walmart using credentials from `.env.local` and is meant to be run "periodically" per the plan doc (specifically to notice the moment `availableReconFiles` stops returning an empty list for the account it was developed against).
-- **`check:boundary`** is a text-level architectural-boundary check, not a functional test — see [Configuration & Security](./configuration-and-security.md#the-middleware-import-boundary) for the two other mechanisms (ESLint, `server-only`) it complements.
+- **`check:boundary`** is a text-level architectural-boundary check, not a functional test — see [Configuration & Security](./configuration-and-security.md#the-gateway-import-boundary) for the two other mechanisms (ESLint, `server-only`) it complements.
 
 **None of these run automatically.** There is no pre-commit hook, no CI workflow, and no `npm test` alias wiring them together. [`docs/adding-a-marketplace.md`](../adding-a-marketplace.md) explicitly lists the commands a contributor should run by hand before considering a new connector done: `test:engine`, `test:csv`, `check:boundary`, `lint`, `build`.
 

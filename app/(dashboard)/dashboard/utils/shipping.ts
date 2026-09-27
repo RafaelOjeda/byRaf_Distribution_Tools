@@ -1,4 +1,4 @@
-import { SHIPPING_PCT_ALERT, SHIPPING_PCT_WARN } from "@/lib/middleware";
+import { SHIPPING_PCT_ALERT, SHIPPING_PCT_WARN } from "@/lib/gateway";
 
 export function shipPctClass(pct: number | null): string {
   if (pct === null) return "";

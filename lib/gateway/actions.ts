@@ -18,7 +18,7 @@ function hasCredentials(creds: Record<string, string> | undefined): boolean {
   return !!creds && Object.values(creds).some((v) => v.trim() !== "");
 }
 
-/** Every marketplace the middleware knows about. The dashboard renders these; it never names one. */
+/** Every marketplace the gateway knows about. The dashboard renders these; it never names one. */
 export async function describeSources(): Promise<SourceDescriptor[]> {
   return CONNECTORS.map((c) => c.descriptor);
 }

@@ -1,4 +1,4 @@
-import type { Report } from "@/lib/middleware";
+import type { Report } from "@/lib/gateway";
 import { money } from "../utils/format";
 import { Fig } from "./shared/Fig";
 

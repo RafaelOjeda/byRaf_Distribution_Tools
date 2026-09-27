@@ -1,4 +1,4 @@
-import type { MarginRow } from "@/lib/middleware";
+import type { MarginRow } from "@/lib/gateway";
 import { money } from "../utils/format";
 import { Fig } from "./shared/Fig";
 
