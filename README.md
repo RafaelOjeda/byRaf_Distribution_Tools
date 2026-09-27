@@ -59,6 +59,8 @@ Settled and estimated totals are always shown separately, never blended.
 
 See [walmart-margin-tracker-plan.md](walmart-margin-tracker-plan.md) for design decisions and the roadmap, and [docs/walmart-api-notes.md](docs/walmart-api-notes.md) for what the Walmart API actually does. Support for more marketplaces (Amazon, then eBay) in one dashboard, behind a middleware layer the dashboard talks to instead of any marketplace, is planned in [docs/multi-marketplace-plan.md](docs/multi-marketplace-plan.md).
 
+**For full technical documentation** — architecture diagrams, the middleware contract, the calculation engine, connector internals, and more, organized as a navigable reference — see [docs/index.md](docs/index.md).
+
 ## Development
 
 Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS 4. Deployed on Vercel; every push to `main` deploys to production.
