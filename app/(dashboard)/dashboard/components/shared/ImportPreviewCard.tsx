@@ -1,4 +1,4 @@
-import type { CostImportResult } from "@/lib/middleware";
+import type { CostImportResult } from "@/lib/gateway";
 
 export function ImportPreviewCard({
   preview,

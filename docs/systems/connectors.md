@@ -1,11 +1,11 @@
 # Connectors
 
-> [Documentation Index](../index.md) · Up: [Architecture Overview](./architecture.md) · Related: [Middleware Contract](./middleware-contract.md) · [Engine](./engine.md)
+> [Documentation Index](../index.md) · Up: [Architecture Overview](./architecture.md) · Related: [Gateway Contract](./gateway-contract.md) · [Engine](./engine.md)
 > Practical checklist for adding one: [`docs/adding-a-marketplace.md`](../adding-a-marketplace.md)
 
 ## Overview
 
-A connector is the only code in the repository allowed to know a specific marketplace's field names, auth flow, pagination quirks, and fee vocabulary. Every connector is a subclass of `MarketplaceConnector` ([`connectors/base.ts`](../../lib/middleware/connectors/base.ts)), registered in [`connectors/registry.ts`](../../lib/middleware/connectors/registry.ts). Two exist today:
+A connector is the only code in the repository allowed to know a specific marketplace's field names, auth flow, pagination quirks, and fee vocabulary. Every connector is a subclass of `MarketplaceConnector` ([`connectors/base.ts`](../../lib/gateway/connectors/base.ts)), registered in [`connectors/registry.ts`](../../lib/gateway/connectors/registry.ts). Two exist today:
 
 | Connector | Folder | Real network calls? | Purpose |
 |---|---|---|---|
@@ -63,7 +63,7 @@ classDiagram
     MarketplaceConnector <|-- DemoConnector
 ```
 
-`base.ts` holds the plumbing that used to be duplicated per-API-module before the middleware carve-out:
+`base.ts` holds the plumbing that used to be duplicated per-API-module before the gateway carve-out:
 
 - **`snapshot()`** — the orchestration every connector gets for free: authenticate once, then fetch settled lines, recent orders, stock, and listings **in parallel**, catching each part's failure independently (`Promise.all` with per-branch `.catch`) so e.g. a catalog 404 doesn't take down settled data. Every line gets tagged with `source`/`sourceLabel` before returning.
 - **`paginate()`** — a shared cursor-pagination helper with a hard page cap (`maxPages`); throws rather than silently truncating.
@@ -107,7 +107,7 @@ A capability the connector doesn't declare (e.g. Demo without `stock: false`, hy
 
 ## The registry
 
-[`connectors/registry.ts`](../../lib/middleware/connectors/registry.ts) is a flat array:
+[`connectors/registry.ts`](../../lib/gateway/connectors/registry.ts) is a flat array:
 
 ```ts
 export const CONNECTORS: MarketplaceConnector[] = [
@@ -124,13 +124,13 @@ Real API-backed reference implementation, split into one file per API area:
 
 | File | Covers |
 |---|---|
-| [`walmart/auth.ts`](../../lib/middleware/connectors/walmart/auth.ts) | `POST /v3/token`, client-credentials grant; two token-fetch paths (see below) |
-| [`walmart/recon.ts`](../../lib/middleware/connectors/walmart/recon.ts) | Settlement/reconciliation report listing + paginated fetch |
-| [`walmart/orders.ts`](../../lib/middleware/connectors/walmart/orders.ts) | `GET /v3/orders` — recent/unsettled orders |
-| [`walmart/inventory.ts`](../../lib/middleware/connectors/walmart/inventory.ts) | `GET /v3/inventories` — on-hand stock |
-| [`walmart/items.ts`](../../lib/middleware/connectors/walmart/items.ts) | `GET /v3/items` — catalog price + publish status |
-| [`walmart/normalize.ts`](../../lib/middleware/connectors/walmart/normalize.ts) | `classify`, `groupReconRows`, `estimateUnsettled` — raw rows → `OrderLineSummary[]` |
-| [`walmart/connector.ts`](../../lib/middleware/connectors/walmart/connector.ts) | The `MarketplaceConnector` subclass wiring the above together |
+| [`walmart/auth.ts`](../../lib/gateway/connectors/walmart/auth.ts) | `POST /v3/token`, client-credentials grant; two token-fetch paths (see below) |
+| [`walmart/recon.ts`](../../lib/gateway/connectors/walmart/recon.ts) | Settlement/reconciliation report listing + paginated fetch |
+| [`walmart/orders.ts`](../../lib/gateway/connectors/walmart/orders.ts) | `GET /v3/orders` — recent/unsettled orders |
+| [`walmart/inventory.ts`](../../lib/gateway/connectors/walmart/inventory.ts) | `GET /v3/inventories` — on-hand stock |
+| [`walmart/items.ts`](../../lib/gateway/connectors/walmart/items.ts) | `GET /v3/items` — catalog price + publish status |
+| [`walmart/normalize.ts`](../../lib/gateway/connectors/walmart/normalize.ts) | `classify`, `groupReconRows`, `estimateUnsettled` — raw rows → `OrderLineSummary[]` |
+| [`walmart/connector.ts`](../../lib/gateway/connectors/walmart/connector.ts) | The `MarketplaceConnector` subclass wiring the above together |
 
 ### Two token-fetch paths, deliberately not shared
 
@@ -200,7 +200,7 @@ Every one of these pagination loops **throws rather than returning a partial lis
 
 ## The Demo connector
 
-[`connectors/demo/connector.ts`](../../lib/middleware/connectors/demo/connector.ts) + [`connectors/demo/fixtures.ts`](../../lib/middleware/connectors/demo/fixtures.ts) implement every part of the `MarketplaceConnector` contract against fixed in-memory data — two settlement periods, two SKUs, one of them (`DEMO-WIDGET-1`) chosen so per-SKU rollups have something real to combine if a Walmart account also carries that SKU. `authenticate` accepts any non-empty "Demo account name" string; nothing ever leaves the browser tab.
+[`connectors/demo/connector.ts`](../../lib/gateway/connectors/demo/connector.ts) + [`connectors/demo/fixtures.ts`](../../lib/gateway/connectors/demo/fixtures.ts) implement every part of the `MarketplaceConnector` contract against fixed in-memory data — two settlement periods, two SKUs, one of them (`DEMO-WIDGET-1`) chosen so per-SKU rollups have something real to combine if a Walmart account also carries that SKU. `authenticate` accepts any non-empty "Demo account name" string; nothing ever leaves the browser tab.
 
 Its purpose, stated directly in its own doc comment: **"if the dashboard works fully against this with no dashboard-side special cases, the `MarketplaceConnector` abstraction holds."** It's the reference to copy from when starting a new connector with no real API to test against yet (per [`docs/adding-a-marketplace.md`](../adding-a-marketplace.md)).
 
@@ -214,7 +214,7 @@ See [`docs/adding-a-marketplace.md`](../adding-a-marketplace.md) for the full st
 - `fetchStock`, `fetchListings`: optional overrides, only implement what `capabilities` claims.
 - Every `OrderLineSummary` produced must have its fee components (`commission`, `shipping`, `tax`, `otherFees`) sum to `netAmount` — this invariant is what lets the engine compute correct profit regardless of classification accuracy (see [Engine](./engine.md)).
 - If nothing has settled yet for a SKU, project fees from that SKU's own settled history (the `estimateUnsettled` pattern) — never invent a rate from a published rate card.
-- `import "server-only";` at the top of `connector.ts` (and any file not also exercised by a `scripts/test-*.ts` connectivity script) — this is what makes it structurally impossible for connector code to end up in the browser bundle, even by accident, independent of the ESLint import boundary. See [Configuration & Security](./configuration-and-security.md#the-middleware-import-boundary).
+- `import "server-only";` at the top of `connector.ts` (and any file not also exercised by a `scripts/test-*.ts` connectivity script) — this is what makes it structurally impossible for connector code to end up in the browser bundle, even by accident, independent of the ESLint import boundary. See [Configuration & Security](./configuration-and-security.md#the-gateway-import-boundary).
 
 ## Known gaps and unverified behavior
 
@@ -233,5 +233,5 @@ See [`docs/walmart-api-notes.md`](../walmart-api-notes.md#still-unverified) for 
 - [`docs/adding-a-marketplace.md`](../adding-a-marketplace.md) — step-by-step checklist for a new connector
 - [`docs/walmart-api-notes.md`](../walmart-api-notes.md) — full verified behavior of Walmart's API, including every pagination gotcha
 - [Engine](./engine.md) — what consumes `OrderLineSummary`/`AccountCharge` once a connector produces them
-- [Middleware Contract](./middleware-contract.md) — `SourceDescriptor`, `Snapshot`, and how `actions.ts` calls into the registry
+- [Gateway Contract](./gateway-contract.md) — `SourceDescriptor`, `Snapshot`, and how `actions.ts` calls into the registry
 - [Configuration & Security](./configuration-and-security.md) — the `server-only` guarantee and the ESLint import boundary

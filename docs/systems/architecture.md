@@ -1,6 +1,6 @@
 # Architecture Overview
 
-> [Documentation Index](../index.md) · Related: [Middleware Contract](./middleware-contract.md) · [Engine](./engine.md) · [Connectors](./connectors.md) · [Frontend](./frontend.md) · [Configuration & Security](./configuration-and-security.md)
+> [Documentation Index](../index.md) · Related: [Gateway Contract](./gateway-contract.md) · [Engine](./engine.md) · [Connectors](./connectors.md) · [Frontend](./frontend.md) · [Configuration & Security](./configuration-and-security.md)
 
 ## What this repository is
 
@@ -10,7 +10,7 @@ The repository is **stateless in production**: no login, no database use. A Post
 
 The one architectural rule that shapes almost every file in `lib/` and `app/` is:
 
-> **The dashboard never talks to a marketplace directly. It talks only to a middleware layer**, which owns every marketplace connection, all normalization, and all of the math. See [Middleware Contract](./middleware-contract.md).
+> **The dashboard never talks to a marketplace directly. It talks only to a gateway layer**, which owns every marketplace connection, all normalization, and all of the math. See [Gateway Contract](./gateway-contract.md).
 
 This is documented at length in [`docs/multi-marketplace-plan.md`](../multi-marketplace-plan.md), the canonical design doc for this split; this page and its siblings under `docs/systems/` restate and cross-reference it as navigable, implementation-linked documentation.
 
@@ -29,7 +29,7 @@ flowchart TB
         Root["app/page.tsx\n(redirect to /dashboard)"]
     end
 
-    subgraph Middleware["lib/middleware/ — the only thing app/ may import"]
+    subgraph Gateway["lib/gateway/ — the only thing app/ may import"]
         Contract["contract/\nSourceDescriptor, Snapshot, Report, ..."]
         Actions["actions.ts (\"use server\")\ndescribeSources, listPeriods, fetchSnapshot"]
         Index["index.ts (client-safe)\nbuildReport, parseCostCsv, exportCsv"]
@@ -71,32 +71,32 @@ flowchart TB
     style Actions fill:#e8f0ff
 ```
 
-**Reading the diagram:** everything in the `Middleware` box lives under `lib/middleware/`. Code under `app/` is allowed to import only `lib/middleware` (the public `index.ts`) and `lib/middleware/actions`; this is enforced by an ESLint rule and a custom script — see [Configuration & Security](./configuration-and-security.md#the-middleware-import-boundary). No file under `app/` may import a connector or `engine/*` directly, and no file under `app/` may mention a marketplace name.
+**Reading the diagram:** everything in the `Gateway` box lives under `lib/gateway/`. Code under `app/` is allowed to import only `lib/gateway` (the public `index.ts`) and `lib/gateway/actions`; this is enforced by an ESLint rule and a custom script — see [Configuration & Security](./configuration-and-security.md#the-gateway-import-boundary). No file under `app/` may import a connector or `engine/*` directly, and no file under `app/` may mention a marketplace name.
 
 ## The two-layer split, restated
 
 | Layer | Lives at | Knows about | Does not know about |
 |---|---|---|---|
 | **Dashboard (frontend)** | `app/(dashboard)/dashboard/` | Forms, tables, tabs, the price chart, what the user typed (credentials, costs, box dimensions) | Marketplace names, fee vocabulary, HTTP, credentials' meaning |
-| **Middleware contract + actions** | `lib/middleware/contract/`, `lib/middleware/actions.ts` | Every connected source, the shape of a `Report`, orchestrating connectors | The dashboard's rendering, browser-side state |
-| **Engine (pure math)** | `lib/middleware/engine/` | Margin calculation, stock pooling, CSV shape, SKU identity/aliasing, price trends | Network, credentials, marketplace-specific field names |
-| **Connectors** | `lib/middleware/connectors/` | One marketplace's real API (auth, pagination, field names, quirks) | The dashboard, the engine's internals, other connectors |
+| **Gateway contract + actions** | `lib/gateway/contract/`, `lib/gateway/actions.ts` | Every connected source, the shape of a `Report`, orchestrating connectors | The dashboard's rendering, browser-side state |
+| **Engine (pure math)** | `lib/gateway/engine/` | Margin calculation, stock pooling, CSV shape, SKU identity/aliasing, price trends | Network, credentials, marketplace-specific field names |
+| **Connectors** | `lib/gateway/connectors/` | One marketplace's real API (auth, pagination, field names, quirks) | The dashboard, the engine's internals, other connectors |
 
-See [Middleware Contract](./middleware-contract.md) for the full type contract and [Engine](./engine.md) / [Connectors](./connectors.md) for what's inside the last two rows.
+See [Gateway Contract](./gateway-contract.md) for the full type contract and [Engine](./engine.md) / [Connectors](./connectors.md) for what's inside the last two rows.
 
 ## Request flow: connecting, listing periods, loading data, editing a cost
 
-This is the sequence a user actually walks through in the dashboard (`DashboardClient.tsx`), and which calls cross the middleware boundary.
+This is the sequence a user actually walks through in the dashboard (`DashboardClient.tsx`), and which calls cross the gateway boundary.
 
 ```mermaid
 sequenceDiagram
     participant U as Seller (browser)
     participant DC as DashboardClient (client component)
-    participant Actions as lib/middleware/actions.ts\n("use server")
+    participant Actions as lib/gateway/actions.ts\n("use server")
     participant Reg as connectors/registry.ts
     participant Conn as MarketplaceConnector\n(Walmart or Demo)
     participant API as Marketplace API
-    participant Idx as lib/middleware/index.ts\n(buildReport, pure)
+    participant Idx as lib/gateway/index.ts\n(buildReport, pure)
 
     Note over DC: step = "connect"
     U->>DC: paste credentials per source
@@ -131,7 +131,7 @@ sequenceDiagram
 Two things this diagram makes concrete:
 
 1. **Credentials cross the boundary exactly twice** — `listPeriods` and `fetchSnapshot` — and never again. Every subsequent cost edit calls `buildReport`, which takes no credentials and makes no network call.
-2. **The `Snapshot` is opaque to the dashboard.** `DashboardClient` stores whatever `fetchSnapshot` returns and hands it back to `buildReport` on every render, but (by TypeScript brand, not runtime enforcement) never reads a field from it. See [Middleware Contract](./middleware-contract.md#the-snapshot-brand).
+2. **The `Snapshot` is opaque to the dashboard.** `DashboardClient` stores whatever `fetchSnapshot` returns and hands it back to `buildReport` on every render, but (by TypeScript brand, not runtime enforcement) never reads a field from it. See [Gateway Contract](./gateway-contract.md#the-snapshot-brand).
 
 ## Deployment
 
@@ -166,7 +166,7 @@ app/                              Next.js App Router — the dashboard shell onl
       components/                 tables, cards, tabs — see docs/systems/frontend.md
     margins/page.tsx               legacy route, redirects -> "/dashboard"
 lib/
-  middleware/                     see docs/systems/middleware-contract.md
+  gateway/                     see docs/systems/gateway-contract.md
     contract/                     public types (SourceDescriptor, Snapshot, Report, ...)
     actions.ts                    "use server": describeSources, listPeriods, fetchSnapshot
     index.ts                      client-safe: buildReport, parseCostCsv, exportCsv, re-exported types
@@ -175,7 +175,7 @@ lib/
   db/                              Drizzle schema + lazy Neon client — see docs/systems/data-model.md
 drizzle/                           SQL migration + snapshot metadata for lib/db/schema.ts
 docs/                              this documentation, plus the pre-existing design docs it links to
-  multi-marketplace-plan.md        canonical design doc for the middleware split (phases, decisions)
+  multi-marketplace-plan.md        canonical design doc for the gateway split (phases, decisions)
   adding-a-marketplace.md          checklist for adding a connector
   walmart-api-notes.md             verified Walmart API behavior and gotchas
 scripts/                           connectivity + fixture-regression scripts (see docs/systems/testing-and-deployment.md)
@@ -184,7 +184,7 @@ walmart-margin-tracker-plan.md     the original V1 plan; records what shipped vs
 
 ## Where to go next
 
-- **How the dashboard and marketplaces are decoupled, and every type crossing that boundary:** [Middleware Contract](./middleware-contract.md)
+- **How the dashboard and marketplaces are decoupled, and every type crossing that boundary:** [Gateway Contract](./gateway-contract.md)
 - **The math: margins, estimation, stock pooling, SKU identity, CSV import/export:** [Engine](./engine.md)
 - **How a marketplace becomes a connector, and everything Walmart's API actually does:** [Connectors](./connectors.md)
 - **The dashboard's component tree, wizard steps, and mobile/PWA behavior:** [Frontend](./frontend.md)

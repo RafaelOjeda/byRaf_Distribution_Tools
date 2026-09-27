@@ -4,7 +4,7 @@ import { DemoConnector } from "./demo/connector";
 import { WalmartConnector } from "./walmart/connector";
 
 /**
- * Every marketplace the middleware knows about. Adding a marketplace
+ * Every marketplace the gateway knows about. Adding a marketplace
  * means adding one connector class plus one line here - see
  * docs/adding-a-marketplace.md.
  */

@@ -1,28 +1,28 @@
-# Middleware Contract
+# Gateway Contract
 
 > [Documentation Index](../index.md) · Up: [Architecture Overview](./architecture.md) · Related: [Engine](./engine.md) · [Connectors](./connectors.md) · [Frontend](./frontend.md)
 
 ## Overview
 
-The middleware contract is **everything the dashboard is allowed to see**. It is defined as plain, serializable TypeScript types in [`lib/middleware/contract/index.ts`](../../lib/middleware/contract/index.ts), re-exported to the dashboard through [`lib/middleware/index.ts`](../../lib/middleware/index.ts) (pure, client-safe) and [`lib/middleware/actions.ts`](../../lib/middleware/actions.ts) (`"use server"`, network-touching). Nothing under `app/` may import any other path under `lib/middleware/*` — see [Configuration & Security](./configuration-and-security.md#the-middleware-import-boundary) for how that's enforced.
+The gateway contract is **everything the dashboard is allowed to see**. It is defined as plain, serializable TypeScript types in [`lib/gateway/contract/index.ts`](../../lib/gateway/contract/index.ts), re-exported to the dashboard through [`lib/gateway/index.ts`](../../lib/gateway/index.ts) (pure, client-safe) and [`lib/gateway/actions.ts`](../../lib/gateway/actions.ts) (`"use server"`, network-touching). Nothing under `app/` may import any other path under `lib/gateway/*` — see [Configuration & Security](./configuration-and-security.md#the-gateway-import-boundary) for how that's enforced.
 
-This design is recorded at length in [`docs/multi-marketplace-plan.md`](../multi-marketplace-plan.md) ("The middleware contract" section); this page indexes the same contract by file and type so it's directly navigable from code.
+This design is recorded at length in [`docs/multi-marketplace-plan.md`](../multi-marketplace-plan.md) ("The gateway contract" section); this page indexes the same contract by file and type so it's directly navigable from code.
 
 ## Responsibilities
 
 - Define every type that can legally cross from server code into the dashboard's browser bundle.
 - Provide exactly two network-touching entry points (`listPeriods`, `fetchSnapshot`) and one listing call (`describeSources`), all as Next.js Server Actions.
 - Provide one pure entry point (`buildReport`) that turns a fetched `Snapshot` plus the user's typed costs into a finished `Report`, with no network access.
-- Keep the `Snapshot` type **opaque** to callers outside the middleware, so the dashboard is structurally prevented from reaching into marketplace-shaped data.
+- Keep the `Snapshot` type **opaque** to callers outside the gateway, so the dashboard is structurally prevented from reaching into marketplace-shaped data.
 
 ## Where other code fits
 
 | Module | Role |
 |---|---|
-| [`contract/index.ts`](../../lib/middleware/contract/index.ts) | The types themselves (this page's main subject) |
-| [`actions.ts`](../../lib/middleware/actions.ts) | Server Actions that call connectors — see [Connectors](./connectors.md) |
-| [`index.ts`](../../lib/middleware/index.ts) | The pure, client-safe surface — re-exports contract types plus `buildReport` and CSV helpers from [`engine/`](./engine.md) |
-| [`engine/report.ts`](../../lib/middleware/engine/report.ts) | `buildReport`'s actual implementation — see [Engine](./engine.md) |
+| [`contract/index.ts`](../../lib/gateway/contract/index.ts) | The types themselves (this page's main subject) |
+| [`actions.ts`](../../lib/gateway/actions.ts) | Server Actions that call connectors — see [Connectors](./connectors.md) |
+| [`index.ts`](../../lib/gateway/index.ts) | The pure, client-safe surface — re-exports contract types plus `buildReport` and CSV helpers from [`engine/`](./engine.md) |
+| [`engine/report.ts`](../../lib/gateway/engine/report.ts) | `buildReport`'s actual implementation — see [Engine](./engine.md) |
 
 ## The contract types
 
@@ -106,7 +106,7 @@ interface SourceDescriptor {
 type Connections = Record<string /* source id */, Record<string, string>>;
 ```
 
-`describeSources()` (in `actions.ts`) returns one `SourceDescriptor` per registered connector (see [Connectors — the registry](./connectors.md#the-registry)). The dashboard's "Connect a source" screen is generated entirely from this array — it never hard-codes a marketplace's field names. `Connections` is what the user pastes in, held in `DashboardClient` state and passed back on every subsequent call; the middleware uses it for that one request only.
+`describeSources()` (in `actions.ts`) returns one `SourceDescriptor` per registered connector (see [Connectors — the registry](./connectors.md#the-registry)). The dashboard's "Connect a source" screen is generated entirely from this array — it never hard-codes a marketplace's field names. `Connections` is what the user pastes in, held in `DashboardClient` state and passed back on every subsequent call; the gateway uses it for that one request only.
 
 ### `Period` / `PeriodList` — settlement periods
 
@@ -125,7 +125,7 @@ export type Snapshot = { readonly [SNAPSHOT_BRAND]: true };
 export function brandSnapshot<T extends object>(data: T): Snapshot & T { return data as Snapshot & T; }
 ```
 
-`Snapshot` is structurally still plain JSON (the module doc in `contract/index.ts` is explicit about this — the middleware could move to its own HTTP service later with no redesign), but the branded type is a **compile-time-only** guard: `DashboardClient` can store a `Snapshot` and pass it to `buildReport`, but TypeScript won't let it read a field off it. Only `engine/report.ts`'s `unwrap()` function narrows it back to the real `SnapshotData` shape. This is not a runtime security boundary (nothing stops a browser from inspecting the actual JSON in devtools) — it's a boundary against *accidental* coupling: no dashboard code path can compile against a marketplace-shaped field.
+`Snapshot` is structurally still plain JSON (the module doc in `contract/index.ts` is explicit about this — the gateway could move to its own HTTP service later with no redesign), but the branded type is a **compile-time-only** guard: `DashboardClient` can store a `Snapshot` and pass it to `buildReport`, but TypeScript won't let it read a field off it. Only `engine/report.ts`'s `unwrap()` function narrows it back to the real `SnapshotData` shape. This is not a runtime security boundary (nothing stops a browser from inspecting the actual JSON in devtools) — it's a boundary against *accidental* coupling: no dashboard code path can compile against a marketplace-shaped field.
 
 ### `CostInputs` / `SkuCostInputs` — what the user typed
 
@@ -160,7 +160,7 @@ Two supporting types worth calling out:
 
 ## `describeSources` / `listPeriods` / `fetchSnapshot` — the three server actions
 
-All three live in [`actions.ts`](../../lib/middleware/actions.ts) and are marked `"use server"`, making them public POST endpoints (see [Configuration & Security](./configuration-and-security.md#server-actions-are-public-endpoints)).
+All three live in [`actions.ts`](../../lib/gateway/actions.ts) and are marked `"use server"`, making them public POST endpoints (see [Configuration & Security](./configuration-and-security.md#server-actions-are-public-endpoints)).
 
 | Action | Touches network? | Needs credentials? | Called when |
 |---|---|---|---|
@@ -176,7 +176,7 @@ All three live in [`actions.ts`](../../lib/middleware/actions.ts) and are marked
 buildReport(snapshot: Snapshot, costs: CostInputs, view: ReportView): Report
 ```
 
-Exported from `lib/middleware/index.ts` (no `"use server"` — it runs synchronously in the browser). Because it takes no credentials and makes no network call, `DashboardClient` calls it on **every keystroke** in a cost field and the dashboard still recomputes instantly — this is the entire reason the fetch/compute split exists. See [Engine — `buildReport`](./engine.md#buildreport-assembling-the-report) for its internals.
+Exported from `lib/gateway/index.ts` (no `"use server"` — it runs synchronously in the browser). Because it takes no credentials and makes no network call, `DashboardClient` calls it on **every keystroke** in a cost field and the dashboard still recomputes instantly — this is the entire reason the fetch/compute split exists. See [Engine — `buildReport`](./engine.md#buildreport-assembling-the-report) for its internals.
 
 ## Related documentation
 

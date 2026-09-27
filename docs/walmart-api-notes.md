@@ -4,7 +4,7 @@ What the Walmart Marketplace API actually does, as observed against a live selle
 
 Last verified: 2026-09-24. All calls use the US marketplace host `https://marketplace.walmartapis.com`.
 
-For the code that uses these, see [`lib/middleware/connectors/walmart/`](../lib/middleware/connectors/walmart/).
+For the code that uses these, see [`lib/gateway/connectors/walmart/`](../lib/gateway/connectors/walmart/).
 
 ## Credentials and headers
 

@@ -1,6 +1,6 @@
 /**
  * Everything the dashboard can see. Plain serializable JSON throughout,
- * so the middleware could later move to its own service with no
+ * so the gateway could later move to its own service with no
  * redesign here - see docs/multi-marketplace-plan.md, "Later: a
  * separate service".
  */

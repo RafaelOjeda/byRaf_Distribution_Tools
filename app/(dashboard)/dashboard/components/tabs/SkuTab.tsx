@@ -1,4 +1,4 @@
-import { skuSummaryToCsv, type SkuSummary } from "@/lib/middleware";
+import { skuSummaryToCsv, type SkuSummary } from "@/lib/gateway";
 import { downloadCsv } from "../../utils/format";
 import { PanelHeader } from "../shared/PanelHeader";
 import { SkuSummaryTable } from "../SkuSummaryTable";

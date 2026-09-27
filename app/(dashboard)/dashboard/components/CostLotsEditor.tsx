@@ -1,4 +1,4 @@
-import { averageUnitCost, type CostLot } from "@/lib/middleware";
+import { averageUnitCost, type CostLot } from "@/lib/gateway";
 import type { LotDraft } from "../types";
 import { money } from "../utils/format";
 

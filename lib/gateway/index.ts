@@ -1,7 +1,7 @@
 /**
- * The public, client-safe surface of the middleware. Pure: no network, no
+ * The public, client-safe surface of the gateway. Pure: no network, no
  * secrets. Code in app/ may import this module and ./actions - nothing
- * else under lib/middleware/ (see docs/multi-marketplace-plan.md,
+ * else under lib/gateway/ (see docs/multi-marketplace-plan.md,
  * "Keeping the boundary honest", and eslint.config.mjs).
  */
 export type {

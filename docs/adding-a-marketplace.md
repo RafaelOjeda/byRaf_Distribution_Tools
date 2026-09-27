@@ -1,15 +1,15 @@
 # Adding a marketplace
 
-Checklist for adding a new connector to the middleware. See
+Checklist for adding a new connector to the gateway. See
 `docs/multi-marketplace-plan.md` for the overall architecture; this file
-is the practical "what do I actually create" companion. `lib/middleware/connectors/demo/`
+is the practical "what do I actually create" companion. `lib/gateway/connectors/demo/`
 is the reference implementation to copy from - it exercises every part
-of the `MarketplaceConnector` contract with no real network calls. `lib/middleware/connectors/walmart/`
+of the `MarketplaceConnector` contract with no real network calls. `lib/gateway/connectors/walmart/`
 is the reference for a *real* API-backed connector.
 
 If the phases in `docs/multi-marketplace-plan.md` haven't landed yet in
-this checkout, do those first - a connector needs `lib/middleware/connectors/base.ts`
-(`MarketplaceConnector`) and `lib/middleware/connectors/registry.ts` to exist.
+this checkout, do those first - a connector needs `lib/gateway/connectors/base.ts`
+(`MarketplaceConnector`) and `lib/gateway/connectors/registry.ts` to exist.
 
 ## 1. Research the API first
 
@@ -31,7 +31,7 @@ account is fine) and write down what you find in `docs/<marketplace>-api-notes.m
 ## 2. Create the connector folder
 
 ```
-lib/middleware/connectors/<marketplace>/
+lib/gateway/connectors/<marketplace>/
   <api-client-files>.ts   one file per API area, mirroring walmart/ (auth, orders, inventory, ...)
   normalize.ts             raw API shapes -> OrderLineSummary/AccountCharge (only if the raw
                             shapes need real transformation - the demo connector skips this
@@ -41,7 +41,7 @@ lib/middleware/connectors/<marketplace>/
 
 Put `import "server-only";` at the top of `connector.ts` (and any other
 file that isn't also exercised directly by a `scripts/test-*.ts` script -
-see the comment in `lib/middleware/connectors/base.ts` for why the raw
+see the comment in `lib/gateway/connectors/base.ts` for why the raw
 API client files skip it).
 
 ## 3. Implement `MarketplaceConnector`
@@ -95,7 +95,7 @@ Notes:
 
 ## 4. Register it
 
-Add one line to `lib/middleware/connectors/registry.ts`:
+Add one line to `lib/gateway/connectors/registry.ts`:
 
 ```ts
 export const CONNECTORS: MarketplaceConnector[] = [
@@ -127,7 +127,7 @@ npm run lint
 npm run build
 ```
 
-If `test:engine` fails, you've likely changed something in `lib/middleware/engine/`
+If `test:engine` fails, you've likely changed something in `lib/gateway/engine/`
 rather than staying inside your connector folder - the engine is meant to be
 marketplace-neutral, so a new connector shouldn't need to touch it (aside
 from possibly adding a canonical field everyone needs, which is a larger,

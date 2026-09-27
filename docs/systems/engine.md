@@ -1,10 +1,10 @@
 # Engine (Pure Calculation Layer)
 
-> [Documentation Index](../index.md) · Up: [Architecture Overview](./architecture.md) · Related: [Middleware Contract](./middleware-contract.md) · [Connectors](./connectors.md) · [Frontend](./frontend.md)
+> [Documentation Index](../index.md) · Up: [Architecture Overview](./architecture.md) · Related: [Gateway Contract](./gateway-contract.md) · [Connectors](./connectors.md) · [Frontend](./frontend.md)
 
 ## Overview
 
-`lib/middleware/engine/` is every dollar-figure calculation in the app, and it is deliberately **marketplace-neutral**: nothing in this folder imports a connector, makes a network call, or knows a Walmart field name. It consumes only the canonical `OrderLineSummary` shape (`engine/types.ts`) that every connector's normalization code produces. This neutrality is enforced socially, not mechanically — `npm run test:engine` pins today's numbers as a fixture regression so a refactor can prove it changed nothing (see [Testing & Deployment](./testing-and-deployment.md#npm-run-testengine)).
+`lib/gateway/engine/` is every dollar-figure calculation in the app, and it is deliberately **marketplace-neutral**: nothing in this folder imports a connector, makes a network call, or knows a Walmart field name. It consumes only the canonical `OrderLineSummary` shape (`engine/types.ts`) that every connector's normalization code produces. This neutrality is enforced socially, not mechanically — `npm run test:engine` pins today's numbers as a fixture regression so a refactor can prove it changed nothing (see [Testing & Deployment](./testing-and-deployment.md#npm-run-testengine)).
 
 ## Responsibilities
 
@@ -20,12 +20,12 @@
 
 | File | Exports | Role |
 |---|---|---|
-| [`engine/types.ts`](../../lib/middleware/engine/types.ts) | `OrderLineSummary`, `normalizeSku` | The canonical line-item shape every connector normalizes into |
-| [`engine/margins.ts`](../../lib/middleware/engine/margins.ts) | `computeMargins`, `summarizeBySku`, `sumMargins`, `stockValue`, `reconcileStock`, `buildSkuHistory`, `settlementKey`, `assignSaleDates`, cost-lot helpers | The core margin, stock, and cost math |
-| [`engine/identity.ts`](../../lib/middleware/engine/identity.ts) | `buildAliasIndex`, `resolveSku`, `findPossibleDuplicates` | SKU identity resolution across sources |
-| [`engine/prices.ts`](../../lib/middleware/engine/prices.ts) | `priceSeriesBySku` | Price-over-time series for the chart |
-| [`engine/csv.ts`](../../lib/middleware/engine/csv.ts) | `toCsv`, `orderLinesToCsv`, `skuSummaryToCsv`, `costsToCsv`, `parseCsv`, `parseCostImportCsv` | CSV encode/decode, shared by every export/import feature |
-| [`engine/report.ts`](../../lib/middleware/engine/report.ts) | `buildReport` | Assembles everything above into a `Report` |
+| [`engine/types.ts`](../../lib/gateway/engine/types.ts) | `OrderLineSummary`, `normalizeSku` | The canonical line-item shape every connector normalizes into |
+| [`engine/margins.ts`](../../lib/gateway/engine/margins.ts) | `computeMargins`, `summarizeBySku`, `sumMargins`, `stockValue`, `reconcileStock`, `buildSkuHistory`, `settlementKey`, `assignSaleDates`, cost-lot helpers | The core margin, stock, and cost math |
+| [`engine/identity.ts`](../../lib/gateway/engine/identity.ts) | `buildAliasIndex`, `resolveSku`, `findPossibleDuplicates` | SKU identity resolution across sources |
+| [`engine/prices.ts`](../../lib/gateway/engine/prices.ts) | `priceSeriesBySku` | Price-over-time series for the chart |
+| [`engine/csv.ts`](../../lib/gateway/engine/csv.ts) | `toCsv`, `orderLinesToCsv`, `skuSummaryToCsv`, `costsToCsv`, `parseCsv`, `parseCostImportCsv` | CSV encode/decode, shared by every export/import feature |
+| [`engine/report.ts`](../../lib/gateway/engine/report.ts) | `buildReport` | Assembles everything above into a `Report` |
 
 ## Data flow: `buildReport`'s pipeline
 
@@ -54,7 +54,7 @@ This is a straight-line pure function: no step performs I/O, and every step afte
 
 ## `buildReport`: assembling the `Report`
 
-`buildReport(snapshot, costs, view)` in [`engine/report.ts`](../../lib/middleware/engine/report.ts) is the sole entry point the dashboard calls (re-exported from `lib/middleware/index.ts`). Its steps, in order:
+`buildReport(snapshot, costs, view)` in [`engine/report.ts`](../../lib/gateway/engine/report.ts) is the sole entry point the dashboard calls (re-exported from `lib/gateway/index.ts`). Its steps, in order:
 
 1. **Unwrap** the opaque `Snapshot` back to `SnapshotData` (the only place allowed to).
 2. **Filter sources** by `view.sourceFilter` ("all" or an explicit id list).
@@ -199,11 +199,11 @@ One subtlety worth flagging for anyone modifying this area: **`buildSkuHistory` 
 
 ## Testing
 
-`scripts/test-engine.ts` is a hand-written fixture regression check (no test framework is configured in this repo — see [Testing & Deployment](./testing-and-deployment.md)) covering `computeMargins`, `summarizeBySku`, `stockValue`, `reconcileStock`, `priceSeriesBySku`, `buildAliasIndex`/`findPossibleDuplicates`, and the Walmart-specific `groupReconRows`/`estimateUnsettled`. It exists specifically to prove the `lib/middleware/` carve-out (phase 1 of the multi-marketplace plan) changed zero dollar figures. `scripts/test-csv-import.ts` covers `csv.ts` separately. Run both with `npm run test:engine` / `npm run test:csv`.
+`scripts/test-engine.ts` is a hand-written fixture regression check (no test framework is configured in this repo — see [Testing & Deployment](./testing-and-deployment.md)) covering `computeMargins`, `summarizeBySku`, `stockValue`, `reconcileStock`, `priceSeriesBySku`, `buildAliasIndex`/`findPossibleDuplicates`, and the Walmart-specific `groupReconRows`/`estimateUnsettled`. It exists specifically to prove the `lib/gateway/` carve-out (phase 1 of the multi-marketplace plan) changed zero dollar figures. `scripts/test-csv-import.ts` covers `csv.ts` separately. Run both with `npm run test:engine` / `npm run test:csv`.
 
 ## Related documentation
 
-- [Middleware Contract](./middleware-contract.md) — the `Report`/`Snapshot`/`CostInputs` types this layer produces and consumes
+- [Gateway Contract](./gateway-contract.md) — the `Report`/`Snapshot`/`CostInputs` types this layer produces and consumes
 - [Connectors](./connectors.md) — where `OrderLineSummary` rows actually come from
 - [Frontend](./frontend.md) — how every field documented here is rendered
-- [`docs/multi-marketplace-plan.md`](../multi-marketplace-plan.md) — "Inside the middleware," "Product identity," "Stock across channels"
+- [`docs/multi-marketplace-plan.md`](../multi-marketplace-plan.md) — "Inside the gateway," "Product identity," "Stock across channels"

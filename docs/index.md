@@ -13,7 +13,7 @@ This is the central map of the repository: what it is, how it's put together, an
 | If you want to... | Go to |
 |---|---|
 | Understand the whole system at a glance, with the main architecture diagram | [Architecture Overview](./systems/architecture.md) |
-| See exactly what the dashboard sees vs. what only the middleware/connectors see | [Middleware Contract](./systems/middleware-contract.md) |
+| See exactly what the dashboard sees vs. what only the gateway/connectors see | [Gateway Contract](./systems/gateway-contract.md) |
 | Understand how margin/profit/stock-value/price figures are actually calculated | [Engine](./systems/engine.md) |
 | Understand how Walmart (or a future marketplace) integration works | [Connectors](./systems/connectors.md) + [`docs/adding-a-marketplace.md`](./adding-a-marketplace.md) |
 | Understand the UI: tabs, wizard flow, mobile/PWA behavior, state | [Frontend / Dashboard](./systems/frontend.md) |
@@ -30,9 +30,9 @@ flowchart TB
     Repo["byRaf Distribution Tools"]
 
     Repo --> Frontend["Frontend / Dashboard\napp/(dashboard)/dashboard/"]
-    Repo --> Middleware["Middleware Contract\nlib/middleware/contract/, actions.ts, index.ts"]
-    Repo --> Engine["Engine (pure math)\nlib/middleware/engine/"]
-    Repo --> Connectors["Connectors\nlib/middleware/connectors/"]
+    Repo --> Gateway["Gateway Contract\nlib/gateway/contract/, actions.ts, index.ts"]
+    Repo --> Engine["Engine (pure math)\nlib/gateway/engine/"]
+    Repo --> Connectors["Connectors\nlib/gateway/connectors/"]
     Repo --> DataModel["Data Model (unused)\nlib/db/, drizzle/"]
     Repo --> Config["Configuration & Security\nnext.config.ts, eslint.config.mjs, .env.example"]
     Repo --> Testing["Testing & Deployment\nscripts/, package.json, Vercel"]
@@ -43,9 +43,9 @@ flowchart TB
     Frontend --> FE4["PriceChart.tsx — hand-built SVG chart"]
     Frontend --> FE5["InstallPrompt.tsx — PWA banner"]
 
-    Middleware --> M1["contract/index.ts — SourceDescriptor, Snapshot, Report, ..."]
-    Middleware --> M2["actions.ts — describeSources, listPeriods, fetchSnapshot"]
-    Middleware --> M3["index.ts — buildReport, parseCostCsv, exportCsv"]
+    Gateway --> M1["contract/index.ts — SourceDescriptor, Snapshot, Report, ..."]
+    Gateway --> M2["actions.ts — describeSources, listPeriods, fetchSnapshot"]
+    Gateway --> M3["index.ts — buildReport, parseCostCsv, exportCsv"]
 
     Engine --> E1["margins.ts — computeMargins, stockValue, reconcileStock"]
     Engine --> E2["identity.ts — SKU aliasing, duplicate detection"]
@@ -64,18 +64,18 @@ flowchart TB
 
 ## The one rule that shapes almost everything
 
-> **The dashboard never talks to a marketplace directly.** It talks only to `lib/middleware`. The middleware owns every marketplace connection, all normalization, and all of the math, and hands the dashboard finished, display-ready figures.
+> **The dashboard never talks to a marketplace directly.** It talks only to `lib/gateway`. The gateway owns every marketplace connection, all normalization, and all of the math, and hands the dashboard finished, display-ready figures.
 
-This is enforced by three independent mechanisms (ESLint import rule, `server-only` imports, and a text-scanning script) — see [Configuration & Security — the middleware import boundary](./systems/configuration-and-security.md#the-middleware-import-boundary) — and is the reason the codebase splits cleanly into the systems listed above. Full rationale: [`multi-marketplace-plan.md`](./multi-marketplace-plan.md).
+This is enforced by three independent mechanisms (ESLint import rule, `server-only` imports, and a text-scanning script) — see [Configuration & Security — the gateway import boundary](./systems/configuration-and-security.md#the-gateway-import-boundary) — and is the reason the codebase splits cleanly into the systems listed above. Full rationale: [`multi-marketplace-plan.md`](./multi-marketplace-plan.md).
 
 ## High-level architecture (see [Architecture Overview](./systems/architecture.md) for the full diagram and deployment view)
 
 ```mermaid
 flowchart LR
-    Browser["Seller's browser\n(DashboardClient)"] <-->|"Server Actions:\nlistPeriods, fetchSnapshot"| Middleware["lib/middleware/\n(contract, actions, engine)"]
-    Browser <-->|"buildReport()\n(pure, no network)"| Middleware
-    Middleware -->|"HTTPS, per-request,\nnever cached/logged"| Walmart[("Walmart\nMarketplace API")]
-    Middleware -.->|"schema exists,\nnot called by the app"| Neon[("Neon Postgres")]
+    Browser["Seller's browser\n(DashboardClient)"] <-->|"Server Actions:\nlistPeriods, fetchSnapshot"| Gateway["lib/gateway/\n(contract, actions, engine)"]
+    Browser <-->|"buildReport()\n(pure, no network)"| Gateway
+    Gateway -->|"HTTPS, per-request,\nnever cached/logged"| Walmart[("Walmart\nMarketplace API")]
+    Gateway -.->|"schema exists,\nnot called by the app"| Neon[("Neon Postgres")]
 ```
 
 ## Documentation map
@@ -85,7 +85,7 @@ flowchart LR
 | Page | Covers |
 |---|---|
 | [Architecture Overview](./systems/architecture.md) | Layered architecture, request-flow sequence diagram, deployment diagram, full directory map |
-| [Middleware Contract](./systems/middleware-contract.md) | Every type crossing the dashboard/middleware boundary (`SourceDescriptor`, `Snapshot`, `Report`, `CostInputs`, ...), the three server actions, `buildReport` |
+| [Gateway Contract](./systems/gateway-contract.md) | Every type crossing the dashboard/gateway boundary (`SourceDescriptor`, `Snapshot`, `Report`, `CostInputs`, ...), the three server actions, `buildReport` |
 | [Engine](./systems/engine.md) | Margin calculation, cost/stock model, SKU identity & aliasing, price-over-time series, CSV shapes and formula-injection guard |
 | [Connectors](./systems/connectors.md) | `MarketplaceConnector` base class, the registry pattern, the Walmart connector's real API quirks, the Demo fixture connector, known gaps |
 | [Frontend / Dashboard](./systems/frontend.md) | Component tree, wizard state machine, the six report tabs, price chart internals, PWA install prompt |
@@ -99,7 +99,7 @@ flowchart LR
 |---|---|
 | [`README.md`](../README.md) | User-facing product description: how the dashboard works, every tab, mobile/PWA behavior, privacy/security model, known limitations |
 | [`walmart-margin-tracker-plan.md`](../walmart-margin-tracker-plan.md) | The original V1 plan (persisted architecture) plus a "Current Build" section recording what's actually live vs. deferred |
-| [`multi-marketplace-plan.md`](./multi-marketplace-plan.md) | The middleware/connector split: goals, contract sketch, phases, decisions |
+| [`multi-marketplace-plan.md`](./multi-marketplace-plan.md) | The gateway/connector split: goals, contract sketch, phases, decisions |
 | [`adding-a-marketplace.md`](./adding-a-marketplace.md) | Step-by-step checklist for implementing a new connector |
 | [`walmart-api-notes.md`](./walmart-api-notes.md) | Verified Walmart Marketplace API behavior, field meanings, and every pagination/quirk gotcha found by testing against a live account |
 
@@ -114,8 +114,8 @@ flowchart LR
 | What services/marketplaces does this depend on? | [Connectors](./systems/connectors.md) (Walmart today; Amazon/eBay planned, not built) |
 | What config does a feature need? | [Configuration & Security — environment variables](./systems/configuration-and-security.md#environment-variables) |
 | What tests cover a given area? | [Testing & Deployment](./systems/testing-and-deployment.md#what-each-test-script-actually-verifies) |
-| What could break if I change `engine/margins.ts`? | [Engine](./systems/engine.md) (consumed by `report.ts`, re-exported through `lib/middleware/index.ts` into every dashboard tab) — run `npm run test:engine` |
-| What could break if I change something under `app/`? | [Configuration & Security — the middleware import boundary](./systems/configuration-and-security.md#the-middleware-import-boundary) — run `npm run check:boundary` and `npm run lint` |
+| What could break if I change `engine/margins.ts`? | [Engine](./systems/engine.md) (consumed by `report.ts`, re-exported through `lib/gateway/index.ts` into every dashboard tab) — run `npm run test:engine` |
+| What could break if I change something under `app/`? | [Configuration & Security — the gateway import boundary](./systems/configuration-and-security.md#the-gateway-import-boundary) — run `npm run check:boundary` and `npm run lint` |
 | How do I add a new marketplace? | [`adding-a-marketplace.md`](./adding-a-marketplace.md), backed by [Connectors](./systems/connectors.md) |
 | Why does a Postgres schema exist if the app doesn't use it? | [Data Model — status](./systems/data-model.md#status-provisioned-but-not-read-or-written-by-the-running-app) |
 | How does a deploy actually happen? | [Testing & Deployment — deployment](./systems/testing-and-deployment.md#deployment) |

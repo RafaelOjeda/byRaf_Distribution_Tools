@@ -1,18 +1,18 @@
 # Frontend / Dashboard
 
-> [Documentation Index](../index.md) · Up: [Architecture Overview](./architecture.md) · Related: [Middleware Contract](./middleware-contract.md) · [Engine](./engine.md)
+> [Documentation Index](../index.md) · Up: [Architecture Overview](./architecture.md) · Related: [Gateway Contract](./gateway-contract.md) · [Engine](./engine.md)
 
 ## Overview
 
 The entire product surface is one Next.js App Router route: `app/(dashboard)/dashboard/`. It is a three-step wizard (connect → pick periods → view data) that becomes, once data is loaded, a tabbed dashboard with five report views plus inline cost/inventory editing. Styling is a hand-rolled "classic Mac OS (System 1) black-and-white" theme built with Tailwind CSS 4 `@apply` utilities (see `app/globals.css`, not detailed further here — purely presentational).
 
-**The dashboard is marketplace-neutral by construction.** No file under `app/` imports a connector or `engine/*` directly, and no file names a marketplace — both facts are mechanically enforced (see [Configuration & Security](./configuration-and-security.md#the-middleware-import-boundary)). Every label, field, and figure the UI shows comes from the middleware's `SourceDescriptor`/`Report` data, not from hard-coded copy.
+**The dashboard is marketplace-neutral by construction.** No file under `app/` imports a connector or `engine/*` directly, and no file names a marketplace — both facts are mechanically enforced (see [Configuration & Security](./configuration-and-security.md#the-gateway-import-boundary)). Every label, field, and figure the UI shows comes from the gateway's `SourceDescriptor`/`Report` data, not from hard-coded copy.
 
 ## Responsibilities
 
 - Render the credential form, settlement-period picker, summary tiles, and six report tabs.
 - Hold every piece of user-entered state: pasted credentials, the fetched `Snapshot`, typed costs/box dimensions/aliases, the active tab, the source filter.
-- Call the two middleware server actions (`listPeriods`, `fetchSnapshot`) and the one pure function (`buildReport`) — nothing else reaches outside `app/`.
+- Call the two gateway server actions (`listPeriods`, `fetchSnapshot`) and the one pure function (`buildReport`) — nothing else reaches outside `app/`.
 - Provide CSV download buttons (client-side `Blob` + anchor download, nothing round-trips to a server).
 - Provide PWA install behavior (`InstallPrompt`) and mobile-first responsive layouts (card lists below `md`, tables above).
 
@@ -88,7 +88,7 @@ stateDiagram-v2
 | `connections` | `Record<sourceId, Record<fieldKey, string>>` | Pasted credentials, per source |
 | `periodsBySource` | `Record<sourceId, PeriodList>` | Result of `listPeriods` |
 | `selectedPeriods` | `Record<sourceId, Set<string>>` | Checked periods per source |
-| `snapshot` | `Snapshot \| null` | Opaque result of `fetchSnapshot` — see [Middleware Contract](./middleware-contract.md#the-snapshot-brand) |
+| `snapshot` | `Snapshot \| null` | Opaque result of `fetchSnapshot` — see [Gateway Contract](./gateway-contract.md#the-snapshot-brand) |
 | `sourceFilter` | `string[] \| "all"` | Which connected sources' data to include in the report |
 | `inputs` | `Record<sku, Partial<Record<SkuField, string>>>` | Raw *string* box-dimension/box-cost fields, keyed by normalized SKU |
 | `lotDrafts` | `Record<sku, LotDraft[]>` | Raw *string* qty/unitCost pairs per purchase batch |
@@ -117,7 +117,7 @@ sequenceDiagram
     Report->>UI: new Report -> re-render
 ```
 
-Because `snapshot` doesn't change, this entire chain runs with **zero network calls** — the responsiveness the two-step fetch/compute split ([Middleware Contract](./middleware-contract.md#buildreport--the-pure-step)) exists to guarantee.
+Because `snapshot` doesn't change, this entire chain runs with **zero network calls** — the responsiveness the two-step fetch/compute split ([Gateway Contract](./gateway-contract.md#buildreport--the-pure-step)) exists to guarantee.
 
 ## Tabs
 
@@ -137,7 +137,7 @@ Every tab follows the same **mobile-first pattern**: a `<ul>` of cards rendered 
 The one tab that mutates state rather than just displaying it. Two input paths converge on the same state:
 
 1. **Manual entry** — `CostLotsEditor` (batch qty × unit cost rows) and box-dimension inputs, wired through `setField`/`addLot`/`updateLot`/`removeLot`/`aliasDrafts`.
-2. **CSV import** — `handleImportFile` reads the file, calls `parseCostCsv` (from `lib/middleware`, i.e. `engine/csv.ts`'s `parseCostImportCsv`), and stores the result in `importPreview` *without touching any other state*. `ImportPreviewCard` shows stats/warnings/errors; only clicking "Apply import" (`applyImport`) overwrites `inputs`/`lotDrafts`/`aliasDrafts` — see [Engine — CSV shapes](./engine.md#csv-shapes-csvts) for the parser itself.
+2. **CSV import** — `handleImportFile` reads the file, calls `parseCostCsv` (from `lib/gateway`, i.e. `engine/csv.ts`'s `parseCostImportCsv`), and stores the result in `importPreview` *without touching any other state*. `ImportPreviewCard` shows stats/warnings/errors; only clicking "Apply import" (`applyImport`) overwrites `inputs`/`lotDrafts`/`aliasDrafts` — see [Engine — CSV shapes](./engine.md#csv-shapes-csvts) for the parser itself.
 
 "Export costs" (`costsToCsv`) doubles as an import template: exporting with nothing entered still lists every currently loaded SKU with blank batch columns, ready to fill in and re-import — a genuine round trip.
 
@@ -170,7 +170,7 @@ Shown on the **connect screen**, before any credentials are entered, so it's vis
 
 ## Related documentation
 
-- [Middleware Contract](./middleware-contract.md) — every type this UI renders (`Report`, `SourceDescriptor`, `Snapshot`)
+- [Gateway Contract](./gateway-contract.md) — every type this UI renders (`Report`, `SourceDescriptor`, `Snapshot`)
 - [Engine](./engine.md) — how the figures shown in every tab are actually computed
 - [Configuration & Security](./configuration-and-security.md) — the import boundary that keeps this layer marketplace-neutral, and why nothing here is persisted
 - [`README.md`](../../README.md) — the user-facing description of every tab and the mobile/PWA behavior, from the seller's point of view

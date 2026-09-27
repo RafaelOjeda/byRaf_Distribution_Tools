@@ -1,4 +1,4 @@
-import { SHIPPING_PCT_ALERT, SHIPPING_PCT_WARN, type SkuSummary } from "@/lib/middleware";
+import { SHIPPING_PCT_ALERT, SHIPPING_PCT_WARN, type SkuSummary } from "@/lib/gateway";
 import { money } from "../utils/format";
 import { shipPctClass } from "../utils/shipping";
 import { Fig } from "./shared/Fig";
