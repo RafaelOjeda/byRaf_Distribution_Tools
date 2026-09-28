@@ -1,5 +1,6 @@
 import { normalizeSku, type OrderLineSummary } from "../../engine/types";
 import { settlementKey, type SkuHistory } from "../../engine/margins";
+import type { AccountCharge } from "../../contract";
 import type { Order } from "./orders";
 import type { ReconRow } from "./recon";
 
@@ -9,14 +10,40 @@ function toIsoDate(mdy: string | undefined): string | undefined {
   return m ? `${m[3]}-${m[1]}-${m[2]}` : undefined;
 }
 
-type Component = "revenue" | "commission" | "shipping" | "tax" | "otherFees";
+type Component =
+  | "revenue"
+  | "commission"
+  | "shipping"
+  | "tax"
+  | "otherFees"
+  | "refunds";
 
 /**
- * Categories confirmed against live settlement data 2026-09-23. Shipping
- * is matched on description rather than Amount Type, because Walmart
- * files label charges under the generic "Fee/Reimbursement" type.
+ * Matches Walmart's documented refund/return vocabulary as best we can
+ * guess it, since no refund or return row has ever actually been observed
+ * against a live account (see docs/walmart-api-notes.md, "Still
+ * unverified"). Checked ahead of the "Product Price"/"Commission on
+ * Product" matches below so a refund that reuses those same Amount Type
+ * labels (reversing a sale rather than adding a new one) lands in
+ * `refunds`, not back in revenue/commission - which would otherwise skew
+ * buildSkuHistory's commission-rate learning for that SKU.
  */
-function classify(amountType: string, description: string): Component {
+function isRefundLike(transactionType: string, amountType: string, description: string): boolean {
+  return /refund|return/i.test(`${transactionType} ${amountType} ${description}`);
+}
+
+/**
+ * Categories confirmed against live settlement data 2026-09-23, except
+ * `refunds` (best-effort - see `isRefundLike`). Shipping is matched on
+ * description rather than Amount Type, because Walmart files label
+ * charges under the generic "Fee/Reimbursement" type.
+ */
+function classify(
+  transactionType: string,
+  amountType: string,
+  description: string
+): Component {
+  if (isRefundLike(transactionType, amountType, description)) return "refunds";
   if (amountType === "Product Price") return "revenue";
   if (amountType === "Commission on Product") return "commission";
   if (amountType.startsWith("Product tax")) return "tax";
@@ -25,19 +52,45 @@ function classify(amountType: string, description: string): Component {
 }
 
 /**
- * Groups raw recon rows into one summary per order line. Rows with no
- * Purchase Order # (account-level rows like PaymentSummary, or WFS
- * storage fees) are dropped here - they don't belong to a single line.
- * (WFS storage fees becoming an `AccountCharge` the engine can show is
- * tracked as a known gap - see docs/multi-marketplace-plan.md.)
+ * Groups raw recon rows into one summary per order line, plus any
+ * account-level charge that doesn't belong to one. Rows with no Purchase
+ * Order # used to be dropped outright; now only the account-level deposit
+ * summary row (`PaymentSummary`, which carries no order info at all) is
+ * skipped, and everything else PO-less - WFS storage fees, and any
+ * refund/return adjustment that isn't tied back to an order line - becomes
+ * an `AccountCharge` instead of silently vanishing. There's no live
+ * signal yet to tell a PO-less refund apart from a PO-less storage fee,
+ * so all of them land under the generic "adjustment" kind for now (see
+ * docs/multi-marketplace-plan.md, "AccountCharge closes a known gap").
  */
-export function groupReconRows(rows: ReconRow[]): OrderLineSummary[] {
+export function groupReconRows(
+  rows: ReconRow[]
+): { lines: OrderLineSummary[]; charges: AccountCharge[] } {
   const groups = new Map<string, OrderLineSummary>();
+  const charges: AccountCharge[] = [];
 
   for (const row of rows) {
     const po = row["Purchase Order #"];
     const line = row["Purchase Order line #"];
-    if (!po || !line) continue;
+    const amount = parseFloat(row["Amount"]) || 0;
+
+    if (!po || !line) {
+      if (row["Transaction Type"] !== "PaymentSummary") {
+        charges.push({
+          source: "walmart",
+          // A raw row doesn't say which settlement file it came from, so
+          // this is the row's own posted date, not the MMDDYYYY period id
+          // listPeriods() hands out - close enough for display, not for
+          // matching back to a specific period.
+          periodId: toIsoDate(row["Transaction Posted Timestamp"]) ?? "",
+          kind: "adjustment",
+          description:
+            row["Transaction Description"] || row["Amount Type"] || "Adjustment",
+          amount,
+        });
+      }
+      continue;
+    }
 
     const key = `${po}::${line}`;
     let group = groups.get(key);
@@ -57,14 +110,15 @@ export function groupReconRows(rows: ReconRow[]): OrderLineSummary[] {
         shipping: 0,
         tax: 0,
         otherFees: 0,
+        refunds: 0,
         netAmount: 0,
       };
       groups.set(key, group);
     }
 
-    const amount = parseFloat(row["Amount"]) || 0;
-    group[classify(row["Amount Type"], row["Transaction Description"])] +=
-      amount;
+    group[
+      classify(row["Transaction Type"], row["Amount Type"], row["Transaction Description"])
+    ] += amount;
     group.netAmount += amount;
 
     const posted = toIsoDate(row["Transaction Posted Timestamp"]);
@@ -82,7 +136,7 @@ export function groupReconRows(rows: ReconRow[]): OrderLineSummary[] {
     }
   }
 
-  return [...groups.values()];
+  return { lines: [...groups.values()], charges };
 }
 
 const SHIP_NODE_LABELS: Record<string, string> = {
@@ -155,6 +209,10 @@ export function estimateUnsettled(
         shipping,
         tax: 0,
         otherFees,
+        // Returns happen after delivery, which is after settlement in
+        // every case observed so far, so an unsettled order has no refund
+        // signal to read from the Orders API.
+        refunds: 0,
         netAmount: revenue + commission + shipping + otherFees,
       });
     }

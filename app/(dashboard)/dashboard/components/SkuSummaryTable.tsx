@@ -60,6 +60,12 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
               {s.lines === 1 ? "" : "s"}
               {s.estimatedLines > 0 && ` (${s.estimatedLines} est.)`}
               {s.noEstimateLines > 0 && ` · ${s.noEstimateLines} not estimable`}
+              {s.refundedLines > 0 && (
+                <span className="text-amber-600">
+                  {" "}
+                  · {s.refundedLines} refunded
+                </span>
+              )}
             </p>
 
             {s.hasMoney ? (
@@ -68,7 +74,12 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                 <Fig label="Avg price">
                   {s.avgPrice === null ? dash : money(s.avgPrice)}
                 </Fig>
-                <Fig label="Net">{money(t.netAmount)}</Fig>
+                <Fig
+                  label="Net"
+                  title={t.refunds !== 0 ? `Includes ${money(t.refunds)} refunded` : undefined}
+                >
+                  {money(t.netAmount)}
+                </Fig>
                 <Fig label="Commission">
                   <span className="text-red-600">{money(t.commission)}</span>
                 </Fig>
@@ -172,7 +183,7 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                 <td className="pr-3 text-right">{s.units}</td>
                 <td
                   className="pr-3 text-right"
-                  title={`${s.settledLines} settled, ${s.estimatedLines} estimated${s.noEstimateLines > 0 ? `, ${s.noEstimateLines} not estimable` : ""}`}
+                  title={`${s.settledLines} settled, ${s.estimatedLines} estimated${s.noEstimateLines > 0 ? `, ${s.noEstimateLines} not estimable` : ""}${s.refundedLines > 0 ? `, ${s.refundedLines} refunded` : ""}`}
                 >
                   {s.lines}
                   {s.estimatedLines > 0 && (
@@ -181,6 +192,7 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                       ({s.estimatedLines} est.)
                     </span>
                   )}
+                  {s.refundedLines > 0 && <span className="ml-1 text-amber-600">↩</span>}
                 </td>
                 <td className="pr-3 text-right" title={noMoneyTitle}>
                   {s.avgPrice === null ? dash : money(s.avgPrice)}
@@ -206,7 +218,14 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                 >
                   {pct === null ? dash : `${(pct * 100).toFixed(1)}%`}
                 </td>
-                <td className="pr-3 text-right" title={noMoneyTitle}>
+                <td
+                  className="pr-3 text-right"
+                  title={
+                    s.hasMoney && t.refunds !== 0
+                      ? `Includes ${money(t.refunds)} refunded`
+                      : noMoneyTitle
+                  }
+                >
                   {s.hasMoney ? money(t.netAmount) : dash}
                 </td>
                 <td

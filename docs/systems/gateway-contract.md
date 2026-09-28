@@ -155,7 +155,7 @@ Currently only `sourceFilter` is wired up in the UI (the source filter chips abo
 
 Two supporting types worth calling out:
 
-- **`AccountCharge`** — a charge that belongs to no single order line (storage, subscriptions, ads, adjustments). This closes a gap the Walmart connector's `groupReconRows` leaves today: WFS storage fees have no Purchase Order # and are currently dropped rather than surfaced as an `AccountCharge` — see [Connectors — known gaps](./connectors.md#known-gaps-and-unverified-behavior).
+- **`AccountCharge`** — a charge that belongs to no single order line (storage, subscriptions, ads, adjustments). The Walmart connector's `groupReconRows` routes every PO-less row here (except the account-level `PaymentSummary` row, which is still dropped) — WFS storage fees and refund/return adjustments not tied to an order both land under the generic `"adjustment"` kind today, since there's no live signal yet to split them apart. See [Connectors — known gaps](./connectors.md#known-gaps-and-unverified-behavior).
 - **`ReportKpis`** — the five summary tiles' numbers (revenue, units, net, profit, stock value), each split into settled/estimated/uncosted counts so the tiles can show *why* a figure is partial rather than silently under-reporting.
 
 ## `describeSources` / `listPeriods` / `fetchSnapshot` — the three server actions

@@ -16,7 +16,14 @@ export function OrderLineCard({ m }: { m: MarginRow }) {
             {m.sourceLabel ? `${m.sourceLabel} · ` : ""}
             {est ? `Estimated · ordered ${m.orderDate}` : `Settled · ${m.postedDate ?? ""}`}
           </div>
-          <div className="font-bold break-words">{m.sku}</div>
+          <div className="font-bold break-words">
+            {m.sku}
+            {m.refunds !== 0 && (
+              <span className="ml-1 text-amber-600" title={`Refunded: ${money(m.refunds)}`}>
+                ↩
+              </span>
+            )}
+          </div>
           <div className="truncate text-xs text-sc-ink-2">
             {m.qty} × {m.itemName}
           </div>
@@ -57,7 +64,12 @@ export function OrderLineCard({ m }: { m: MarginRow }) {
             <span className="text-amber-600">—</span>
           )}
         </Fig>
-        <Fig label="Other">{money(m.tax + m.otherFees)}</Fig>
+        <Fig
+          label="Other"
+          title={m.refunds !== 0 ? `Includes ${money(m.refunds)} refunded` : undefined}
+        >
+          {money(m.tax + m.otherFees + m.refunds)}
+        </Fig>
       </dl>
       {est && m.estimateNote && (
         <p className="mt-2 text-xs text-sc-ink-2">{m.estimateNote}</p>

@@ -213,7 +213,7 @@ const orders: Order[] = [
   order("1000000000001", Date.UTC(2026, 8, 18), "SellerFulfilled", "WIDGET-A", 25),
 ];
 
-const settled = groupReconRows(reconRows);
+const { lines: settled } = groupReconRows(reconRows);
 const history = buildSkuHistory(settled);
 const settledKeys = new Set(
   settled.map((l) => settlementKey(l.purchaseOrderNo, l.sku))
@@ -400,6 +400,87 @@ check("stockValue pools quantity across sources and flags oversell risk", () => 
   assert.equal(stock.purchased, 10);
   assert.equal(stock.impliedOnHand, 7);
   assert.equal(stock.discrepancy, -1);
+});
+
+// ---------------------------------------------------------------------
+// Refunds/returns: best-effort classification (no real refund row has
+// ever been observed against a live Walmart account - see
+// docs/walmart-api-notes.md, "Still unverified"). These fixtures are
+// hand-built guesses at Walmart's vocabulary, not confirmed live data.
+// ---------------------------------------------------------------------
+const refundRows: ReconRow[] = [
+  // WIDGET-R: an ordinary sale, then a partial refund tied to the same
+  // PO+line, using the *same* Amount Types a sale uses (a real refund
+  // row's exact shape is unverified) but a distinct Transaction Type.
+  row({
+    "Purchase Order #": "3000000000001",
+    "Purchase Order line #": "1",
+    "Partner Item Id": "widget-r",
+    "Partner Item Name": "Widget R",
+    "Ship Qty": "1",
+    "Fulfillment Type": "SellerFulfilled",
+    "Amount Type": "Product Price",
+    Amount: "25.00",
+    "Transaction Posted Timestamp": "09/10/2026",
+    "Transaction Description": "Product Price",
+  }),
+  row({
+    "Purchase Order #": "3000000000001",
+    "Purchase Order line #": "1",
+    "Amount Type": "Commission on Product",
+    Amount: "-1.60",
+    "Transaction Posted Timestamp": "09/10/2026",
+    "Transaction Description": "Commission",
+  }),
+  row({
+    "Purchase Order #": "3000000000001",
+    "Purchase Order line #": "1",
+    "Transaction Type": "Return",
+    "Amount Type": "Product Price",
+    Amount: "-10.00",
+    "Transaction Posted Timestamp": "09/12/2026",
+    "Transaction Description": "Customer return - partial",
+  }),
+  // An account-level return adjustment with no Purchase Order # at all.
+  row({
+    "Transaction Type": "Adjustment",
+    "Amount Type": "Refund",
+    Amount: "-7.50",
+    "Transaction Posted Timestamp": "09/13/2026",
+    "Transaction Description": "Refund - goodwill credit",
+  }),
+  // A PaymentSummary row: still PO-less, but must not become a charge.
+  row({
+    "Transaction Type": "PaymentSummary",
+    Amount: "16.90",
+    "Transaction Posted Timestamp": "09/13/2026",
+  }),
+];
+
+const { lines: refundLines, charges: refundCharges } = groupReconRows(refundRows);
+
+check("groupReconRows: a refund tied to a PO+line lands in `refunds`, not revenue", () => {
+  const r = refundLines.find((l) => l.sku === "widget-r")!;
+  assert.equal(cents(r.revenue), 25); // unchanged by the refund
+  assert.equal(cents(r.commission), -1.6); // unchanged by the refund
+  assert.equal(cents(r.refunds), -10);
+  assert.equal(cents(r.netAmount), 13.4); // 25 - 1.6 - 10, still correct either way
+});
+
+check("groupReconRows: a PO-less adjustment becomes an AccountCharge, and PaymentSummary is still excluded", () => {
+  // Only the "Refund - goodwill credit" row becomes a charge; the
+  // PO-less PaymentSummary row in the fixture adds nothing.
+  assert.equal(refundCharges.length, 1);
+  assert.equal(refundCharges[0].kind, "adjustment");
+  assert.equal(refundCharges[0].description, "Refund - goodwill credit");
+  assert.equal(cents(refundCharges[0].amount), -7.5);
+});
+
+check("sumMargins: refunds flow through totals without double-counting netAmount", () => {
+  const refundMargins = computeMargins(assignSaleDates(refundLines, {}), {});
+  const totals = sumMargins(refundMargins);
+  assert.equal(cents(totals.refunds), -10);
+  assert.equal(cents(totals.netAmount), 13.4);
 });
 
 check("buildAliasIndex/resolveSku merge an alias SKU into its canonical key", () => {

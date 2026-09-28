@@ -1,7 +1,7 @@
 import "server-only";
 import type { SourceDescriptor } from "../../contract";
 import { buildSkuHistory, settlementKey } from "../../engine/margins";
-import { MarketplaceConnector, type AccountCharge } from "../base";
+import { MarketplaceConnector } from "../base";
 import { fetchWalmartToken } from "./auth";
 import { fetchInventory } from "./inventory";
 import { fetchCatalogPrices } from "./items";
@@ -67,11 +67,7 @@ export class WalmartConnector extends MarketplaceConnector {
   async fetchSettled(session: unknown, periodIds: string[]) {
     const token = session as string;
     const rows = await fetchRowsForDates(token, periodIds);
-    // WFS storage fees and other account-level rows have no Purchase
-    // Order # and are dropped by groupReconRows - see AccountCharge's
-    // doc comment in base.ts for the known gap this leaves.
-    const charges: AccountCharge[] = [];
-    return { lines: groupReconRows(rows), charges };
+    return groupReconRows(rows);
   }
 
   async fetchRecentOrders(session: unknown, sinceIsoDate: string) {
@@ -84,7 +80,7 @@ export class WalmartConnector extends MarketplaceConnector {
       fetchOrdersSince(token, sinceIsoDate),
     ]);
 
-    const settled = groupReconRows(settledRows);
+    const { lines: settled } = groupReconRows(settledRows);
     const settledKeys = new Set(
       settled.map((l) => settlementKey(l.purchaseOrderNo, l.sku))
     );

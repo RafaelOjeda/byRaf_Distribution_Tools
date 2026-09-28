@@ -73,8 +73,13 @@ Things worth knowing:
 - **The effective commission rate differs from the listed rate** on some products (an incentive program), so a flat category rate would be wrong. Compute it from revenue and commission actually charged.
 - **Reconciliation holds:** revenue + commission + shipping + tax + other, summed over every line in a period, equals the `PaymentSummary` row's `Total Payable` to the cent.
 - **Dates** (`Transaction Posted Timestamp`) are `MM/DD/YYYY`, and are the *settlement posting* date, about two days after the order.
-- Rows with no `Purchase Order #` do not belong to an order line. `PaymentSummary` is one. WFS storage fees are expected to arrive the same way (**unverified**, none observed).
-- Refunds and returns: **unverified**, none observed yet.
+- Rows with no `Purchase Order #` do not belong to an order line. `PaymentSummary` is one, and is still dropped outright (it's an account-level deposit summary, not a charge). Every other PO-less row - WFS storage fees, refund/return adjustments not tied back to an order - becomes an `AccountCharge` (kind `"adjustment"`) instead, since there's no live signal yet to tell those apart. See [Connectors - known gaps](./systems/connectors.md#known-gaps-and-unverified-behavior).
+
+### Refunds and returns (best-effort)
+
+No refund or return row has ever actually been observed against a live account, so `groupReconRows`' classification of one is an educated guess, not confirmed behavior - see `isRefundLike` in [`lib/gateway/connectors/walmart/normalize.ts`](../lib/gateway/connectors/walmart/normalize.ts). The guess: a row whose `Transaction Type`, `Amount Type`, or `Transaction Description` contains "refund" or "return" (case-insensitive) is treated as one, checked *before* the `Product Price`/`Commission on Product` matches above - so a refund that reuses those same Amount Type labels to reverse a sale still lands in a separate `refunds` bucket rather than being re-added to revenue/commission.
+
+This is deliberately conservative about correctness even if the category guess is wrong: every row's `Amount` is summed into a line's `netAmount` regardless of which bucket it's classified into, so profit is always right. What's genuinely unverified is only the *display* - whether a real refund row actually uses this vocabulary, and whether a PO-less refund is distinguishable from a PO-less WFS storage fee (right now, neither is - both become a generic `"adjustment"` `AccountCharge`). Update `isRefundLike` and the PO-less charge's `kind` once a real refund or return row is observed, and note the date here the way every other confirmed behavior above is dated.
 
 ## Orders
 
@@ -126,7 +131,7 @@ Paging is the least intuitive of the four:
 
 ## Still unverified
 
-- Refund and return rows in the settlement report
+- Refund and return rows in the settlement report - best-effort classification exists (see "Refunds and returns (best-effort)" above) but is unconfirmed against real data
 - WFS `Fulfillment Type` value, WFS fee types, and WFS storage fee rows
 - The Orders API cursor form, and `chargeAmount` semantics for quantities above 1
 - Inventory paging past 50 SKUs on a real account (verified only with small forced pages)

@@ -53,8 +53,8 @@ Settled and estimated totals are always shown separately, never blended.
 
 - **Costs are re-entered every session**, since nothing is saved. CSV import (Inventory & costs tab) makes bulk re-entry fast; saving them for good is the planned next step.
 - **Every page load re-fetches** the selected settlement history plus orders, inventory and catalog. It is quick at current volume but does not scale to years of history.
-- **WFS stock is not included** in inventory or stock value, and WFS storage fees are not surfaced yet.
-- **Refunds and returns are not handled** (none have been observed to design against).
+- **WFS stock is not included** in inventory or stock value.
+- **Refunds and returns are handled on a best-effort basis.** Profit and net figures are always correct even when a refund's category guess is wrong, because a refund is folded into the line's total before the split into revenue/commission/etc. happens. But no refund or return has ever actually been observed against a live account, so which rows get recognized as a refund - and which account-level charges are refunds vs. something else, like a WFS storage fee - is an educated guess, not confirmed behavior. See [docs/walmart-api-notes.md](docs/walmart-api-notes.md#refunds-and-returns-best-effort) once one shows up.
 - Shipping shown on estimated lines is an average, not the actual label cost. Walmart does not expose label cost before settlement.
 
 See [walmart-margin-tracker-plan.md](walmart-margin-tracker-plan.md) for design decisions and the roadmap, and [docs/walmart-api-notes.md](docs/walmart-api-notes.md) for what the Walmart API actually does. Support for more marketplaces (Amazon, then eBay) in one dashboard, behind a gateway layer the dashboard talks to instead of any marketplace, is planned in [docs/multi-marketplace-plan.md](docs/multi-marketplace-plan.md).

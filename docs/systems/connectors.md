@@ -168,7 +168,12 @@ Two important design choices here:
 ### Fee classification (`normalize.ts`)
 
 ```ts
-function classify(amountType: string, description: string): Component {
+function classify(
+  transactionType: string,
+  amountType: string,
+  description: string
+): Component {
+  if (isRefundLike(transactionType, amountType, description)) return "refunds";
   if (amountType === "Product Price") return "revenue";
   if (amountType === "Commission on Product") return "commission";
   if (amountType.startsWith("Product tax")) return "tax";
@@ -179,7 +184,9 @@ function classify(amountType: string, description: string): Component {
 
 Shipping is matched on **description text**, not `Amount Type`, because Walmart files shipping label charges under the generic `Adjustment` / `Fee/Reimbursement` type with a description like `Walmart Shipping Label Service Charge`. Anything unmatched falls into `otherFees` rather than being dropped — and because `netAmount` sums every row regardless of classification, **profit is correct even if a fee type is misclassified**; only the fee breakdown and channel label would be wrong (see [Engine — `computeMargins`](./engine.md#computemargins-per-line-profit)).
 
-**Rows with no Purchase Order # are dropped** by `groupReconRows` (account-level rows like `PaymentSummary`, and — expected but unverified — WFS storage fees). This is a known, explicitly tracked gap: see [Known gaps](#known-gaps-and-unverified-behavior) below.
+The `isRefundLike` check runs *first*, ahead of the revenue/commission matches, so a refund/return row that reuses those same Amount Type labels to reverse a sale lands in a separate `refunds` bucket instead of being re-added to revenue/commission — see [`walmart-api-notes.md` — Refunds and returns](../walmart-api-notes.md#refunds-and-returns-best-effort) for why this is a best-effort guess, not confirmed live behavior.
+
+**Rows with no Purchase Order #** used to be dropped outright by `groupReconRows`. Now only the account-level `PaymentSummary` row (a deposit summary with no order info at all) is skipped; everything else PO-less — WFS storage fees, and any refund/return adjustment not tied back to an order line — becomes an `AccountCharge` with kind `"adjustment"` instead. There's no live signal yet to tell those apart from each other, which is tracked as a known gap: see [Known gaps](#known-gaps-and-unverified-behavior) below.
 
 ### Pagination quirks (Walmart-specific, verified live)
 
@@ -220,8 +227,8 @@ See [`docs/adding-a-marketplace.md`](../adding-a-marketplace.md) for the full st
 
 These are tracked explicitly in the source rather than silently assumed correct — worth reading before extending this area:
 
-- **WFS storage fees would silently vanish.** `groupReconRows` drops any row with no Purchase Order #, which is exactly how WFS storage fees are expected to arrive (per Walmart's docs; **not yet observed live**, since the account this was built against is all seller-fulfilled). Once WFS activity appears, these costs need to become an `AccountCharge` instead of being dropped. See [`multi-marketplace-plan.md`](../multi-marketplace-plan.md#where-the-code-is-coupled-to-walmart-today).
-- **Refunds and returns are unhandled** — none have been observed against the live account this was built against, so there's nothing to design against yet.
+- **WFS storage fees and refund/return adjustments can't be told apart.** Both are PO-less rows that `groupReconRows` now turns into an `AccountCharge`, but both land under the same generic `"adjustment"` kind — there's no live signal yet to split them into more specific kinds like `"storage"`. WFS activity in particular is **not yet observed live**, since the account this was built against is all seller-fulfilled.
+- **Refund/return classification is best-effort, not confirmed live behavior.** No refund or return row has ever been observed against a live account, so `isRefundLike` (in `normalize.ts`) is an educated guess at Walmart's vocabulary. Profit is unaffected either way (`netAmount` sums every row regardless of classification); only the `refunds` bucket and the account-level charge's `kind` could be wrong. See [`walmart-api-notes.md` — Refunds and returns](../walmart-api-notes.md#refunds-and-returns-best-effort).
 - **The Orders API cursor form is unverified** — the test account never had more than one page of orders.
 - **`chargeAmount` semantics for quantity > 1 are unverified** — every observed order line has been quantity 1.
 - **Inventory paging past 50 SKUs is verified only by artificially forcing small page sizes**, not by a real account that size.

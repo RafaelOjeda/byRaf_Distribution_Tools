@@ -37,10 +37,11 @@ export function OrdersTab({
       <p className="text-sm text-sc-ink-2">
         Revenue − commission − shipping − other − your cost = profit. Fee
         columns are shown as the source reports them (negative = money
-        out). <span className="italic">Est.</span> rows are orders not
-        yet settled: revenue is exact, but commission and shipping are
-        projected from that SKU&apos;s settled history and switch to
-        exact figures once the order settles.
+        out); a ↩ next to a SKU means part of that line was refunded, and
+        the refund is folded into Other. <span className="italic">Est.</span>{" "}
+        rows are orders not yet settled: revenue is exact, but commission
+        and shipping are projected from that SKU&apos;s settled history
+        and switch to exact figures once the order settles.
       </p>
 
       <ul className="flex flex-col gap-3 md:hidden">
@@ -121,7 +122,17 @@ export function OrdersTab({
                     {est ? `Est. · ${m.orderDate?.slice(5)}` : "Settled"}
                   </td>
                   <td className="pr-3">{m.sourceLabel ?? "—"}</td>
-                  <td className="pr-3">{m.sku}</td>
+                  <td className="pr-3">
+                    {m.sku}
+                    {m.refunds !== 0 && (
+                      <span
+                        className="ml-1 text-amber-600"
+                        title={`Refunded: ${money(m.refunds)}`}
+                      >
+                        ↩
+                      </span>
+                    )}
+                  </td>
                   <td
                     className="max-w-[11rem] truncate pr-3"
                     title={m.itemName}
@@ -151,9 +162,9 @@ export function OrdersTab({
                   </td>
                   <td
                     className="pr-3 text-right"
-                    title={`Tax collected/withheld: ${money(m.tax)}`}
+                    title={`Tax collected/withheld: ${money(m.tax)}${m.refunds !== 0 ? ` · Refunded: ${money(m.refunds)}` : ""}`}
                   >
-                    {money(m.tax + m.otherFees)}
+                    {money(m.tax + m.otherFees + m.refunds)}
                   </td>
                   <td className="pr-3 text-right">
                     {m.noEstimate ? noEst : money(m.netAmount)}

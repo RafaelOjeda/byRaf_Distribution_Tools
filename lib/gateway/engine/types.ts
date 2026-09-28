@@ -46,6 +46,17 @@ export interface OrderLineSummary {
   shipping: number; // shipping label charges (negative)
   tax: number; // tax collected + withheld, normally nets to 0
   otherFees: number; // anything not matched above
+  /**
+   * Money reversed by a refund or return, kept separate from revenue/
+   * commission/shipping so those stay "as originally sold" (buildSkuHistory's
+   * commission-rate learning isn't skewed by refund noise). Best-effort:
+   * Walmart has never sent an observed refund/return row to test against
+   * (see docs/walmart-api-notes.md, "Still unverified"), so the row
+   * classification that fills this in is a guess at the vocabulary Walmart
+   * uses, not confirmed field values. Still always included in netAmount,
+   * so profit is correct even if the bucketing guess is wrong.
+   */
+  refunds: number;
 
   netAmount: number;
 }

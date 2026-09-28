@@ -130,7 +130,7 @@ interface StockLevel   { source: string; sku: string; onHand: number; availToSel
 interface Listing      { source: string; sku: string; price: number | null; isPublished: boolean; rawStatus: string }
 ```
 
-`AccountCharge` closes a known gap. Today `groupReconRows` drops every row that has no Purchase Order #, and that is exactly how WFS storage fees arrive.
+`AccountCharge` closes a known gap: `groupReconRows` now routes every row with no Purchase Order # here (the account-level `PaymentSummary` row aside) instead of dropping it, which is exactly how WFS storage fees are expected to arrive. The `refunds` field above is likewise implemented today in `lib/gateway/engine/types.ts`'s `OrderLineSummary`, ahead of the rest of this canonical model — see `docs/walmart-api-notes.md`, "Refunds and returns (best-effort)".
 
 ### Connectors: abstract base class (`connectors/base.ts`)
 

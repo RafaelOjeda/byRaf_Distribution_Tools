@@ -358,6 +358,8 @@ export interface SkuSummary {
   settledLines: number;
   estimatedLines: number;
   noEstimateLines: number;
+  /** Lines carrying a nonzero refund/return amount - see OrderLineSummary.refunds. */
+  refundedLines: number;
   /** false => every money column must render "—", never $0.00. */
   hasMoney: boolean;
   unitsCounted: number; // units behind the money figures
@@ -428,6 +430,7 @@ export function summarizeBySku(rows: MarginRow[]): SkuSummary[] {
         (r) => r.status === "estimated" && !r.noEstimate
       ).length,
       noEstimateLines: group.length - counted.length,
+      refundedLines: group.filter((r) => r.refunds !== 0).length,
       hasMoney,
       unitsCounted,
       avgPrice: unitsCounted > 0 ? totals.revenue / unitsCounted : null,
@@ -459,6 +462,7 @@ export function sumMargins(rows: MarginRow[]) {
       shipping: acc.shipping + r.shipping,
       tax: acc.tax + r.tax,
       otherFees: acc.otherFees + r.otherFees,
+      refunds: acc.refunds + r.refunds,
       netAmount: acc.netAmount + r.netAmount,
       itemCostTotal: acc.itemCostTotal + r.itemCostTotal,
       boxCostTotal: acc.boxCostTotal + r.boxCostTotal,
@@ -471,6 +475,7 @@ export function sumMargins(rows: MarginRow[]) {
       shipping: 0,
       tax: 0,
       otherFees: 0,
+      refunds: 0,
       netAmount: 0,
       itemCostTotal: 0,
       boxCostTotal: 0,

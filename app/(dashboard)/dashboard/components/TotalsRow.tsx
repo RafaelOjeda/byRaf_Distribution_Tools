@@ -37,6 +37,11 @@ export function TotalsCard({
           cost and profit aren&apos;t known yet.
         </p>
       )}
+      {totals.refunds !== 0 && (
+        <p className="mt-2 text-xs not-italic text-sc-ink-2">
+          Includes {money(totals.refunds)} refunded.
+        </p>
+      )}
     </li>
   );
 }
@@ -78,8 +83,11 @@ export function TotalsRow({
       <td className="py-2 pr-3 text-right text-red-600">
         {money(totals.shipping)}
       </td>
-      <td className="py-2 pr-3 text-right">
-        {money(totals.tax + totals.otherFees)}
+      <td
+        className="py-2 pr-3 text-right"
+        title={totals.refunds !== 0 ? `Includes ${money(totals.refunds)} refunded` : undefined}
+      >
+        {money(totals.tax + totals.otherFees + totals.refunds)}
       </td>
       <td className="py-2 pr-3 text-right">{money(totals.netAmount)}</td>
       <td

@@ -35,6 +35,7 @@ const SETTLED_LINES: Record<string, OrderLineSummary[]> = {
       shipping: -6,
       tax: 0,
       otherFees: 0,
+      refunds: 0,
       netAmount: 30,
     },
   ],
@@ -55,6 +56,7 @@ const SETTLED_LINES: Record<string, OrderLineSummary[]> = {
       shipping: -3,
       tax: 0,
       otherFees: 0,
+      refunds: 0,
       netAmount: 15,
     },
     {
@@ -73,7 +75,31 @@ const SETTLED_LINES: Record<string, OrderLineSummary[]> = {
       shipping: -9,
       tax: 0,
       otherFees: 0,
+      refunds: 0,
       netAmount: 70.2,
+    },
+    // A partial refund (goodwill credit for a damaged-in-transit unit) on
+    // an otherwise ordinary sale - the "refunds" bucket carries it, kept
+    // separate from revenue/commission so those still read as the sale
+    // that was actually made.
+    {
+      purchaseOrderNo: "D-10005",
+      purchaseOrderLine: "1",
+      sku: "DEMO-GADGET-2",
+      itemName: "Demo Gadget",
+      qty: 1,
+      fulfillmentType: "Merchant",
+      commissionRate: "12.0",
+      status: "settled",
+      noEstimate: false,
+      postedDate: "2026-09-25",
+      revenue: 30,
+      commission: -3.6,
+      shipping: -3,
+      tax: 0,
+      otherFees: 0,
+      refunds: -8,
+      netAmount: 15.4,
     },
   ],
 };
@@ -95,6 +121,15 @@ const CHARGES: Record<string, AccountCharge[]> = {
       kind: "advertising",
       description: "Sponsored placement",
       amount: -12,
+    },
+    // A return processed at the account level, with no order line to tie
+    // it back to - see groupReconRows' handling of PO-less rows.
+    {
+      source: "demo",
+      periodId: "2026-P2",
+      kind: "adjustment",
+      description: "Return adjustment (no linked order)",
+      amount: -12.99,
     },
   ],
 };
@@ -129,6 +164,7 @@ export function recentOrder(): { lines: OrderLineSummary[]; orderDates: Record<s
     shipping: -4.5,
     tax: 0,
     otherFees: 0,
+    refunds: 0,
     netAmount: 13.5,
   };
   return {
