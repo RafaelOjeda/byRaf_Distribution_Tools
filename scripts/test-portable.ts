@@ -6,9 +6,11 @@
  */
 import assert from "node:assert/strict";
 import { strToU8, zipSync } from "fflate";
+import writeExcelFile from "write-excel-file/universal";
 import {
   applyImport,
   exportCsvBundle,
+  exportWorkbook,
   parseImportFile,
   type PortableData,
 } from "../lib/gateway/engine/portable";
@@ -179,6 +181,47 @@ check("diff vs current inputs; merge keeps untouched SKUs, replace drops them", 
   assert.deepEqual(merged.Z, { boxCost: 5 });
   const replaced = applyImport(current, r.data.inputs, "replace");
   assert.equal("Z" in replaced, false);
+});
+
+check("XLSX workbook round-trips, incl. leading zeros, unicode and formula-looking SKUs", async () => {
+  const r = await parseImportFile(await exportWorkbook(sample, NOW));
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.format, "xlsx");
+  assert.deepEqual(r.data, sample);
+});
+
+check("XLSX and CSV bundle carry identical data", async () => {
+  const x = await parseImportFile(await exportWorkbook(sample, NOW));
+  const z = await parseImportFile(await exportCsvBundle(sample, NOW));
+  assert.deepEqual(x.data, z.data);
+  assert.deepEqual(x.stats, z.stats);
+});
+
+check("hand-edited workbook: numeric SKU cells, odd header case, extra sheet/column, blank rows", async () => {
+  const blob = await writeExcelFile([
+    {
+      sheet: "costs",
+      data: [
+        ["sku", "BATCH QTY", "Batch Unit Cost", "Notes"],
+        [123, 4, 2.5, "typed as a number"],
+        [null, null, null, null],
+        ["B-2", "6", 1, "qty typed as text"],
+      ],
+    },
+    { sheet: "Report - By SKU", data: [["SKU", "Net"], ["A", 1]] },
+  ]).toBlob();
+  const r = await parseImportFile(new Uint8Array(await blob.arrayBuffer()));
+  assert.deepEqual(r.errors, []);
+  assert.deepEqual(r.data.inputs, {
+    "123": { lots: [{ qty: 4, unitCost: 2.5 }] },
+    "B-2": { lots: [{ qty: 6, unitCost: 1 }] },
+  });
+});
+
+check("a non-xlsx zip-like or corrupt .xlsx is rejected, not thrown", async () => {
+  const bogus = zipOf({ "xl/workbook.xml": "<nope/>" });
+  const r = await parseImportFile(bogus);
+  assert.equal(r.errors.length > 0, true);
 });
 
 Promise.all(pending).then(() => console.log(`\n${passed} passed`));

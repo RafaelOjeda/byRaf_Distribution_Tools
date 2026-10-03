@@ -17,7 +17,14 @@ import {
 } from "./schema";
 import type { SkuInputs } from "../margins";
 import { classifyTable, csvToRawTable, sniffDelimiter } from "./tabular";
-import { MAX_FILE_BYTES, tablesToZip, zipNames, zipToRawTables } from "./zip";
+import { tablesToXlsx, xlsxToRawTables } from "./xlsx";
+import {
+  MAX_FILE_BYTES,
+  MAX_UNZIPPED_BYTES,
+  tablesToZip,
+  zipInfo,
+  zipToRawTables,
+} from "./zip";
 
 export {
   EMPTY_SETTINGS,
@@ -36,6 +43,13 @@ export async function exportCsvBundle(
   exportedAt?: string
 ): Promise<Uint8Array> {
   return tablesToZip(guardTables(dataToTables(data, exportedAt)));
+}
+
+export async function exportWorkbook(
+  data: PortableData,
+  exportedAt?: string
+): Promise<Uint8Array> {
+  return tablesToXlsx(dataToTables(data, exportedAt));
 }
 
 function failure(
@@ -78,9 +92,12 @@ export async function parseImportFile(
 
   try {
     if (isZip(bytes)) {
-      const names = await zipNames(bytes);
+      const { names, totalBytes } = await zipInfo(bytes);
       if (names.includes("xl/workbook.xml")) {
-        return failure("xlsx", "XLSX import is not available yet.");
+        if (totalBytes > MAX_UNZIPPED_BYTES) {
+          return failure("xlsx", "Workbook expands to too much data.");
+        }
+        return withDiff(tablesToData(await xlsxToRawTables(bytes)), "xlsx", current);
       }
       const { tables, problems } = await zipToRawTables(bytes);
       const r = withDiff(tablesToData(tables), "zip", current);

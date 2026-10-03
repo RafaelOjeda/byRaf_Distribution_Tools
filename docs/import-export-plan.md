@@ -1,6 +1,6 @@
 # Import / Export (XLSX + CSV) — Plan
 
-Status: **proposed, 2026-10-03.** Not started. Decisions so far are recorded at the bottom.
+Status: **in progress, 2026-10-03.** Phases 1–2 are implemented on `claude/import-export-plan`. Decisions so far are recorded at the bottom.
 
 ## Goal
 
@@ -105,7 +105,7 @@ export interface PortableImportResult {
 - **Headers are matched case-insensitively and by name, not position.** Extra columns are ignored, and missing optional columns are treated as blank. This is the same rule as today.
 - **SKUs are always text.** XLSX writes them as string cells, so `00123` survives. CSV quotes nothing extra, but import never coerces SKUs to numbers.
 - **Numbers:** plain decimals with a `.` separator, and no currency symbols in the file. Import tolerates a leading `$` and thousands commas, with a warning.
-- **Formula guard:** the same `guardFormula` rule applies to XLSX text cells as to CSV. Import strips the leading `'`.
+- **Formula guard:** CSV text cells use the existing `guardFormula` rule, and import strips the leading `'`. XLSX text is written as typed string cells, which a spreadsheet doesn't execute, so no apostrophe is added there (import still strips one if present).
 - **CSV bundle:** files are named after their table (`costs.csv`, `boxes.csv`, `aliases.csv`, `settings.csv`, `meta.csv`), UTF-8 with BOM and CRLF, as now.
 - **Single-table CSV import:** the table is detected from its headers, so a lone `costs.csv` or the legacy cost CSV both work.
 - **Limits:** 2 MB per CSV and 5,000 rows per table, as today. An XLSX or zip upload is capped at 5 MB compressed. Unzipping is bounded, with total uncompressed size ≤ 20 MB, to stop zip bombs.
@@ -151,7 +151,7 @@ Each phase is a separate PR-sized commit. Phase 1 is useful on its own: it deliv
 - Round trip for each format: `PortableData` → file → `PortableData` gives deep-equal output, including multi-batch SKUs, aliases, and SKUs with leading zeros or unicode.
 - The legacy cost CSV, including the `"; "` alias cell, still imports.
 - A single-table CSV is detected by its headers.
-- Formula-guarded cells (`=`, `+`, `-`, `@`) are escaped on export and restored on import.
+- Formula-looking SKUs (`=`, `+`, `-`, `@`) survive a round trip in every format (guarded in CSV, typed text in XLSX).
 - Rejections: unknown `schema_version`, oversized file, zip bomb, a non-xlsx file renamed `.xlsx`, missing `SKU` column.
 - Merge vs Replace produce the expected state and diff.
 - Report sheets are present on export and ignored on import.

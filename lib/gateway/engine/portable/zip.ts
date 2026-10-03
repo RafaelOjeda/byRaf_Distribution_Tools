@@ -10,16 +10,21 @@ export const MAX_UNZIPPED_BYTES = 20 * 1024 * 1024; // zip-bomb guard
 const MAX_CSV_BYTES = 2 * 1024 * 1024;
 const MAX_ENTRIES = 50;
 
-export async function zipNames(bytes: Uint8Array): Promise<string[]> {
+/** Lists a zip's entries and their inflated size without inflating anything. */
+export async function zipInfo(
+  bytes: Uint8Array
+): Promise<{ names: string[]; totalBytes: number }> {
   const { unzipSync } = await import("fflate");
   const names: string[] = [];
+  let totalBytes = 0;
   unzipSync(bytes, {
     filter: (f) => {
       names.push(f.name);
+      totalBytes += f.originalSize;
       return false; // list only, inflate nothing
     },
   });
-  return names;
+  return { names, totalBytes };
 }
 
 export async function tablesToZip(

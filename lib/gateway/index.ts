@@ -37,6 +37,7 @@ export {
   applyImport,
   diffInputs,
   exportCsvBundle,
+  exportWorkbook,
   parseImportFile,
   type PortableData,
   type PortableDiff,
