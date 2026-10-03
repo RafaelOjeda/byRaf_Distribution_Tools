@@ -1,20 +1,16 @@
-import { Fragment, type ChangeEvent, type Dispatch, type RefObject, type SetStateAction } from "react";
+import { Fragment, type Dispatch, type SetStateAction } from "react";
 import {
   DIM_DIVISOR,
   averageUnitCost,
-  costsToCsv,
   cubicInches,
   dimWeight,
   reconcileStock,
-  type CostImportResult,
   type CostInputs,
   type Report,
-  type SkuInputs,
 } from "@/lib/gateway";
 import { BOX_FIELDS, type LotDraft, type SkuField } from "../../types";
-import { downloadCsv, money } from "../../utils/format";
+import { money } from "../../utils/format";
 import { PanelHeader } from "../shared/PanelHeader";
-import { ImportPreviewCard } from "../shared/ImportPreviewCard";
 import { InventoryCard } from "../InventoryCard";
 import { CostLotsEditor } from "../CostLotsEditor";
 
@@ -27,17 +23,12 @@ export function InventoryTab({
   lotDrafts,
   expanded,
   aliasDrafts,
-  importPreview,
-  importFileRef,
   setField,
   addLot,
   updateLot,
   removeLot,
   toggleExpanded,
   setAliasDrafts,
-  handleImportFile,
-  applyImport,
-  cancelImport,
 }: {
   skus: string[];
   parsedInputs: CostInputs;
@@ -47,67 +38,25 @@ export function InventoryTab({
   lotDrafts: Record<string, LotDraft[]>;
   expanded: Set<string>;
   aliasDrafts: Record<string, string>;
-  importPreview: CostImportResult | null;
-  importFileRef: RefObject<HTMLInputElement | null>;
   setField: (sku: string, field: SkuField, value: string) => void;
   addLot: (sku: string) => void;
   updateLot: (sku: string, index: number, field: keyof LotDraft, value: string) => void;
   removeLot: (sku: string, index: number) => void;
   toggleExpanded: (sku: string) => void;
   setAliasDrafts: Dispatch<SetStateAction<Record<string, string>>>;
-  handleImportFile: (e: ChangeEvent<HTMLInputElement>) => void;
-  applyImport: () => void;
-  cancelImport: () => void;
 }) {
   return (
     <>
       <PanelHeader
         title="Inventory and costs"
-        action={
-          <div className="flex gap-2">
-            <button
-              onClick={() =>
-                downloadCsv("costs", costsToCsv(skus, parsedInputs as Record<string, SkuInputs>))
-              }
-              disabled={skus.length === 0}
-              className="sc-btn"
-              title="Downloads every SKU's purchase batches and box info as a CSV - blank if nothing entered yet, so it also works as a fill-in template."
-            >
-              Export costs
-            </button>
-            <button
-              onClick={() => importFileRef.current?.click()}
-              className="sc-btn"
-            >
-              Import CSV
-            </button>
-            <input
-              ref={importFileRef}
-              type="file"
-              accept=".csv,text/csv"
-              onChange={handleImportFile}
-              className="hidden"
-            />
-          </div>
-        }
       >
-        Not saved — re-enter each session. Add a batch for each price you
+        Not saved automatically — use Export above to keep a file, and
+        Import to load it back next session. Add a batch for each price you
         bought an item at, including units already sold; cost per unit is
         the quantity-weighted average across batches. &ldquo;Left&rdquo;
         is purchased − sold and should match the source&apos;s on-hand
         count.
       </PanelHeader>
-      {importPreview && (
-        <ImportPreviewCard
-          preview={importPreview}
-          existingSkuCount={
-            new Set([...Object.keys(inputs), ...Object.keys(lotDrafts)]).size
-          }
-          onApply={applyImport}
-          onCancel={cancelImport}
-        />
-      )}
-
       {/* Phone: one card per SKU. Tables take over from md up. */}
       <ul className="flex flex-col gap-3 md:hidden">
         {skus.map((sku) => {

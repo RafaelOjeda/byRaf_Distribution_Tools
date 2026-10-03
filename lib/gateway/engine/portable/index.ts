@@ -60,6 +60,7 @@ function failure(
     data: { inputs: {}, settings: EMPTY_SETTINGS },
     format,
     schemaVersion: 1,
+    hasSettings: false,
     warnings: [],
     errors: [{ table: "", row: 0, message }],
     stats: { skus: 0, batches: 0, boxed: 0, aliased: 0, skippedRows: 0 },
@@ -132,6 +133,7 @@ function parseSingleCsv(
       {
         data: { inputs: legacy.inputs, settings: EMPTY_SETTINGS },
         schemaVersion: 1,
+        hasSettings: false,
         warnings: legacy.warnings,
         errors: legacy.errors.map((e) => ({ table: "Costs", ...e })),
         stats: legacy.stats,

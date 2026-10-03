@@ -70,6 +70,8 @@ export interface PortableImportResult {
     aliased: number;
     skippedRows: number;
   };
+  /** The file carried a Settings table, so `data.settings` is the user's, not the default. */
+  hasSettings: boolean;
   /** Only filled when the caller passes the current inputs. */
   diff: PortableDiff;
 }
@@ -196,6 +198,7 @@ interface Collector {
   skippedRows: number;
   batches: number;
   settings: PortableSettings;
+  hasSettings: boolean;
   schemaVersion: number;
 }
 
@@ -385,6 +388,7 @@ export function tablesToData(
     skippedRows: 0,
     batches: 0,
     settings: { selectedPeriods: {}, sourceFilter: "all" },
+    hasSettings: !!tables.settings,
     schemaVersion: 1, // a file with no Meta is treated as v1
   };
   // Meta first: a newer file than we understand is rejected outright.
@@ -423,6 +427,7 @@ function finish(c: Collector): Omit<PortableImportResult, "format" | "diff"> {
   return {
     data: { inputs: c.inputs, settings: c.settings },
     schemaVersion: c.schemaVersion,
+    hasSettings: c.hasSettings,
     warnings: c.warnings,
     errors: c.errors,
     stats: {

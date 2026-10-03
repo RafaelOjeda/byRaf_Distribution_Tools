@@ -8,21 +8,29 @@ import {
   useState,
 } from "react";
 import {
+  applyImport as applyPortableImport,
   buildReport,
+  costsToCsv,
+  exportCsvBundle,
+  exportWorkbook,
   normalizeSku,
-  parseCostCsv,
-  type CostImportResult,
+  parseImportFile,
   type CostInputs,
   type CostLot,
+  type PortableData,
+  type PortableImportResult,
   type Report,
   type SkuCostInputs,
+  type SkuInputs,
   type Snapshot,
   type SourceDescriptor,
 } from "@/lib/gateway";
 import { fetchSnapshot, listPeriods } from "@/lib/gateway/actions";
 import InstallPrompt from "./InstallPrompt";
-import { money } from "./utils/format";
+import { downloadBytes, downloadCsv, money } from "./utils/format";
 import { KpiTile } from "./components/shared/KpiTile";
+import { ImportPreviewCard } from "./components/shared/ImportPreviewCard";
+import { SaveLoadControls, type ExportKind } from "./components/shared/SaveLoadControls";
 import { InventoryTab } from "./components/tabs/InventoryTab";
 import { StockTab } from "./components/tabs/StockTab";
 import { FeesTab } from "./components/tabs/FeesTab";
@@ -61,9 +69,15 @@ export default function DashboardClient({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [importPreview, setImportPreview] = useState<CostImportResult | null>(
+  const [importPreview, setImportPreview] = useState<PortableImportResult | null>(
     null
   );
+  // Periods from an imported file, applied (where still offered) the next
+  // time the period list loads.
+  const [pendingPeriods, setPendingPeriods] = useState<Record<string, string[]> | null>(
+    null
+  );
+  const [periodsNotice, setPeriodsNotice] = useState<string | null>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
 
   function setCredential(sourceId: string, key: string, value: string) {
@@ -109,45 +123,6 @@ export default function DashboardClient({
     }));
   }
 
-  async function handleImportFile(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-selecting the same file after a fix
-    if (!file) return;
-    const text = await file.text();
-    setImportPreview(parseCostCsv(text));
-  }
-
-  // Replaces all cost/box inputs with what the file contained - the
-  // preview step is the confirmation, so this doesn't ask again.
-  function applyImport() {
-    if (!importPreview) return;
-    const nextInputs: typeof inputs = {};
-    const nextLotDrafts: typeof lotDrafts = {};
-    const nextAliasDrafts: typeof aliasDrafts = {};
-    for (const [sku, parsed] of Object.entries(importPreview.inputs)) {
-      const fields: Partial<Record<SkuField, string>> = {};
-      for (const { key } of BOX_FIELDS) {
-        const v = parsed[key];
-        if (v !== undefined) fields[key] = String(v);
-      }
-      nextInputs[sku] = fields;
-      if (parsed.lots?.length) {
-        nextLotDrafts[sku] = parsed.lots.map((l) => ({
-          qty: String(l.qty),
-          unitCost: String(l.unitCost),
-        }));
-      }
-      if (parsed.aliasSkus?.length) {
-        nextAliasDrafts[sku] = parsed.aliasSkus.join(", ");
-      }
-    }
-    setInputs(nextInputs);
-    setLotDrafts(nextLotDrafts);
-    setAliasDrafts(nextAliasDrafts);
-    setExpanded(new Set(Object.keys(nextLotDrafts)));
-    setImportPreview(null);
-  }
-
   function cancelImport() {
     setImportPreview(null);
   }
@@ -180,6 +155,7 @@ export default function DashboardClient({
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setImportPreview(null);
     const result = await listPeriods(connections);
     setLoading(false);
     setPeriodsBySource(result);
@@ -194,15 +170,28 @@ export default function DashboardClient({
       );
       return;
     }
-    // Default: everything selected for each source that listed periods.
+    // Default: everything selected for each source that listed periods -
+    // unless an imported file saved a selection, in which case use the
+    // part of it that's still offered.
+    let stale = false;
     setSelectedPeriods(
       Object.fromEntries(
-        Object.entries(result).map(([id, p]) => [
-          id,
-          new Set(p.periods.map((period) => period.id)),
-        ])
+        Object.entries(result).map(([id, p]) => {
+          const available = p.periods.map((period) => period.id);
+          const saved = pendingPeriods?.[id];
+          if (!saved) return [id, new Set(available)];
+          const kept = available.filter((a) => saved.includes(a));
+          if (kept.length < saved.length) stale = true;
+          return [id, new Set(kept.length > 0 ? kept : available)];
+        })
       )
     );
+    setPeriodsNotice(
+      stale
+        ? "Some periods in your imported file are no longer offered, so they were left out."
+        : null
+    );
+    setPendingPeriods(null);
     setStep("periods");
   }
 
@@ -237,6 +226,8 @@ export default function DashboardClient({
   function startOver() {
     clearData();
     setStep("connect");
+    setPendingPeriods(null);
+    setPeriodsNotice(null);
     setConnections({});
     setPeriodsBySource({});
     setSelectedPeriods({});
@@ -297,6 +288,110 @@ export default function DashboardClient({
     return m;
   }, [liveReport]);
 
+  async function handleImportFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file after a fix
+    if (!file) return;
+    setError(null);
+    setImportPreview(
+      await parseImportFile(
+        new Uint8Array(await file.arrayBuffer()),
+        parsedInputs as Record<string, SkuInputs>
+      )
+    );
+  }
+
+  // Merge keeps what the file doesn't mention; replace starts from empty.
+  // The preview step is the confirmation, so this doesn't ask again.
+  function confirmImport(mode: "merge" | "replace") {
+    if (!importPreview) return;
+    const { data, hasSettings } = importPreview;
+    const next = applyPortableImport(
+      parsedInputs as Record<string, SkuInputs>,
+      data.inputs,
+      mode
+    );
+    // Merge only rebuilds the SKUs the file carries, so a half-typed row
+    // on any other SKU survives; replace rebuilds everything.
+    const touched = mode === "replace" ? Object.keys(next) : Object.keys(data.inputs);
+    const nextInputs: typeof inputs = mode === "replace" ? {} : { ...inputs };
+    const nextLotDrafts: typeof lotDrafts = mode === "replace" ? {} : { ...lotDrafts };
+    const nextAliasDrafts: typeof aliasDrafts = mode === "replace" ? {} : { ...aliasDrafts };
+    for (const sku of touched) {
+      const parsed = next[sku] ?? {};
+      const fields: Partial<Record<SkuField, string>> = {};
+      for (const { key } of BOX_FIELDS) {
+        const v = parsed[key];
+        if (v !== undefined) fields[key] = String(v);
+      }
+      nextInputs[sku] = fields;
+      if (parsed.lots?.length) {
+        nextLotDrafts[sku] = parsed.lots.map((l) => ({
+          qty: String(l.qty),
+          unitCost: String(l.unitCost),
+        }));
+      } else delete nextLotDrafts[sku];
+      if (parsed.aliasSkus?.length) {
+        nextAliasDrafts[sku] = parsed.aliasSkus.join(", ");
+      } else delete nextAliasDrafts[sku];
+    }
+    setInputs(nextInputs);
+    setLotDrafts(nextLotDrafts);
+    setAliasDrafts(nextAliasDrafts);
+    setExpanded(new Set(Object.keys(nextLotDrafts)));
+
+    if (hasSettings) {
+      if (Object.keys(data.settings.selectedPeriods).length > 0) {
+        setPendingPeriods(data.settings.selectedPeriods);
+      }
+      // Only meaningful once data is loaded, and only for sources that are.
+      const knownIds = liveReport?.sources.map((src) => src.id) ?? [];
+      const f = data.settings.sourceFilter;
+      if (liveReport && (f === "all" || f.every((id) => knownIds.includes(id)))) {
+        setSourceFilter(f);
+      }
+    }
+    setImportPreview(null);
+  }
+
+  async function handleExport(kind: ExportKind) {
+    setError(null);
+    try {
+      if (kind === "costs-csv") {
+        downloadCsv("costs", costsToCsv(skus, parsedInputs as Record<string, SkuInputs>));
+        return;
+      }
+      // Credentials (connections) are deliberately never part of this.
+      const data: PortableData = {
+        inputs: parsedInputs as Record<string, SkuInputs>,
+        settings: {
+          sourceFilter,
+          selectedPeriods: Object.fromEntries(
+            Object.entries(selectedPeriods).map(([id, set]) => [id, [...set]])
+          ),
+        },
+      };
+      if (kind === "xlsx") {
+        downloadBytes(
+          "byraf",
+          "xlsx",
+          await exportWorkbook(data),
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+      } else {
+        downloadBytes("byraf", "zip", await exportCsvBundle(data), "application/zip");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Export failed.");
+    }
+  }
+
+  const existingSkuCount = new Set([
+    ...Object.keys(inputs),
+    ...Object.keys(lotDrafts),
+    ...Object.keys(aliasDrafts),
+  ]).size;
+
   if (step === "connect") {
     return (
       <>
@@ -306,9 +401,21 @@ export default function DashboardClient({
           <p className="mt-2 text-sm text-sc-ink-2">
             Paste API credentials for one or more marketplaces to see
             what&apos;s available. Nothing is saved anywhere — refresh this
-            page and it&apos;s gone.
+            page and it&apos;s gone. Have a saved file? Import it to bring back
+            your costs and period choices (API keys are never saved).
           </p>
+          <div className="mt-3">
+            <SaveLoadControls fileRef={importFileRef} onFile={handleImportFile} />
+          </div>
         </div>
+        {importPreview && (
+          <ImportPreviewCard
+            preview={importPreview}
+            existingSkuCount={existingSkuCount}
+            onApply={confirmImport}
+            onCancel={cancelImport}
+          />
+        )}
         <form onSubmit={handleConnect} className="flex flex-col gap-4">
           {sources.map((s) => (
             <fieldset key={s.id} className="sc-card flex flex-col gap-3 p-4">
@@ -362,6 +469,7 @@ export default function DashboardClient({
             Start over
           </button>
         </div>
+        {periodsNotice && <p className="text-sm text-amber-600">{periodsNotice}</p>}
         {settlementSources.map((s) => {
           const list = periodsBySource[s.id];
           if (!list) return null;
@@ -441,7 +549,12 @@ export default function DashboardClient({
             </p>
           ))}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <SaveLoadControls
+            fileRef={importFileRef}
+            onFile={handleImportFile}
+            onExport={handleExport}
+          />
           <button
             onClick={() => {
               clearData();
@@ -456,6 +569,16 @@ export default function DashboardClient({
           </button>
         </div>
       </div>
+
+      {importPreview && (
+        <ImportPreviewCard
+          preview={importPreview}
+          existingSkuCount={existingSkuCount}
+          onApply={confirmImport}
+          onCancel={cancelImport}
+        />
+      )}
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       {r.sources.filter((s) => s.status === "ok").length > 1 && (
         <div className="flex flex-wrap gap-2" aria-label="Filter by source">
@@ -588,17 +711,12 @@ export default function DashboardClient({
           lotDrafts={lotDrafts}
           expanded={expanded}
           aliasDrafts={aliasDrafts}
-          importPreview={importPreview}
-          importFileRef={importFileRef}
           setField={setField}
           addLot={addLot}
           updateLot={updateLot}
           removeLot={removeLot}
           toggleExpanded={toggleExpanded}
           setAliasDrafts={setAliasDrafts}
-          handleImportFile={handleImportFile}
-          applyImport={applyImport}
-          cancelImport={cancelImport}
         />
       )}
 
