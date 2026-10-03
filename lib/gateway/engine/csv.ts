@@ -1,7 +1,7 @@
 import type { CostLot, MarginRow, SkuInputs, SkuSummary } from "./margins";
 import { normalizeSku } from "./types";
 
-type Cell = string | number | null;
+export type Cell = string | number | null;
 
 const BOM = "﻿"; // so Excel reads UTF-8 (accented item names) correctly
 
@@ -11,7 +11,7 @@ const BOM = "﻿"; // so Excel reads UTF-8 (accented item names) correctly
  * string cells get a leading apostrophe. Numbers are exempt: a legitimate
  * -12.50 must stay a number, not become text.
  */
-function guardFormula(s: string): string {
+export function guardFormula(s: string): string {
   return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
 }
 
@@ -212,9 +212,10 @@ export function costsToCsv(
 /**
  * Parses CSV text into raw string cells per RFC 4180: quoted fields,
  * embedded commas/newlines, and doubled quotes escaping a literal quote.
- * Strips a leading BOM. Blank trailing lines are dropped.
+ * Strips a leading BOM. Blank trailing lines are dropped. `delimiter`
+ * defaults to "," - some Excel locales save with ";" (see sniffDelimiter).
  */
-export function parseCsv(text: string): string[][] {
+export function parseCsv(text: string, delimiter = ","): string[][] {
   const s = text.startsWith(BOM) ? text.slice(BOM.length) : text;
   const rows: string[][] = [];
   let row: string[] = [];
@@ -242,7 +243,7 @@ export function parseCsv(text: string): string[][] {
     if (c === '"') {
       inQuotes = true;
       i++;
-    } else if (c === ",") {
+    } else if (c === delimiter) {
       row.push(field);
       field = "";
       i++;
@@ -299,7 +300,7 @@ const empty = (
 
 /** A cell our own export prefixed with `'` to block spreadsheet formula
  *  execution (see `guardFormula`). Strip it back off before parsing. */
-function stripApostrophe(cell: string): string {
+export function stripApostrophe(cell: string): string {
   return cell.startsWith("'") ? cell.slice(1) : cell;
 }
 
@@ -326,7 +327,10 @@ const BOX_COLUMNS: { key: BoxKey; label: string }[] = [
  * surfaced rather than silently dropped. Nothing here touches state -
  * the caller decides whether/how to apply the result.
  */
-export function parseCostImportCsv(text: string): CostImportResult {
+export function parseCostImportCsv(
+  text: string,
+  delimiter = ","
+): CostImportResult {
   if (text.length > COST_IMPORT_MAX_BYTES) {
     return empty([
       {
@@ -336,7 +340,7 @@ export function parseCostImportCsv(text: string): CostImportResult {
     ]);
   }
 
-  const rows = parseCsv(text);
+  const rows = parseCsv(text, delimiter);
   if (rows.length === 0) {
     return empty([{ row: 0, message: "File is empty." }]);
   }

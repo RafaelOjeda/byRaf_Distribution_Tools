@@ -33,6 +33,20 @@ export {
 } from "./engine/csv";
 
 export {
+  EMPTY_SETTINGS,
+  applyImport,
+  diffInputs,
+  exportCsvBundle,
+  parseImportFile,
+  type PortableData,
+  type PortableDiff,
+  type PortableFormat,
+  type PortableImportError,
+  type PortableImportResult,
+  type PortableSettings,
+} from "./engine/portable";
+
+export {
   DIM_DIVISOR,
   SHIPPING_PCT_ALERT,
   SHIPPING_PCT_WARN,
