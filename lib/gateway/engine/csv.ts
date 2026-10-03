@@ -1,7 +1,7 @@
 import type { CostLot, MarginRow, SkuInputs, SkuSummary } from "./margins";
 import { normalizeSku } from "./types";
 
-type Cell = string | number | null;
+export type Cell = string | number | null;
 
 const BOM = "﻿"; // so Excel reads UTF-8 (accented item names) correctly
 
@@ -11,7 +11,7 @@ const BOM = "﻿"; // so Excel reads UTF-8 (accented item names) correctly
  * string cells get a leading apostrophe. Numbers are exempt: a legitimate
  * -12.50 must stay a number, not become text.
  */
-function guardFormula(s: string): string {
+export function guardFormula(s: string): string {
   return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
 }
 
@@ -69,10 +69,8 @@ export const ORDER_LINE_HEADERS = [
  * - a line with no cost entered would otherwise export a profit that
  *   silently assumed cost = 0, and a file has no amber "no cost" marker.
  */
-export function orderLinesToCsv(rows: MarginRow[]): string {
-  return toCsv(
-    ORDER_LINE_HEADERS,
-    rows.map((r) => {
+export function orderLineRows(rows: MarginRow[]): Cell[][] {
+  return rows.map((r) => {
       const fees = !r.noEstimate;
       const costed = r.hasCost && !r.noEstimate;
       return [
@@ -96,8 +94,11 @@ export function orderLinesToCsv(rows: MarginRow[]): string {
         costed ? money(r.profit) : null,
         costed ? pct(r.margin) : null,
       ];
-    })
-  );
+  });
+}
+
+export function orderLinesToCsv(rows: MarginRow[]): string {
+  return toCsv(ORDER_LINE_HEADERS, orderLineRows(rows));
 }
 
 export const SKU_SUMMARY_HEADERS = [
@@ -119,10 +120,8 @@ export const SKU_SUMMARY_HEADERS = [
   "Margin %",
 ];
 
-export function skuSummaryToCsv(rows: SkuSummary[]): string {
-  return toCsv(
-    SKU_SUMMARY_HEADERS,
-    rows.map((s) => {
+export function skuSummaryRows(rows: SkuSummary[]): Cell[][] {
+  return rows.map((s) => {
       const m = s.hasMoney;
       const costed = m && !s.missingCost;
       const t = s.totals;
@@ -144,8 +143,11 @@ export function skuSummaryToCsv(rows: SkuSummary[]): string {
         costed ? money(t.profit) : null,
         costed ? pct(s.margin) : null,
       ];
-    })
-  );
+  });
+}
+
+export function skuSummaryToCsv(rows: SkuSummary[]): string {
+  return toCsv(SKU_SUMMARY_HEADERS, skuSummaryRows(rows));
 }
 
 // ---------------------------------------------------------------------
@@ -212,9 +214,10 @@ export function costsToCsv(
 /**
  * Parses CSV text into raw string cells per RFC 4180: quoted fields,
  * embedded commas/newlines, and doubled quotes escaping a literal quote.
- * Strips a leading BOM. Blank trailing lines are dropped.
+ * Strips a leading BOM. Blank trailing lines are dropped. `delimiter`
+ * defaults to "," - some Excel locales save with ";" (see sniffDelimiter).
  */
-export function parseCsv(text: string): string[][] {
+export function parseCsv(text: string, delimiter = ","): string[][] {
   const s = text.startsWith(BOM) ? text.slice(BOM.length) : text;
   const rows: string[][] = [];
   let row: string[] = [];
@@ -242,7 +245,7 @@ export function parseCsv(text: string): string[][] {
     if (c === '"') {
       inQuotes = true;
       i++;
-    } else if (c === ",") {
+    } else if (c === delimiter) {
       row.push(field);
       field = "";
       i++;
@@ -299,7 +302,7 @@ const empty = (
 
 /** A cell our own export prefixed with `'` to block spreadsheet formula
  *  execution (see `guardFormula`). Strip it back off before parsing. */
-function stripApostrophe(cell: string): string {
+export function stripApostrophe(cell: string): string {
   return cell.startsWith("'") ? cell.slice(1) : cell;
 }
 
@@ -326,7 +329,10 @@ const BOX_COLUMNS: { key: BoxKey; label: string }[] = [
  * surfaced rather than silently dropped. Nothing here touches state -
  * the caller decides whether/how to apply the result.
  */
-export function parseCostImportCsv(text: string): CostImportResult {
+export function parseCostImportCsv(
+  text: string,
+  delimiter = ","
+): CostImportResult {
   if (text.length > COST_IMPORT_MAX_BYTES) {
     return empty([
       {
@@ -336,7 +342,7 @@ export function parseCostImportCsv(text: string): CostImportResult {
     ]);
   }
 
-  const rows = parseCsv(text);
+  const rows = parseCsv(text, delimiter);
   if (rows.length === 0) {
     return empty([{ row: 0, message: "File is empty." }]);
   }
