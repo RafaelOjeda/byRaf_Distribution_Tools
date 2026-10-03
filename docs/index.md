@@ -19,7 +19,8 @@ This is the central map of the repository: what it is, how it's put together, an
 | Understand the UI: tabs, wizard flow, mobile/PWA behavior, state | [Frontend / Dashboard](./systems/frontend.md) |
 | Understand the (unused) database schema and why it exists | [Data Model](./systems/data-model.md) |
 | Turn on sign-in (Clerk), deploy it on any host, or add another auth provider | [Authentication](./systems/authentication.md) |
-| Understand env vars, the import-boundary rule, and the security model | [Configuration & Security](./systems/configuration-and-security.md) |
+| Understand env vars, the import-boundary rule, and the security model | [Authentication](./systems/authentication.md) | Optional env-driven sign-in (Clerk), the provider-neutral `lib/auth` adapter, per-platform setup, how to add a provider, and how saved data will key off the user id |
+| [Configuration & Security](./systems/configuration-and-security.md) |
 | Know what's tested, how, and how deploys happen | [Testing & Deployment](./systems/testing-and-deployment.md) |
 | Understand saving/loading inputs as XLSX or CSV (design record) | [`import-export-plan.md`](./import-export-plan.md) · [Engine — Portable save file](./systems/engine.md#portable-save-file-engineportable) |
 | Read the user-facing product description | [`README.md`](../README.md) |
@@ -36,6 +37,7 @@ flowchart TB
     Repo --> Engine["Engine (pure math)\nlib/gateway/engine/"]
     Repo --> Connectors["Connectors\nlib/gateway/connectors/"]
     Repo --> DataModel["Data Model (unused)\nlib/db/, drizzle/"]
+    Repo --> Auth["Authentication (optional)\nlib/auth/, proxy.ts"]
     Repo --> Config["Configuration & Security\nnext.config.ts, eslint.config.mjs, .env.example"]
     Repo --> Testing["Testing & Deployment\nscripts/, package.json, Vercel"]
 
@@ -59,6 +61,11 @@ flowchart TB
     Connectors --> C2["registry.ts — CONNECTORS[]"]
     Connectors --> C3["walmart/ — real API integration"]
     Connectors --> C4["demo/ — fixture-backed reference"]
+
+    Auth --> A1["config.ts — env vars -> provider, fails closed"]
+    Auth --> A2["index.tsx — getSession, requireSession, authProxy"]
+    Auth --> A3["providers/clerk.tsx — the only @clerk/* importer"]
+    Auth --> A4["providers/none.tsx — auth off"]
 
     DataModel --> D1["schema.ts — walmart_recon_rows, sku_costs, sync_runs"]
     DataModel --> D2["index.ts — getDb() lazy Neon client"]
@@ -114,6 +121,8 @@ flowchart LR
 | What happens when the dashboard calls `fetchSnapshot`? | [Architecture — request flow sequence diagram](./systems/architecture.md#request-flow-connecting-listing-periods-loading-data-editing-a-cost) |
 | What data is stored, and where? | [Data Model](./systems/data-model.md) — short answer: nothing, in production |
 | What services/marketplaces does this depend on? | [Connectors](./systems/connectors.md) (Walmart today; Amazon/eBay planned, not built) |
+| How do I require login, and on which hosts does it work? | [Authentication](./systems/authentication.md#turning-it-on) and [Works on any host](./systems/authentication.md#works-on-any-host) |
+| Where would saved data get its owner/user id? | [Authentication — Toward saved data](./systems/authentication.md#toward-saved-data) |
 | What config does a feature need? | [Configuration & Security — environment variables](./systems/configuration-and-security.md#environment-variables) |
 | What tests cover a given area? | [Testing & Deployment](./systems/testing-and-deployment.md#what-each-test-script-actually-verifies) |
 | What could break if I change `engine/margins.ts`? | [Engine](./systems/engine.md) (consumed by `report.ts`, re-exported through `lib/gateway/index.ts` into every dashboard tab) — run `npm run test:engine` |
