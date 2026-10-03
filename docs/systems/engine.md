@@ -193,6 +193,20 @@ flowchart TD
 
 Import is **preview-then-confirm**: `parseCostImportCsv` never mutates any application state by itself — `DashboardClient` shows the result in an `ImportPreviewCard` and only applies it (replacing the session's `inputs`/`lotDrafts`/`aliasDrafts`) when the user clicks "Apply import." See [Frontend — Inventory & costs tab](./frontend.md#inventory--costs-tab).
 
+## Portable save file (`engine/portable/`)
+
+The stateless app's save/load path: the user-entered inputs (purchase batches, box costs and sizes, alias SKUs) plus the chosen periods and source filter, written to and read from a file. The design record is [`docs/import-export-plan.md`](../import-export-plan.md).
+
+| File | Role |
+|---|---|
+| `schema.ts` | The **single** definition of the tables (`Costs`, `Boxes`, `Aliases`, `Settings`, `Meta`), their columns, validation, `dataToTables` / `tablesToData`, `diffInputs`, `applyImport` (merge/replace), and the read-only `Report - …` sheets |
+| `tabular.ts` | CSV text ⇄ table, delimiter sniffing (`;` locales), and `classifyTable` (which table a lone CSV is, or the legacy cost CSV) |
+| `zip.ts` | CSV bundle ⇄ `.zip` via `fflate` (size, entry-count and unzipped-size limits; skips macOS `__MACOSX` junk) |
+| `xlsx.ts` | Workbook ⇄ tables via `write-excel-file` / `read-excel-file` |
+| `index.ts` | `exportWorkbook`, `exportCsvBundle`, `parseImportFile` (auto-detects xlsx / zip / csv; never throws — problems come back as `errors`) |
+
+The format-specific encoders only move cells in and out of a file; every format goes through `tablesToData`, so they cannot disagree. The three libraries are loaded with `await import()` on first use, keeping them out of the dashboard's initial bundle. Rules worth knowing: tables are long/tidy (one fact per row, one alias per row), headers match by name case-insensitively with extra columns ignored, a `Meta.schema_version` newer than the app is rejected, `Report - …` sheets are ignored on import, and SKUs stay text so `00123` survives. The original single cost CSV (with its `"; "`-joined alias cell) still imports unchanged.
+
 ## Where estimation actually lives
 
 One subtlety worth flagging for anyone modifying this area: **`buildSkuHistory` lives in `engine/margins.ts`** (it's a general per-SKU average of settled commission rate and shipping cost, keyed by normalized SKU — nothing Walmart-specific about the shape), but **`estimateUnsettled`, the function that actually turns a recent unsettled order into an estimated line, lives in `connectors/walmart/normalize.ts`**, because it consumes Walmart's raw `Order`/charge shape. Every connector is expected to implement its own version of this pattern against its own recent-orders shape (see [Connectors — Implementing a connector](./connectors.md#what-a-connector-must-implement)); the engine only supplies the neutral averaging (`buildSkuHistory`) and the settled/recent join key (`settlementKey`).

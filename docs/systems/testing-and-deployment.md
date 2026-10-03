@@ -16,6 +16,7 @@ There is **no test framework configured** in this repository (no Jest, Vitest, P
 | `npm run lint` | `eslint` | Includes the `app/**` import-boundary rule — see [Configuration & Security](./configuration-and-security.md#the-gateway-import-boundary) |
 | `npm run test:walmart` | `dotenv -e .env.local -- tsx scripts/test-walmart-connection.ts` | Live connectivity check: fetches a token and lists settlement periods against real Walmart credentials in `.env.local` |
 | `npm run test:csv` | `tsx scripts/test-csv-import.ts` | Fixture checks for the cost CSV import/export parser (`engine/csv.ts`) |
+| `npm run test:portable` | `tsx scripts/test-portable.ts` | Round-trip (xlsx, zip bundle), legacy-CSV, hand-edited-workbook, merge/replace/diff, and rejection checks (bad version, zip bomb, corrupt or binary files) for `engine/portable/` |
 | `npm run test:engine` | `tsx scripts/test-engine.ts` | Fixture regression check pinning the margin/price/stock engine's dollar figures |
 | `npm run check:boundary` | `tsx scripts/check-boundary.ts` | Fails if `app/` names a marketplace outside a comment — see [Configuration & Security](./configuration-and-security.md#the-gateway-import-boundary) |
 | `npm run db:push` | `dotenv -e .env.local -- drizzle-kit push` | Applies the Drizzle schema to Neon — see [Data Model](./data-model.md) |

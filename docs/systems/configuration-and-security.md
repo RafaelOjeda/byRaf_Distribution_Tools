@@ -82,6 +82,10 @@ Walmart's Orders API includes customer names and addresses (`fetchOrdersSince` i
 
 Exports (`orderLinesToCsv`, `skuSummaryToCsv`, `costsToCsv` in [`engine/csv.ts`](../../lib/gateway/engine/csv.ts)) prefix any string cell that starts with `=`, `+`, `-`, `@`, tab, or carriage return with a leading apostrophe (`guardFormula`), so a spreadsheet application can't execute it as a formula when the SKU or item name — both sourced from a marketplace's catalog, i.e. untrusted input from the app's own perspective — happens to look like one. Numbers are exempt (a legitimate `-12.50` must stay numeric, not become text). The cost-import parser (`parseCostImportCsv`) strips that same leading apostrophe back off before parsing (`stripApostrophe`), so a round trip through export → edit → import isn't corrupted by the guard. See [Engine — CSV shapes](./engine.md#csv-shapes-csvts).
 
+### Export files never contain credentials
+
+The portable save file (`engine/portable/`) is built from the cost/box/alias inputs and the period and source selections only. `connections` (the pasted API keys) is never passed to the exporter, and `test:portable` checks an export for credential-shaped words. A spreadsheet is easy to email or upload by mistake, which is why this is a hard rule, not an option. Imports are bounded: 5 MB file, 2 MB per CSV, 5,000 rows per table, 20 MB unzipped, at most 50 zip entries. See [Engine — Portable save file](./engine.md#portable-save-file-engineportable).
+
 ### Server actions are public endpoints
 
 `describeSources`, `listPeriods`, and `fetchSnapshot` in [`lib/gateway/actions.ts`](../../lib/gateway/actions.ts) are Next.js Server Actions marked `"use server"`, which makes each one a public HTTP POST endpoint at the framework level — anyone who can reach the deployed app can call them directly, not just through the rendered UI. This is accepted as-is (documented in [`multi-marketplace-plan.md`](../multi-marketplace-plan.md)'s "Risks" section) because they're only useful with valid marketplace credentials the caller must already possess, and connector error messages are designed to never echo a credential back (see above).
