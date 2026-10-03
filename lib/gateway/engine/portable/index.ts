@@ -9,6 +9,7 @@ import {
   dataToTables,
   diffInputs,
   guardTables,
+  type ExportOptions,
   tablesToData,
   type PortableData,
   type PortableFormat,
@@ -30,26 +31,28 @@ export {
   EMPTY_SETTINGS,
   applyImport,
   diffInputs,
+  type ExportOptions,
   type PortableData,
   type PortableDiff,
   type PortableFormat,
   type PortableImportError,
   type PortableImportResult,
   type PortableSettings,
+  type ReportSheets,
 } from "./schema";
 
 export async function exportCsvBundle(
   data: PortableData,
-  exportedAt?: string
+  options?: ExportOptions
 ): Promise<Uint8Array> {
-  return tablesToZip(guardTables(dataToTables(data, exportedAt)));
+  return tablesToZip(guardTables(dataToTables(data, options)));
 }
 
 export async function exportWorkbook(
   data: PortableData,
-  exportedAt?: string
+  options?: ExportOptions
 ): Promise<Uint8Array> {
-  return tablesToXlsx(dataToTables(data, exportedAt));
+  return tablesToXlsx(dataToTables(data, options));
 }
 
 function failure(

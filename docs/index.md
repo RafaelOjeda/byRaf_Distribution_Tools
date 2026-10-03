@@ -20,7 +20,7 @@ This is the central map of the repository: what it is, how it's put together, an
 | Understand the (unused) database schema and why it exists | [Data Model](./systems/data-model.md) |
 | Understand env vars, the import-boundary rule, and the security model | [Configuration & Security](./systems/configuration-and-security.md) |
 | Know what's tested, how, and how deploys happen | [Testing & Deployment](./systems/testing-and-deployment.md) |
-| Read the plan for saving/loading inputs as XLSX or CSV | [`import-export-plan.md`](./import-export-plan.md) |
+| Understand saving/loading inputs as XLSX or CSV (design record) | [`import-export-plan.md`](./import-export-plan.md) · [Engine — Portable save file](./systems/engine.md#portable-save-file-engineportable) |
 | Read the user-facing product description | [`README.md`](../README.md) |
 | Read the original design/decision history | [`walmart-margin-tracker-plan.md`](../walmart-margin-tracker-plan.md) (root), [`multi-marketplace-plan.md`](./multi-marketplace-plan.md), [`walmart-api-notes.md`](./walmart-api-notes.md) |
 

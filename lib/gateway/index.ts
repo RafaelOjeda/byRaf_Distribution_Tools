@@ -39,6 +39,7 @@ export {
   exportCsvBundle,
   exportWorkbook,
   parseImportFile,
+  type ExportOptions,
   type PortableData,
   type PortableDiff,
   type PortableFormat,

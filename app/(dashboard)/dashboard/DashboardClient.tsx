@@ -371,15 +371,20 @@ export default function DashboardClient({
           ),
         },
       };
+      // Calculated sheets ride along when data is loaded; they're for
+      // reading only and are ignored on import.
+      const reports = liveReport
+        ? { orderLines: liveReport.orderLines, bySku: liveReport.bySku }
+        : undefined;
       if (kind === "xlsx") {
         downloadBytes(
           "byraf",
           "xlsx",
-          await exportWorkbook(data),
+          await exportWorkbook(data, { reports }),
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         );
       } else {
-        downloadBytes("byraf", "zip", await exportCsvBundle(data), "application/zip");
+        downloadBytes("byraf", "zip", await exportCsvBundle(data, { reports }), "application/zip");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Export failed.");

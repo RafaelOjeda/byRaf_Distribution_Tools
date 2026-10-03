@@ -69,10 +69,8 @@ export const ORDER_LINE_HEADERS = [
  * - a line with no cost entered would otherwise export a profit that
  *   silently assumed cost = 0, and a file has no amber "no cost" marker.
  */
-export function orderLinesToCsv(rows: MarginRow[]): string {
-  return toCsv(
-    ORDER_LINE_HEADERS,
-    rows.map((r) => {
+export function orderLineRows(rows: MarginRow[]): Cell[][] {
+  return rows.map((r) => {
       const fees = !r.noEstimate;
       const costed = r.hasCost && !r.noEstimate;
       return [
@@ -96,8 +94,11 @@ export function orderLinesToCsv(rows: MarginRow[]): string {
         costed ? money(r.profit) : null,
         costed ? pct(r.margin) : null,
       ];
-    })
-  );
+  });
+}
+
+export function orderLinesToCsv(rows: MarginRow[]): string {
+  return toCsv(ORDER_LINE_HEADERS, orderLineRows(rows));
 }
 
 export const SKU_SUMMARY_HEADERS = [
@@ -119,10 +120,8 @@ export const SKU_SUMMARY_HEADERS = [
   "Margin %",
 ];
 
-export function skuSummaryToCsv(rows: SkuSummary[]): string {
-  return toCsv(
-    SKU_SUMMARY_HEADERS,
-    rows.map((s) => {
+export function skuSummaryRows(rows: SkuSummary[]): Cell[][] {
+  return rows.map((s) => {
       const m = s.hasMoney;
       const costed = m && !s.missingCost;
       const t = s.totals;
@@ -144,8 +143,11 @@ export function skuSummaryToCsv(rows: SkuSummary[]): string {
         costed ? money(t.profit) : null,
         costed ? pct(s.margin) : null,
       ];
-    })
-  );
+  });
+}
+
+export function skuSummaryToCsv(rows: SkuSummary[]): string {
+  return toCsv(SKU_SUMMARY_HEADERS, skuSummaryRows(rows));
 }
 
 // ---------------------------------------------------------------------

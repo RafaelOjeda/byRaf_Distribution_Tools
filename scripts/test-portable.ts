@@ -13,6 +13,7 @@ import {
   exportWorkbook,
   parseImportFile,
   type PortableData,
+  type ReportSheets,
 } from "../lib/gateway/engine/portable";
 import { costsToCsv } from "../lib/gateway/engine/csv";
 
@@ -62,7 +63,7 @@ const zipOf = (files: Record<string, string>) =>
 const csv = (s: string) => strToU8(s);
 
 check("CSV bundle round-trips, incl. leading zeros, unicode and formula-looking SKUs", async () => {
-  const r = await parseImportFile(await exportCsvBundle(sample, NOW));
+  const r = await parseImportFile(await exportCsvBundle(sample, { exportedAt: NOW }));
   assert.deepEqual(r.errors, []);
   assert.equal(r.format, "zip");
   assert.equal(r.schemaVersion, 1);
@@ -184,15 +185,15 @@ check("diff vs current inputs; merge keeps untouched SKUs, replace drops them", 
 });
 
 check("XLSX workbook round-trips, incl. leading zeros, unicode and formula-looking SKUs", async () => {
-  const r = await parseImportFile(await exportWorkbook(sample, NOW));
+  const r = await parseImportFile(await exportWorkbook(sample, { exportedAt: NOW }));
   assert.deepEqual(r.errors, []);
   assert.equal(r.format, "xlsx");
   assert.deepEqual(r.data, sample);
 });
 
 check("XLSX and CSV bundle carry identical data", async () => {
-  const x = await parseImportFile(await exportWorkbook(sample, NOW));
-  const z = await parseImportFile(await exportCsvBundle(sample, NOW));
+  const x = await parseImportFile(await exportWorkbook(sample, { exportedAt: NOW }));
+  const z = await parseImportFile(await exportCsvBundle(sample, { exportedAt: NOW }));
   assert.deepEqual(x.data, z.data);
   assert.deepEqual(x.stats, z.stats);
 });
@@ -222,6 +223,46 @@ check("a non-xlsx zip-like or corrupt .xlsx is rejected, not thrown", async () =
   const bogus = zipOf({ "xl/workbook.xml": "<nope/>" });
   const r = await parseImportFile(bogus);
   assert.equal(r.errors.length > 0, true);
+});
+
+const reports = {
+  orderLines: [
+    {
+      status: "settled", orderDate: "2026-09-01", postedDate: "2026-09-05",
+      purchaseOrderNo: "PO-1", sku: "=CMD|calc", itemName: "Widget, \"large\"",
+      fulfillmentType: "WFS", qty: 2, revenue: 20, commission: -3, shipping: 0, tax: 0,
+      otherFees: 0, netAmount: 17, hasCost: true, noEstimate: false, itemCostTotal: 6,
+      boxCostTotal: 1, costTotal: 7, profit: 10, margin: 0.5,
+    },
+  ],
+  bySku: [],
+} as unknown as ReportSheets;
+
+check("report sheets are exported but never imported (workbook and bundle)", async () => {
+  const x = await exportWorkbook(sample, { exportedAt: NOW, reports });
+  const z = await exportCsvBundle(sample, { exportedAt: NOW, reports });
+  for (const file of [x, z]) {
+    const r = await parseImportFile(file);
+    assert.deepEqual(r.errors, []);
+    assert.deepEqual(r.data, sample); // reports didn't leak into the inputs
+  }
+  const { unzipSync, strFromU8 } = await import("fflate");
+  const files = unzipSync(z);
+  assert.deepEqual(Object.keys(files).sort(), [
+    "aliases.csv", "boxes.csv", "costs.csv", "meta.csv",
+    "report - by sku.csv", "report - order lines.csv", "settings.csv",
+  ]);
+  // formula-looking SKU is guarded in the CSV report
+  assert.match(strFromU8(files["report - order lines.csv"]), /'=CMD\|calc/);
+});
+
+check("no credentials-shaped data in an export", async () => {
+  const z = await exportCsvBundle(sample, { exportedAt: NOW });
+  const { unzipSync, strFromU8 } = await import("fflate");
+  const all = Object.values(unzipSync(z)).map((b) => strFromU8(b)).join("\n").toLowerCase();
+  for (const word of ["secret", "password", "client_id", "clientid", "api key", "apikey"]) {
+    assert.equal(all.includes(word), false, word);
+  }
 });
 
 Promise.all(pending).then(() => console.log(`\n${passed} passed`));

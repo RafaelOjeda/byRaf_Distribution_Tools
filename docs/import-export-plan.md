@@ -1,6 +1,6 @@
 # Import / Export (XLSX + CSV) — Plan
 
-Status: **in progress, 2026-10-03.** Phases 1–2 are implemented on `claude/import-export-plan`. Decisions so far are recorded at the bottom.
+Status: **implemented, 2026-10-03** on `claude/import-export-plan` (phases 1–5). The "Phases" table below is the original order of work. Decisions so far are recorded at the bottom.
 
 ## Goal
 
@@ -41,7 +41,7 @@ The existing cost CSV stays fully supported. Its columns are unchanged, so older
 
 These are long/tidy tables: one fact per row, no merged cells, no `"; "`-joined lists. That is what makes them easy for scripts. `Aliases` changes from the cost CSV's joined cell to one pair per row for this reason.
 
-**Export-only (ignored on import):** `Report – By SKU`, `Report – Order lines`, `Report – Stock value`. They reuse the existing report CSV builders and are always recalculated from the data.
+**Export-only (ignored on import):** `Report - By SKU` and `Report - Order lines`, added when data is loaded. They reuse the existing report CSV row builders and are always recalculated from the data. (A Stock value sheet was in the first draft; there is no existing builder for it, so it was left out.)
 
 **Never in the file:**
 - **API credentials** (`connections`). A spreadsheet is easy to email or upload by mistake, and these keys give full API access.
@@ -175,5 +175,4 @@ Each phase is a separate PR-sized commit. Phase 1 is useful on its own: it deliv
 
 ## Open questions
 
-- Should the Export menu live in the dashboard header (proposed) or stay on the Inventory & costs tab?
-- Should a **blank template** export (headers only, every loaded SKU pre-listed, like today's cost CSV) be offered separately, or is "export with nothing entered" enough?
+None. The two open questions were settled by default: the Export menu is in the dashboard header, and the costs-only CSV (which lists every loaded SKU with blank batches) serves as the blank template.

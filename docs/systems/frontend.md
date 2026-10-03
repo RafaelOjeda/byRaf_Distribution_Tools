@@ -94,7 +94,8 @@ stateDiagram-v2
 | `lotDrafts` | `Record<sku, LotDraft[]>` | Raw *string* qty/unitCost pairs per purchase batch |
 | `aliasDrafts` | `Record<sku, string>` | Raw comma/semicolon-separated alias SKU text per SKU |
 | `expanded` | `Set<sku>` | Which SKUs' purchase-batch editor is open |
-| `importPreview` | `CostImportResult \| null` | Parsed-but-not-yet-applied CSV import |
+| `importPreview` | `PortableImportResult \| null` | Parsed-but-not-yet-applied import file (xlsx, zip or csv) |
+| `pendingPeriods` | `Record<sourceId, string[]> \| null` | Period ids from an imported file, applied (where still offered) when the period list next loads |
 
 **Why raw strings, not parsed numbers:** inputs are kept as strings (`inputs`, `lotDrafts`) so a half-typed value like `"1."` doesn't fight the controlled input's value on every keystroke. A `useMemo` (`parsedInputs`) converts everything to the real `CostInputs` shape — parsing each field with `parseFloat`, dropping `NaN`s — and only *that* derived value is passed to `buildReport`. This keeps `buildReport` itself simple (it only ever sees valid numbers or `undefined`) while the UI stays forgiving of in-progress typing.
 
@@ -137,9 +138,9 @@ Every tab follows the same **mobile-first pattern**: a `<ul>` of cards rendered 
 The one tab that mutates state rather than just displaying it. Two input paths converge on the same state:
 
 1. **Manual entry** — `CostLotsEditor` (batch qty × unit cost rows) and box-dimension inputs, wired through `setField`/`addLot`/`updateLot`/`removeLot`/`aliasDrafts`.
-2. **CSV import** — `handleImportFile` reads the file, calls `parseCostCsv` (from `lib/gateway`, i.e. `engine/csv.ts`'s `parseCostImportCsv`), and stores the result in `importPreview` *without touching any other state*. `ImportPreviewCard` shows stats/warnings/errors; only clicking "Apply import" (`applyImport`) overwrites `inputs`/`lotDrafts`/`aliasDrafts` — see [Engine — CSV shapes](./engine.md#csv-shapes-csvts) for the parser itself.
+2. **File import** — `handleImportFile` reads the file into bytes, calls `parseImportFile` (from `lib/gateway`) with the current inputs, and stores the result in `importPreview` *without touching any other state*. `ImportPreviewCard` shows stats, a diff against the current entries, and warnings/errors; **Merge** or **Replace** (`confirmImport`) then applies it — see [Engine — Portable save file](./engine.md#portable-save-file-engineportable).
 
-"Export costs" (`costsToCsv`) doubles as an import template: exporting with nothing entered still lists every currently loaded SKU with blank batch columns, ready to fill in and re-import — a genuine round trip.
+**Export / Import controls (`SaveLoadControls`)** live in the data screen's header (Export menu + Import file) and, import-only, on the connect screen so a saved file can be loaded before connecting. `handleExport` builds the file (workbook, CSV bundle, or the costs-only CSV) and downloads it client-side. The costs-only CSV (`costsToCsv`) still lists every loaded SKU with blank batch columns when nothing is entered, so it doubles as a fill-in template. API credentials (`connections`) are never passed to the exporter.
 
 ### Price chart
 

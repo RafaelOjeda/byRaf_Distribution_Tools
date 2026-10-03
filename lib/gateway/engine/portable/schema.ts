@@ -6,8 +6,16 @@
  * format, so the two can't drift apart.
  * See docs/import-export-plan.md.
  */
-import { guardFormula, stripApostrophe, type Cell } from "../csv";
-import type { SkuInputs } from "../margins";
+import {
+  ORDER_LINE_HEADERS,
+  SKU_SUMMARY_HEADERS,
+  guardFormula,
+  orderLineRows,
+  skuSummaryRows,
+  stripApostrophe,
+  type Cell,
+} from "../csv";
+import type { MarginRow, SkuInputs, SkuSummary } from "../margins";
 import { normalizeSku } from "../types";
 
 export const SCHEMA_VERSION = 1;
@@ -104,11 +112,27 @@ const BOX_FIELDS = [
 // Export: data -> tables
 // ---------------------------------------------------------------------
 
+/** Calculated figures, exported for reading only. Import ignores these sheets. */
+export interface ReportSheets {
+  orderLines: MarginRow[];
+  bySku: SkuSummary[];
+}
+
+export function reportTables(r: ReportSheets): Record<string, TableOut> {
+  return {
+    "Report - By SKU": { headers: SKU_SUMMARY_HEADERS, rows: skuSummaryRows(r.bySku) },
+    "Report - Order lines": {
+      headers: ORDER_LINE_HEADERS,
+      rows: orderLineRows(r.orderLines),
+    },
+  };
+}
+
 const text = (s: string): string => guardFormula(s);
 
 export function dataToTables(
   data: PortableData,
-  exportedAt: string = new Date().toISOString()
+  { exportedAt = new Date().toISOString(), reports }: ExportOptions = {}
 ): Record<string, TableOut> {
   const costs: Cell[][] = [];
   const boxes: Cell[][] = [];
@@ -148,7 +172,14 @@ export function dataToTables(
         ["app", "byRaf Distribution Tools"],
       ],
     },
+    ...(reports ? reportTables(reports) : {}),
   };
+}
+
+export interface ExportOptions {
+  exportedAt?: string;
+  /** Add the calculated report sheets (read-only; never imported). */
+  reports?: ReportSheets;
 }
 
 /** Strings headed for a file cell: SKUs, IDs, names. Blocks formula execution. */
