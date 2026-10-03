@@ -6,7 +6,7 @@
 
 byRaf Distribution Tools is a single Next.js application, currently shipping one product: **the Margins Dashboard**, a multi-marketplace seller profit/margin tracker. A seller pastes API credentials for one or more marketplaces (Walmart today; a fixture-backed "Demo" source for development), the app pulls sales, fees, inventory and catalog data, and shows true profit and margin once the seller enters what they paid for each product.
 
-The repository is **stateless in production**: no login, no database use. A Postgres schema and Neon database are provisioned for a planned persisted version, but the running app does not read or write them (see [Data Model](./data-model.md)).
+The repository is **stateless in production**: no database use, and sign-in is optional (off unless Clerk keys are set; see [Authentication](./authentication.md)). A Postgres schema and Neon database are provisioned for a planned persisted version, but the running app does not read or write them (see [Data Model](./data-model.md)).
 
 The one architectural rule that shapes almost every file in `lib/` and `app/` is:
 
@@ -147,7 +147,7 @@ flowchart LR
 
 - **One Vercel project**, no separate backend host — see the "Stack Decisions" section of [`walmart-margin-tracker-plan.md`](../../walmart-margin-tracker-plan.md) for why (originally planned as FastAPI + separate Next.js frontend, collapsed into one Next.js App Router project).
 - **Every push to `main` deploys to production automatically.** There is no `vercel.json` and no CI workflow in this repository (no `.github/workflows/`) — `npm run lint`, `npm run test:*` and `npm run check:boundary` are run manually or by whoever pushes; see [Testing & Deployment](./testing-and-deployment.md).
-- **No access control / login.** Vercel Authentication was enabled once (2026-09-23) and explicitly turned back off (2026-09-24, per the plan doc); the pasted API key *is* the access control. See [Configuration & Security](./configuration-and-security.md).
+- **Sign-in is env-driven.** Vercel Authentication was enabled once (2026-09-23) and explicitly turned back off (2026-09-24, per the plan doc). Login is now provided by the app itself through `lib/auth` (Clerk today) when its keys are set, on any host; with no keys, the pasted API key is the access control. See [Authentication](./authentication.md).
 
 ## Directory map
 
@@ -172,7 +172,9 @@ lib/
     index.ts                      client-safe: buildReport, parseCostCsv, exportCsv, re-exported types
     engine/                       pure math — see docs/systems/engine.md
     connectors/                   marketplace integrations — see docs/systems/connectors.md
+  auth/                            provider-neutral sign-in (Clerk adapter) — see docs/systems/authentication.md
   db/                              Drizzle schema + lazy Neon client — see docs/systems/data-model.md
+proxy.ts                           Next 16 proxy (ex-middleware): the auth check before every page
 drizzle/                           SQL migration + snapshot metadata for lib/db/schema.ts
 docs/                              this documentation, plus the pre-existing design docs it links to
   multi-marketplace-plan.md        canonical design doc for the gateway split (phases, decisions)
@@ -189,5 +191,6 @@ walmart-margin-tracker-plan.md     the original V1 plan; records what shipped vs
 - **How a marketplace becomes a connector, and everything Walmart's API actually does:** [Connectors](./connectors.md)
 - **The dashboard's component tree, wizard steps, and mobile/PWA behavior:** [Frontend](./frontend.md)
 - **The unused Neon/Drizzle schema and why it exists:** [Data Model](./data-model.md)
+- **Optional sign-in, its env vars, and how to swap providers:** [Authentication](./authentication.md)
 - **Environment variables, the ESLint import boundary, and the security model:** [Configuration & Security](./configuration-and-security.md)
 - **npm scripts, the (nonexistent) CI, and how deploys happen:** [Testing & Deployment](./testing-and-deployment.md)

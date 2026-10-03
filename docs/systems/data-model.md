@@ -10,7 +10,7 @@ Do not infer from the schema's existence that any of the tables below are popula
 
 ## Why it exists anyway
 
-The schema and database were provisioned during an earlier phase of the project (recorded as "Phase 0" / "Phase 1" in [`walmart-margin-tracker-plan.md`](../../walmart-margin-tracker-plan.md)), when the intended design was a persisted margin tracker backed by Postgres. Partway through, the project pivoted to a stateless, no-login MVP — Vercel Authentication was enabled and then explicitly disabled (2026-09-23 → 2026-09-24), and the pasted API key became the sole access control. The schema was left in place because **persistence is still the planned next step** (saving purchase batches and box details specifically — see the README's "Known limitations"), not because it's dead code slated for removal.
+The schema and database were provisioned during an earlier phase of the project (recorded as "Phase 0" / "Phase 1" in [`walmart-margin-tracker-plan.md`](../../walmart-margin-tracker-plan.md)), when the intended design was a persisted margin tracker backed by Postgres. Partway through, the project pivoted to a stateless, no-login MVP — Vercel Authentication was enabled and then explicitly disabled (2026-09-23 → 2026-09-24), and the pasted API key became the sole access control. The schema was left in place because **persistence is still the planned next step** (saving purchase batches and box details specifically — see the README's "Known limitations"), not because it's dead code slated for removal. Optional sign-in now exists ([Authentication](./authentication.md)), so saved data has an owner to key off: the session's `userId`.
 
 ## Files
 

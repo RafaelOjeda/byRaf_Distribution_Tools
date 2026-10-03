@@ -6,7 +6,7 @@ This is the central map of the repository: what it is, how it's put together, an
 
 ## What this repository is, in one paragraph
 
-**byRaf Distribution Tools** is a Next.js 16 (App Router) application. Its one shipped product is the **Margins Dashboard**: a multi-marketplace seller profit/margin tracker. A seller pastes API credentials for one or more marketplaces (Walmart today; a fixture-backed "Demo" source for development and testing), picks which settlement periods to load, and sees revenue, fees, profit, inventory, and stock value — per order line and rolled up per product — once they've entered what each product actually cost them. The app is **stateless in production**: no login, no database use, nothing persisted beyond one `localStorage` flag for a dismissed install banner. A Postgres/Drizzle schema and Neon database are provisioned for a planned persisted version but are not used by the running app.
+**byRaf Distribution Tools** is a Next.js 16 (App Router) application. Its one shipped product is the **Margins Dashboard**: a multi-marketplace seller profit/margin tracker. A seller pastes API credentials for one or more marketplaces (Walmart today; a fixture-backed "Demo" source for development and testing), picks which settlement periods to load, and sees revenue, fees, profit, inventory, and stock value — per order line and rolled up per product — once they've entered what each product actually cost them. The app is **stateless in production**: no database use, sign-in only if auth keys are set in the environment, nothing persisted beyond one `localStorage` flag for a dismissed install banner. A Postgres/Drizzle schema and Neon database are provisioned for a planned persisted version but are not used by the running app.
 
 ## Start here
 
@@ -18,6 +18,7 @@ This is the central map of the repository: what it is, how it's put together, an
 | Understand how Walmart (or a future marketplace) integration works | [Connectors](./systems/connectors.md) + [`docs/adding-a-marketplace.md`](./adding-a-marketplace.md) |
 | Understand the UI: tabs, wizard flow, mobile/PWA behavior, state | [Frontend / Dashboard](./systems/frontend.md) |
 | Understand the (unused) database schema and why it exists | [Data Model](./systems/data-model.md) |
+| Turn on sign-in (Clerk), deploy it on any host, or add another auth provider | [Authentication](./systems/authentication.md) |
 | Understand env vars, the import-boundary rule, and the security model | [Configuration & Security](./systems/configuration-and-security.md) |
 | Know what's tested, how, and how deploys happen | [Testing & Deployment](./systems/testing-and-deployment.md) |
 | Understand saving/loading inputs as XLSX or CSV (design record) | [`import-export-plan.md`](./import-export-plan.md) · [Engine — Portable save file](./systems/engine.md#portable-save-file-engineportable) |

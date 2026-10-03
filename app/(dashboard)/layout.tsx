@@ -1,3 +1,5 @@
+import { UserMenu } from "@/lib/auth";
+
 export default function DashboardLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-dvh flex-col">
@@ -17,6 +19,9 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
           <span className="text-[15px] font-bold tracking-tight">BYRAF</span>
           <span aria-hidden="true" className="h-4 w-px bg-sc-ink/30" />
           <span className="text-sm text-sc-ink-2">Margins Dashboard</span>
+          <div className="ml-auto flex items-center">
+            <UserMenu />
+          </div>
         </div>
       </header>
       {/* The desktop's dither shows in the gutter around this window - the

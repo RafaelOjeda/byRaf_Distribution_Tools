@@ -18,11 +18,12 @@ There is **no test framework configured** in this repository (no Jest, Vitest, P
 | `npm run test:csv` | `tsx scripts/test-csv-import.ts` | Fixture checks for the cost CSV import/export parser (`engine/csv.ts`) |
 | `npm run test:portable` | `tsx scripts/test-portable.ts` | Round-trip (xlsx, zip bundle), legacy-CSV, hand-edited-workbook, merge/replace/diff, and rejection checks (bad version, zip bomb, corrupt or binary files) for `engine/portable/` |
 | `npm run test:engine` | `tsx scripts/test-engine.ts` | Fixture regression check pinning the margin/price/stock engine's dollar figures |
+| `npm run test:auth` | `tsx scripts/test-auth.ts` | Which auth provider each env combination selects; half-set or malformed keys fail closed — see [Authentication](./authentication.md#fails-closed) |
 | `npm run check:boundary` | `tsx scripts/check-boundary.ts` | Fails if `app/` names a marketplace outside a comment — see [Configuration & Security](./configuration-and-security.md#the-gateway-import-boundary) |
 | `npm run db:push` | `dotenv -e .env.local -- drizzle-kit push` | Applies the Drizzle schema to Neon — see [Data Model](./data-model.md) |
 | `npm run db:studio` | `dotenv -e .env.local -- drizzle-kit studio` | Opens Drizzle Studio against Neon |
 
-**Only the scripts read environment variables** — the running dashboard needs none (see [Configuration & Security](./configuration-and-security.md#environment-variables)).
+**The running dashboard needs no environment variables** (the optional auth keys turn on sign-in) (see [Configuration & Security](./configuration-and-security.md#environment-variables)).
 
 ## What each test script actually verifies
 
@@ -74,7 +75,7 @@ flowchart LR
 - **Single Vercel project**, connected to this GitHub repo with `productionBranch: main` and auto-deploy enabled — this was already configured when the project was first created, not something set up manually as part of any documented phase; it was only *discovered* (not obvious from `vercel project inspect`'s summary view, confirmed instead by matching a deployment's commit SHA to a git push) during Phase 0 provisioning per `walmart-margin-tracker-plan.md`.
 - **Every push to `main` deploys to production.** There is no separate staging/preview promotion step documented or configured beyond whatever Vercel does automatically for non-production branches/PRs.
 - **No `vercel.json` exists** in the repository — no custom routing, headers, or cron configuration is defined at the platform-config-file level. (The plan's Phase 7 called for a `vercel.ts` cron schedule for a daily sync job; that phase, and that file, don't exist yet — see [Data Model — the planned sync job](./data-model.md#the-planned-sync-job--not-implemented).)
-- **No environment variables are required for the deployed app to function** — `WALMART_CLIENT_ID`/`WALMART_CLIENT_SECRET`/`DATABASE_URL` are only consulted by scripts a developer runs locally, never by the deployed Server Actions.
+- **No environment variables are required for the deployed app to function** — the optional `CLERK_*` keys turn on sign-in ([Authentication](./authentication.md#works-on-any-host)), and `WALMART_CLIENT_ID`/`WALMART_CLIENT_SECRET`/`DATABASE_URL` are only consulted by scripts a developer runs locally, never by the deployed Server Actions.
 
 ## What "done" looks like for a change in this repo
 
