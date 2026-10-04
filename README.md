@@ -46,7 +46,7 @@ Settled and estimated totals are always shown separately, never blended.
 ### Privacy and security model
 
 - **Nothing is stored.** No database is used. Credentials and all fetched data live only in your browser tab and the single server request that needs them. Refresh and it is gone, including anything you typed.
-- **The API key is the access control.** There is no login. The app itself is public, and it shows data only for whichever credentials are pasted in. This was a deliberate choice; Vercel Authentication is switched off.
+- **Sign-in is optional.** With no auth configured, the app is public and the pasted API key is the access control. Set Clerk keys in the environment and every page and server action requires sign-in. See [docs/systems/authentication.md](docs/systems/authentication.md).
 - **Credentials are used per request and never cached or logged** server-side. Token fetching is deliberately not shared between requests, so one seller's session can never reach another's. Note that Next.js's *dev* server prints every server-action call with its arguments by default, which would print the Client Secret; `next.config.ts` turns that off (`logging.serverFunctions: false`). Production never logged them — verified with fake credentials against `next start`.
 - **Customer data stays on the server.** Walmart's orders include customer names and addresses. Only derived line-level numbers (SKU, quantity, amounts, date) are sent to the browser.
 - **CSV exports guard against formula injection.** Text starting with `=`, `+`, `-` or `@` is prefixed so a spreadsheet cannot run it as a formula. (XLSX text is written as typed string cells, which a spreadsheet does not execute.)
@@ -75,7 +75,7 @@ npm install
 npm run dev        # http://localhost:3000/margins
 ```
 
-**No configuration is needed to run the app.** You paste credentials into the page.
+**No configuration is needed to run the app.** You paste credentials into the page. To require sign-in, add `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` to `.env.local` (or your host's environment). See [docs/systems/authentication.md](docs/systems/authentication.md) for every platform.
 
 | Command | What it does |
 |---|---|
@@ -84,9 +84,10 @@ npm run dev        # http://localhost:3000/margins
 | `npm run test:walmart` | Checks that credentials in `.env.local` can fetch a token and list settlement reports |
 | `npm run test:csv` | Fixture checks for the cost CSV import/export parser |
 | `npm run test:portable` | Round-trip and rejection checks for the xlsx / zip / csv save file |
+| `npm run test:auth` | Checks which auth provider each env combination selects, and that half-set keys fail closed |
 | `npm run db:push` | Applies the Drizzle schema to Neon (unused by the app today, see below) |
 
-Only the scripts read environment variables. Copy [.env.example](.env.example) to `.env.local` and fill in `WALMART_CLIENT_ID` and `WALMART_CLIENT_SECRET`. Never commit `.env.local`; it is gitignored.
+Copy [.env.example](.env.example) to `.env.local`. The app itself reads only the optional auth variables; `WALMART_CLIENT_ID` and `WALMART_CLIENT_SECRET` are for `test:walmart`. Never commit `.env.local`; it is gitignored.
 
 If `next build` fails with "Failed to open database" (a corrupted Turbopack cache), delete `.next` and rebuild.
 
@@ -109,4 +110,4 @@ scripts/                    connectivity check
 
 ### Persistence (planned, not built)
 
-A Neon Postgres database is provisioned and a schema exists for the original persisted design, but **the running app does not use it.** The intended next step is saving purchase batches and box details. See the plan for the open design question of how saved data would be tied to a seller when there is no login.
+A Neon Postgres database is provisioned and a schema exists for the original persisted design, but **the running app does not use it.** The intended next step is saving purchase batches and box details. Saved data will be tied to the signed-in user's id from `lib/auth` (see [docs/systems/authentication.md](docs/systems/authentication.md#toward-saved-data)).

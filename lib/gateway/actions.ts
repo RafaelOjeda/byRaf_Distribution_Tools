@@ -1,5 +1,6 @@
 "use server";
 
+import { requireSession } from "@/lib/auth";
 import { CONNECTORS } from "./connectors/registry";
 import {
   brandSnapshot,
@@ -31,6 +32,7 @@ export async function describeSources(): Promise<SourceDescriptor[]> {
 export async function listPeriods(
   connections: Connections
 ): Promise<Record<string, PeriodList>> {
+  await requireSession();
   const out: Record<string, PeriodList> = {};
 
   await Promise.all(
@@ -63,6 +65,7 @@ export async function fetchSnapshot(
   connections: Connections,
   periods: Record<string, string[]>
 ): Promise<Snapshot> {
+  await requireSession();
   const since = new Date(Date.now() - UNSETTLED_LOOKBACK_DAYS * 86_400_000)
     .toISOString()
     .slice(0, 10);

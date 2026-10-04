@@ -11,13 +11,14 @@ This app's security model is unusually simple to state, because almost everythin
 | Variable | Required for | Read by | Notes |
 |---|---|---|---|
 | `WALMART_CLIENT_ID` / `WALMART_CLIENT_SECRET` | `npm run test:walmart` only | `getWalmartToken()` in [`connectors/walmart/auth.ts`](../../lib/gateway/connectors/walmart/auth.ts) | **The running dashboard never reads these.** Sellers paste their own Client ID/Secret into the browser form; only the connectivity-check script uses env-var credentials. |
+| `AUTH_PROVIDER`, `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | Sign-in (optional) | `resolveAuthConfig()` in [`lib/auth/config.ts`](../../lib/auth/config.ts), at request time | All blank: auth off. See [Authentication](./authentication.md). |
 | `DATABASE_URL` | `npm run db:push` / `db:studio` only | `lib/db/index.ts`'s `getDb()`, `drizzle.config.ts` | Injected automatically by the Vercel Neon integration. **Not read by any code path the running app exercises** — see [Data Model](./data-model.md). |
 
-Copy [`.env.example`](../../.env.example) to `.env.local` to run any script locally; `.env.local` is gitignored and must never be committed. **No configuration is needed to run the dashboard itself** — `npm run dev` works with zero environment variables set, because credentials are pasted into the page at runtime, not read from the environment.
+Copy [`.env.example`](../../.env.example) to `.env.local` to run any script locally; `.env.local` is gitignored and must never be committed. **No configuration is needed to run the dashboard itself** — `npm run dev` works with zero environment variables set, because credentials are pasted into the page at runtime, not read from the environment. The only variables the running app reads are the optional auth ones.
 
 ```mermaid
 flowchart LR
-    subgraph Runtime["Dashboard at runtime — reads NO env vars"]
+    subgraph Runtime["Dashboard at runtime — reads only the optional auth env vars"]
         Browser["Seller pastes Client ID + Secret\ninto the page"] --> ServerAction["Server Action\n(listPeriods / fetchSnapshot)"]
         ServerAction --> WalmartAPI[("Walmart API")]
     end
@@ -60,9 +61,11 @@ The full user-facing statement of this lives in the README's "Privacy and securi
 
 No database is used by the running app. Credentials and all fetched data live only in the browser tab (`DashboardClient` React state) and the single server request that needed them — a page refresh loses everything, including anything typed. See [Data Model](./data-model.md) for the provisioned-but-dormant Postgres schema this implies exists but isn't touched.
 
-### The API key is the access control
+### Sign-in is optional; otherwise the API key is the access control
 
-There is no login. Vercel Authentication (deployment protection) was enabled once (2026-09-23) and then explicitly disabled the next day, once the design settled on "pasted credentials are the access control" — recorded in detail in [`walmart-margin-tracker-plan.md`](../../walmart-margin-tracker-plan.md), including a caught near-miss: the CLI's default protection scope covered only per-deployment URLs and previews, *not* the production domain alias, so an early "enabled" state was actually still fully public — caught only by testing the real production URL with an unauthenticated `curl`, not by trusting the tool's own success output. The takeaway recorded there generalizes to any access-control change in this repo: **verify with an actual unauthenticated request against the real URL, not the tool's confirmation.**
+With `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` set, `proxy.ts` sends every signed-out page request to `/sign-in`, and the credential-taking server actions call `requireSession()`. A half-set configuration fails closed. See [Authentication](./authentication.md).
+
+With no auth configured, there is no login. Vercel Authentication (deployment protection) was enabled once (2026-09-23) and then explicitly disabled the next day, once the design settled on "pasted credentials are the access control" — recorded in detail in [`walmart-margin-tracker-plan.md`](../../walmart-margin-tracker-plan.md), including a caught near-miss: the CLI's default protection scope covered only per-deployment URLs and previews, *not* the production domain alias, so an early "enabled" state was actually still fully public — caught only by testing the real production URL with an unauthenticated `curl`, not by trusting the tool's own success output. The takeaway recorded there generalizes to any access-control change in this repo: **verify with an actual unauthenticated request against the real URL, not the tool's confirmation.**
 
 ### Credentials are used per request, never cached or logged server-side
 
@@ -88,7 +91,7 @@ The portable save file (`engine/portable/`) is built from the cost/box/alias inp
 
 ### Server actions are public endpoints
 
-`describeSources`, `listPeriods`, and `fetchSnapshot` in [`lib/gateway/actions.ts`](../../lib/gateway/actions.ts) are Next.js Server Actions marked `"use server"`, which makes each one a public HTTP POST endpoint at the framework level — anyone who can reach the deployed app can call them directly, not just through the rendered UI. This is accepted as-is (documented in [`multi-marketplace-plan.md`](../multi-marketplace-plan.md)'s "Risks" section) because they're only useful with valid marketplace credentials the caller must already possess, and connector error messages are designed to never echo a credential back (see above).
+`describeSources`, `listPeriods`, and `fetchSnapshot` in [`lib/gateway/actions.ts`](../../lib/gateway/actions.ts) are Next.js Server Actions marked `"use server"`, which makes each one a public HTTP POST endpoint at the framework level — anyone who can reach the deployed app can call them directly, not just through the rendered UI. This is accepted as-is (documented in [`multi-marketplace-plan.md`](../multi-marketplace-plan.md)'s "Risks" section) because they're only useful with valid marketplace credentials the caller must already possess, and connector error messages are designed to never echo a credential back (see above). When sign-in is on, `listPeriods` and `fetchSnapshot` also call `requireSession()` first, because an action can be posted to any route, including the public `/sign-in` (see [Authentication — Two layers of protection](./authentication.md#two-layers-of-protection)).
 
 ### Import size limits
 
@@ -99,10 +102,11 @@ The portable save file (`engine/portable/`) is built from the cost/box/alias inp
 | File | Purpose |
 |---|---|
 | [`next.config.ts`](../../next.config.ts) | Disables dev-server Server Action argument logging (see above) — the only non-default setting |
-| [`eslint.config.mjs`](../../eslint.config.mjs) | Next.js's core-web-vitals + TypeScript presets, plus the `app/**` import-boundary rule documented above |
+| [`eslint.config.mjs`](../../eslint.config.mjs) | Next.js's core-web-vitals + TypeScript presets, plus the `app/**` import-boundary rule documented above and the auth boundary (only `lib/auth/providers/` imports `@clerk/*`) |
+| [`proxy.ts`](../../proxy.ts) | Next 16's renamed `middleware.ts`: runs the auth provider's check before each page and server action. A pass-through when auth is off. See [Authentication](./authentication.md) |
 | [`tsconfig.json`](../../tsconfig.json) | Standard Next.js TypeScript config; `strict: true`; `@/*` path alias to the repo root |
 | [`postcss.config.mjs`](../../postcss.config.mjs) | Tailwind CSS 4 PostCSS plugin — no project-specific customization beyond Tailwind defaults |
-| [`.env.example`](../../.env.example) | Documents `DATABASE_URL`, `WALMART_CLIENT_ID`, `WALMART_CLIENT_SECRET` — copy to `.env.local` for local scripts |
+| [`.env.example`](../../.env.example) | Documents `DATABASE_URL`, `WALMART_CLIENT_ID`, `WALMART_CLIENT_SECRET` and the optional auth variables — copy to `.env.local` |
 
 `AGENTS.md` (linked from `CLAUDE.md`) is worth noting separately: it's not application configuration but an instruction file for AI coding agents, warning that this Next.js version (16) has breaking changes from what a model's training data likely assumes, and pointing at `node_modules/next/dist/docs/` for the real API surface. It's regenerated automatically by `next dev` (see `node_modules/next/dist/server/lib/generate-agent-files.js`) and is expected to be committed as part of keeping the tree clean.
 
