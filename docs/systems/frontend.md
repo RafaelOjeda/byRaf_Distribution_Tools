@@ -11,7 +11,7 @@ The entire product surface is one Next.js App Router route: `app/(dashboard)/das
 ## Responsibilities
 
 - Render the credential form, settlement-period picker, summary tiles, and six report tabs.
-- Hold every piece of user-entered state: pasted credentials, the fetched `Snapshot`, typed costs/box dimensions/aliases, the active tab, the source filter.
+- Hold every piece of user-entered state: pasted credentials, the fetched `Snapshot`, typed costs/box cost/aliases, the active tab, the source filter.
 - Call the two gateway server actions (`listPeriods`, `fetchSnapshot`) and the one pure function (`buildReport`) — nothing else reaches outside `app/`.
 - Provide CSV download buttons (client-side `Blob` + anchor download, nothing round-trips to a server).
 - Provide PWA install behavior (`InstallPrompt`) and mobile-first responsive layouts (card lists below `md`, tables above).
@@ -90,7 +90,7 @@ stateDiagram-v2
 | `selectedPeriods` | `Record<sourceId, Set<string>>` | Checked periods per source |
 | `snapshot` | `Snapshot \| null` | Opaque result of `fetchSnapshot` — see [Gateway Contract](./gateway-contract.md#the-snapshot-brand) |
 | `sourceFilter` | `string[] \| "all"` | Which connected sources' data to include in the report |
-| `inputs` | `Record<sku, Partial<Record<SkuField, string>>>` | Raw *string* box-dimension/box-cost fields, keyed by normalized SKU |
+| `inputs` | `Record<sku, Partial<Record<SkuField, string>>>` | Raw *string* box-cost field, keyed by normalized SKU |
 | `lotDrafts` | `Record<sku, LotDraft[]>` | Raw *string* qty/unitCost pairs per purchase batch |
 | `aliasDrafts` | `Record<sku, string>` | Raw comma/semicolon-separated alias SKU text per SKU |
 | `expanded` | `Set<sku>` | Which SKUs' purchase-batch editor is open |
@@ -127,7 +127,7 @@ Because `snapshot` doesn't change, this entire chain runs with **zero network ca
 | **By SKU** | `SkuTab` → `SkuSummaryTable` | `bySku: SkuSummary[]` | Per-product rollup; flags `possibleDuplicates`; CSV export |
 | **Order lines** | `OrdersTab` → `OrderLineCard` (phone) / table (desktop) | `orderLines: MarginRow[]` | One row per settled or estimated line; settled/estimated totals shown separately, never blended; CSV export |
 | **Price over time** | `PriceTab` → `PriceChart` | `priceSeries: PriceSeries[]` | Hand-built SVG chart — see [below](#price-chart) |
-| **Inventory & costs** | `InventoryTab` → `InventoryCard` (phone) / table (desktop) | derived from `parsedInputs` + `Report.inventory` | The only tab with write operations: cost entry, box dimensions, CSV import/export |
+| **Inventory & costs** | `InventoryTab` → `InventoryCard` (phone) / table (desktop) | derived from `parsedInputs` + `Report.inventory` | The only tab with write operations: cost entry, box cost, CSV import/export |
 | **Stock value** | `StockTab` → `StockValueTable` | `stock` (from `stockValue()`, see [Engine](./engine.md#stockvalue-pooled-never-summed-across-sources)) | Merchant-fulfilled only; oversell risk flagged |
 | **Marketplace fees** | `FeesTab` → `MarketplaceFeesTable` | `marketplaceFees: AccountCharge[]` | Charges tied to no single order line |
 
@@ -137,7 +137,7 @@ Every tab follows the same **mobile-first pattern**: a `<ul>` of cards rendered 
 
 The one tab that mutates state rather than just displaying it. Two input paths converge on the same state:
 
-1. **Manual entry** — `CostLotsEditor` (batch qty × unit cost rows) and box-dimension inputs, wired through `setField`/`addLot`/`updateLot`/`removeLot`/`aliasDrafts`.
+1. **Manual entry** — `CostLotsEditor` (batch qty × unit cost rows) and the box-cost input, wired through `setField`/`addLot`/`updateLot`/`removeLot`/`aliasDrafts`.
 2. **File import** — `handleImportFile` reads the file into bytes, calls `parseImportFile` (from `lib/gateway`) with the current inputs, and stores the result in `importPreview` *without touching any other state*. `ImportPreviewCard` shows stats, a diff against the current entries, and warnings/errors; **Merge** or **Replace** (`confirmImport`) then applies it — see [Engine — Portable save file](./engine.md#portable-save-file-engineportable).
 
 **Export / Import controls (`SaveLoadControls`)** live in the data screen's header (Export menu + Import file) and, import-only, on the connect screen so a saved file can be loaded before connecting. `handleExport` builds the file (workbook, CSV bundle, or the costs-only CSV) and downloads it client-side. The costs-only CSV (`costsToCsv`) still lists every loaded SKU with blank batch columns when nothing is entered, so it doubles as a fill-in template. API credentials (`connections`) are never passed to the exporter.

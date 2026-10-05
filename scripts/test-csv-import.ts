@@ -24,10 +24,10 @@ function check(name: string, fn: () => void) {
 
 check("multi-batch file with a box-only row parses cleanly", () => {
   const csv = [
-    "SKU,Batch Qty,Batch Unit Cost,Box Cost,Box Length,Box Width,Box Height",
-    "abc-1,24,3.50,0.42,10,8,4",
-    "abc-1,12,3.75,,,,",
-    "abc-2,,,0.30,6,6,6",
+    "SKU,Batch Qty,Batch Unit Cost,Box Cost",
+    "abc-1,24,3.50,0.42",
+    "abc-1,12,3.75,",
+    "abc-2,,,0.30",
   ].join("\r\n");
   const result = parseCostImportCsv(csv);
   assert.deepEqual(result.errors, []);
@@ -41,7 +41,7 @@ check("multi-batch file with a box-only row parses cleanly", () => {
   ]);
   assert.equal(result.inputs["ABC-1"].boxCost, 0.42);
   assert.equal(result.inputs["ABC-2"].lots, undefined);
-  assert.equal(result.inputs["ABC-2"].boxLength, 6);
+  assert.equal(result.inputs["ABC-2"].boxCost, 0.3);
 });
 
 check("missing SKU column is a hard error", () => {
@@ -110,9 +110,6 @@ check("costsToCsv -> parseCostImportCsv round-trips", () => {
         { qty: 12, unitCost: 3.75 },
       ],
       boxCost: 0.42,
-      boxLength: 10,
-      boxWidth: 8,
-      boxHeight: 4,
     },
     "SKU-2": { boxCost: 0.3 },
   };

@@ -34,7 +34,7 @@ The existing cost CSV stays fully supported. Its columns are unchanged, so older
 | Table | Rows | Columns |
 |---|---|---|
 | `Costs` | One per purchase batch | `SKU`, `Batch Qty`, `Batch Unit Cost` |
-| `Boxes` | One per SKU with any box info | `SKU`, `Box Cost`, `Box Length`, `Box Width`, `Box Height` |
+| `Boxes` | One per SKU with any box info | `SKU`, `Box Cost` |
 | `Aliases` | One per SKU→alias pair | `SKU`, `Alias SKU` |
 | `Settings` | Key/value | `Key`, `Value` (selected periods per source, source filter) |
 | `Meta` | Key/value | `schema_version`, `exported_at`, `app` |

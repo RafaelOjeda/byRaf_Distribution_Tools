@@ -151,7 +151,7 @@ export function skuSummaryToCsv(rows: SkuSummary[]): string {
 }
 
 // ---------------------------------------------------------------------
-// Cost import / export (purchase batches + box cost & dimensions)
+// Cost import / export (purchase batches + box cost)
 // ---------------------------------------------------------------------
 
 export const COST_IMPORT_HEADERS = [
@@ -159,9 +159,6 @@ export const COST_IMPORT_HEADERS = [
   "Batch Qty",
   "Batch Unit Cost",
   "Box Cost",
-  "Box Length",
-  "Box Width",
-  "Box Height",
   "Alias SKUs",
 ];
 
@@ -190,9 +187,6 @@ export function costsToCsv(
     const lots = inp?.lots ?? [];
     const extra: Cell[] = [
       inp?.boxCost ?? null,
-      inp?.boxLength ?? null,
-      inp?.boxWidth ?? null,
-      inp?.boxHeight ?? null,
       inp?.aliasSkus?.length ? inp.aliasSkus.join(ALIAS_SEPARATOR) : null,
     ];
     if (lots.length === 0) {
@@ -315,12 +309,9 @@ function parseNumericCell(raw: string, label: string): number | undefined {
   return n;
 }
 
-type BoxKey = "boxCost" | "boxLength" | "boxWidth" | "boxHeight";
+type BoxKey = "boxCost";
 const BOX_COLUMNS: { key: BoxKey; label: string }[] = [
   { key: "boxCost", label: "Box Cost" },
-  { key: "boxLength", label: "Box Length" },
-  { key: "boxWidth", label: "Box Width" },
-  { key: "boxHeight", label: "Box Height" },
 ];
 
 /**

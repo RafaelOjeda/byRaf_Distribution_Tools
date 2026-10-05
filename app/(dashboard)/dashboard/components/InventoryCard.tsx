@@ -10,8 +10,6 @@ export function InventoryCard({
   onHandTitle,
   stock,
   avg,
-  cu,
-  dim,
   boxValues,
   onBoxChange,
   drafts,
@@ -28,8 +26,6 @@ export function InventoryCard({
   onHandTitle?: string;
   stock: ReturnType<typeof reconcileStock>;
   avg: number | null;
-  cu: number | null;
-  dim: number | null;
   boxValues: Partial<Record<SkuField, string>>;
   onBoxChange: (field: SkuField, value: string) => void;
   drafts: LotDraft[];
@@ -83,7 +79,7 @@ export function InventoryCard({
         </p>
       ) : null}
 
-      <div className="mt-3 grid grid-cols-4 gap-2">
+      <div className="mt-3 grid grid-cols-1 gap-2">
         {BOX_FIELDS.map((f) => (
           <label key={f.key} className="flex min-w-0 flex-col gap-1 text-xs text-sc-ink-2">
             {f.label}
@@ -101,11 +97,6 @@ export function InventoryCard({
           </label>
         ))}
       </div>
-      {(cu !== null || dim !== null) && (
-        <p className="mt-1 text-xs text-sc-ink-2">
-          {cu?.toFixed(0)} cu in · {dim?.toFixed(1)} lb dim wt (estimate)
-        </p>
-      )}
 
       <button
         onClick={onToggle}

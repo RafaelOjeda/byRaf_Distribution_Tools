@@ -36,7 +36,7 @@ export function classifyTable(
     return null;
   }
   const costs = h.has("batch qty") || h.has("batch unit cost");
-  const boxes = h.has("box cost") || h.has("box length");
+  const boxes = h.has("box cost");
   const aliases = h.has("alias sku") || h.has("alias skus");
   // The pre-portable cost CSV: batches + box + a joined "Alias SKUs" cell in one table.
   if (h.has("alias skus") || (costs && boxes)) return "legacy";
