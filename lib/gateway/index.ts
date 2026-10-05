@@ -49,12 +49,9 @@ export {
 } from "./engine/portable";
 
 export {
-  DIM_DIVISOR,
   SHIPPING_PCT_ALERT,
   SHIPPING_PCT_WARN,
   averageUnitCost,
-  cubicInches,
-  dimWeight,
   reconcileStock,
   type MarginRow,
   type SkuInputs,

@@ -1,9 +1,6 @@
 import { Fragment, type Dispatch, type SetStateAction } from "react";
 import {
-  DIM_DIVISOR,
   averageUnitCost,
-  cubicInches,
-  dimWeight,
   reconcileStock,
   type CostInputs,
   type Report,
@@ -74,8 +71,6 @@ export function InventoryTab({
               }
               stock={reconcileStock(parsed.lots, soldBySku.get(sku) ?? 0, inv ? inv.onHand : null)}
               avg={averageUnitCost(parsed.lots)}
-              cu={cubicInches(parsed)}
-              dim={dimWeight(parsed)}
               boxValues={inputs[sku] ?? {}}
               onBoxChange={(field, value) => setField(sku, field, value)}
               drafts={lotDrafts[sku] ?? []}
@@ -116,20 +111,11 @@ export function InventoryTab({
                   {f.label}
                 </th>
               ))}
-              <th className="pr-3 text-right">Cu in</th>
-              <th
-                className="pr-3 text-right"
-                title={`Volume ÷ ${DIM_DIVISOR}. An estimate of billable dimensional weight — not what the carrier actually charged.`}
-              >
-                Dim wt
-              </th>
             </tr>
           </thead>
           <tbody>
             {skus.map((sku) => {
               const parsed = parsedInputs[sku] ?? {};
-              const cu = cubicInches(parsed);
-              const dim = dimWeight(parsed);
               const drafts = lotDrafts[sku] ?? [];
               const inv = inventoryBySku.get(sku);
               const stock = reconcileStock(
@@ -228,16 +214,10 @@ export function InventoryTab({
                         />
                       </td>
                     ))}
-                    <td className="pr-3 text-right text-sc-ink-2">
-                      {cu === null ? "—" : cu.toFixed(0)}
-                    </td>
-                    <td className="pr-3 text-right text-sc-ink-2">
-                      {dim === null ? "—" : `${dim.toFixed(1)} lb`}
-                    </td>
                   </tr>
                   {isOpen && (
                     <tr className="border-b border-sc-row bg-sc-head">
-                      <td colSpan={BOX_FIELDS.length + 8} className="px-3 py-3">
+                      <td colSpan={BOX_FIELDS.length + 6} className="px-3 py-3">
                         <CostLotsEditor
                           sku={sku}
                           drafts={drafts}
@@ -260,7 +240,7 @@ export function InventoryTab({
             {skus.length === 0 && (
               <tr>
                 <td
-                  colSpan={BOX_FIELDS.length + 8}
+                  colSpan={BOX_FIELDS.length + 6}
                   className="py-3 text-sc-ink-2"
                 >
                   No SKUs found in the returned data.

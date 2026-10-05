@@ -77,7 +77,7 @@ flowchart TB
 
 | Layer | Lives at | Knows about | Does not know about |
 |---|---|---|---|
-| **Dashboard (frontend)** | `app/(dashboard)/dashboard/` | Forms, tables, tabs, the price chart, what the user typed (credentials, costs, box dimensions) | Marketplace names, fee vocabulary, HTTP, credentials' meaning |
+| **Dashboard (frontend)** | `app/(dashboard)/dashboard/` | Forms, tables, tabs, the price chart, what the user typed (credentials, costs, box cost) | Marketplace names, fee vocabulary, HTTP, credentials' meaning |
 | **Gateway contract + actions** | `lib/gateway/contract/`, `lib/gateway/actions.ts` | Every connected source, the shape of a `Report`, orchestrating connectors | The dashboard's rendering, browser-side state |
 | **Engine (pure math)** | `lib/gateway/engine/` | Margin calculation, stock pooling, CSV shape, SKU identity/aliasing, price trends | Network, credentials, marketplace-specific field names |
 | **Connectors** | `lib/gateway/connectors/` | One marketplace's real API (auth, pagination, field names, quirks) | The dashboard, the engine's internals, other connectors |

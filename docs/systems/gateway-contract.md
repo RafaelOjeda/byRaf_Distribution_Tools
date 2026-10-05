@@ -133,7 +133,7 @@ export function brandSnapshot<T extends object>(data: T): Snapshot & T { return 
 interface CostLot { qty: number; unitCost: number; }
 interface SkuCostInputs {
   lots?: CostLot[];
-  boxCost?: number; boxLength?: number; boxWidth?: number; boxHeight?: number;
+  boxCost?: number;
   aliasSkus?: string[];        // other sources' SKUs for the same physical product
 }
 type CostInputs = Record<string, SkuCostInputs>;   // keyed by normalizeSku(sku)

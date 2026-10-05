@@ -59,9 +59,6 @@ export interface CostLot {
 export interface SkuCostInputs {
   lots?: CostLot[];
   boxCost?: number;
-  boxLength?: number;
-  boxWidth?: number;
-  boxHeight?: number;
   /** Other SKUs (on any source) that are the same physical product. Phase 4. */
   aliasSkus?: string[];
 }

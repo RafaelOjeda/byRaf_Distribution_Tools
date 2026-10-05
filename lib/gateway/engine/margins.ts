@@ -87,9 +87,6 @@ export interface CostLot {
 export interface SkuInputs {
   lots?: CostLot[];
   boxCost?: number;
-  boxLength?: number;
-  boxWidth?: number;
-  boxHeight?: number;
   /** Other SKUs (on any source) that are this same physical product. Resolved before grouping - see engine/identity.ts. */
   aliasSkus?: string[];
 }
@@ -281,24 +278,6 @@ export function reconcileStock(
     discrepancy:
       onHand === null || purchased === 0 ? null : impliedOnHand - onHand,
   };
-}
-
-/**
- * The divisor carriers use to turn box volume into billable "dimensional
- * weight" - 139 is the common domestic ground figure. Shown so an
- * oversized box's shipping charge is explainable rather than mysterious;
- * it is an estimate, not what a marketplace actually billed.
- */
-export const DIM_DIVISOR = 139;
-
-export function cubicInches(i: SkuInputs): number | null {
-  if (!i.boxLength || !i.boxWidth || !i.boxHeight) return null;
-  return i.boxLength * i.boxWidth * i.boxHeight;
-}
-
-export function dimWeight(i: SkuInputs): number | null {
-  const cu = cubicInches(i);
-  return cu === null ? null : cu / DIM_DIVISOR;
 }
 
 export interface MarginRow extends OrderLineSummary {

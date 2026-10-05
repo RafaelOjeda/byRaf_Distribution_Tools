@@ -18,9 +18,6 @@ function toSkuInputs(costs: CostInputs): Record<string, SkuInputs> {
     out[sku] = {
       lots: c.lots,
       boxCost: c.boxCost,
-      boxLength: c.boxLength,
-      boxWidth: c.boxWidth,
-      boxHeight: c.boxHeight,
       aliasSkus: c.aliasSkus,
     };
   }

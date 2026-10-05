@@ -128,16 +128,6 @@ discrepancy   = onHand === null || purchased === 0 ? null : impliedOnHand − on
 
 Used by the Inventory & Costs tab's "Left" column (amber when nonzero) — a hint that a batch is missing or mistyped, never a hard constraint. See [Frontend — Inventory & costs tab](./frontend.md#inventory--costs-tab).
 
-### Box dimensions and dimensional weight
-
-```ts
-DIM_DIVISOR = 139   // common domestic-ground carrier divisor
-cubicInches(i) = boxLength × boxWidth × boxHeight   (null if any dimension is missing)
-dimWeight(i)   = cubicInches(i) / DIM_DIVISOR
-```
-
-Purely informational — shown so an oversized box's shipping cost is *explainable*, not a claim about what a carrier actually billed.
-
 ## SKU identity resolution (`identity.ts`)
 
 ```mermaid

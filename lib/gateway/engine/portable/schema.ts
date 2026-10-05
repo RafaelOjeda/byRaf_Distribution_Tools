@@ -90,22 +90,13 @@ export const EMPTY_SETTINGS: PortableSettings = {
 };
 
 export const COSTS_HEADERS = ["SKU", "Batch Qty", "Batch Unit Cost"];
-export const BOXES_HEADERS = [
-  "SKU",
-  "Box Cost",
-  "Box Length",
-  "Box Width",
-  "Box Height",
-];
+export const BOXES_HEADERS = ["SKU", "Box Cost"];
 export const ALIASES_HEADERS = ["SKU", "Alias SKU"];
 export const SETTINGS_HEADERS = ["Key", "Source", "Value"];
 export const META_HEADERS = ["Key", "Value"];
 
 const BOX_FIELDS = [
   { key: "boxCost", label: "Box Cost" },
-  { key: "boxLength", label: "Box Length" },
-  { key: "boxWidth", label: "Box Width" },
-  { key: "boxHeight", label: "Box Height" },
 ] as const;
 
 // ---------------------------------------------------------------------
