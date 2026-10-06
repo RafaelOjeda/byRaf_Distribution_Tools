@@ -22,6 +22,7 @@ This is the central map of the repository: what it is, how it's put together, an
 | Understand env vars, the import-boundary rule, and the security model | [Authentication](./systems/authentication.md) | Optional env-driven sign-in (Clerk), the provider-neutral `lib/auth` adapter, per-platform setup, how to add a provider, and how saved data will key off the user id |
 | [Configuration & Security](./systems/configuration-and-security.md) |
 | Know what's tested, how, and how deploys happen | [Testing & Deployment](./systems/testing-and-deployment.md) |
+| Find the Receipts folder (PDF upload, stateless) | [Frontend — Receipts folder](./systems/frontend.md#receipts-folder-appdashboardreceipts) |
 | Understand saving/loading inputs as XLSX or CSV (design record) | [`import-export-plan.md`](./import-export-plan.md) · [Engine — Portable save file](./systems/engine.md#portable-save-file-engineportable) |
 | Read the user-facing product description | [`README.md`](../README.md) |
 | Read the original design/decision history | [`walmart-margin-tracker-plan.md`](../walmart-margin-tracker-plan.md) (root), [`multi-marketplace-plan.md`](./multi-marketplace-plan.md), [`walmart-api-notes.md`](./walmart-api-notes.md) |

@@ -165,6 +165,21 @@ Shown on the **connect screen**, before any credentials are entered, so it's vis
 - **Dismissal** is remembered via `localStorage` (`byraf-install-dismissed`) — the *only* thing this app persists in the browser, consistent with the "nothing is stored" security model (see [Configuration & Security](./configuration-and-security.md)).
 - Uses `useSyncExternalStore` with a `serverSnapshot` of `"hidden"`, so server-rendered HTML always matches the first client render (avoiding a hydration mismatch) and the real platform-detected state appears immediately after hydration.
 
+## Receipts folder (`app/(dashboard)/receipts/`)
+
+A standalone, stateless folder for PDF receipts, opened from the **Receipts** button in the dashboard header. Not linked to batches or SKUs.
+
+| File | Role |
+|---|---|
+| `ReceiptsProvider.tsx` | Context holding the receipts (in memory only), `addFiles`/`rename`/`remove`, and blob-URL bookkeeping. Rendered in `app/(dashboard)/layout.tsx`. |
+| `ReceiptsPanel.tsx` | The modal window (a native `<dialog>`): upload zone, per-upload results, search, list, Download all. |
+| `ReceiptsButton.tsx` | Header button, shows the count. |
+| `utils.ts` | Pure helpers: PDF sniffing, limits, name cleanup, SHA-256 duplicate id, zip backup. Covered by `npm run test:receipts`. |
+
+**Why it is a panel and not a `/receipts` page:** the app keeps nothing between page loads, so navigating away from `/dashboard` would unmount `DashboardClient` and discard the typed-in credentials and costs. State lives in the layout instead, which survives the panel opening and closing.
+
+**Reviving persistence later:** the UI only talks to `useReceipts()`, so swapping the in-memory array for IndexedDB or cloud storage keyed by the signed-in user id (see [Authentication](./authentication.md#toward-saved-data)) is a change inside `ReceiptsProvider.tsx`.
+
 ## Legacy route
 
 `app/(dashboard)/margins/page.tsx` is a redirect to `/dashboard`, and `app/page.tsx` redirects `/` to `/dashboard` as well. `/margins` was the route before the multi-marketplace refactor unified everything under `/dashboard`; it's kept only so old bookmarks/links keep working.

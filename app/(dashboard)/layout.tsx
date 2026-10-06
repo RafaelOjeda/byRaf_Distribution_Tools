@@ -1,7 +1,10 @@
 import { UserMenu } from "@/lib/auth";
+import { ReceiptsButton } from "./receipts/ReceiptsButton";
+import { ReceiptsProvider } from "./receipts/ReceiptsProvider";
 
 export default function DashboardLayout({ children }: LayoutProps<"/">) {
   return (
+    <ReceiptsProvider>
     <div className="flex min-h-dvh flex-col">
       {/* Classic Mac menu bar: white strip, black text, single black rule
           underneath - never inverted, unlike a pulled-down menu. */}
@@ -19,7 +22,8 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
           <span className="text-[15px] font-bold tracking-tight">BYRAF</span>
           <span aria-hidden="true" className="h-4 w-px bg-sc-ink/30" />
           <span className="text-sm text-sc-ink-2">Margins Dashboard</span>
-          <div className="ml-auto flex items-center">
+          <div className="ml-auto flex items-center gap-3">
+            <ReceiptsButton />
             <UserMenu />
           </div>
         </div>
@@ -30,5 +34,6 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
         <div className="sc-card px-4 py-6 sm:px-6">{children}</div>
       </main>
     </div>
+    </ReceiptsProvider>
   );
 }

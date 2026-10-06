@@ -43,6 +43,10 @@ Walmart only reports fees once a settlement period closes, about two weeks after
 
 Settled and estimated totals are always shown separately, never blended.
 
+### Receipts folder
+
+The **Receipts** button in the header opens a folder for PDF receipts: add several at once (picker or drag-and-drop), then view, download, rename or delete each, search by name, or download everything as one `.zip`. Like the rest of the app it is stateless: receipts live in memory in the open tab and **a refresh or closed tab empties the folder**, so download the zip before you leave. Files never leave the browser, and they aren't attached to any batch or SKU yet. Limits: PDF only (checked by file contents, not name), 10 MB per file, 100 MB in total, and the same file added twice is skipped.
+
 ### Privacy and security model
 
 - **Nothing is stored.** No database is used. Credentials and all fetched data live only in your browser tab and the single server request that needs them. Refresh and it is gone, including anything you typed.
@@ -84,6 +88,7 @@ npm run dev        # http://localhost:3000/margins
 | `npm run test:walmart` | Checks that credentials in `.env.local` can fetch a token and list settlement reports |
 | `npm run test:csv` | Fixture checks for the cost CSV import/export parser |
 | `npm run test:portable` | Round-trip and rejection checks for the xlsx / zip / csv save file |
+| `npm run test:receipts` | PDF detection, upload limits, name cleanup, duplicate detection and zip backup for the Receipts folder |
 | `npm run test:auth` | Checks which auth provider each env combination selects, and that half-set keys fail closed |
 | `npm run db:push` | Applies the Drizzle schema to Neon (unused by the app today, see below) |
 
