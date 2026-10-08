@@ -2,7 +2,13 @@ import type { Report } from "@/lib/gateway";
 import { PanelHeader } from "../shared/PanelHeader";
 import { StockValueTable } from "../StockValueTable";
 
-export function StockTab({ stock }: { stock: Report["stock"] }) {
+export function StockTab({
+  stock,
+  nameBySku,
+}: {
+  stock: Report["stock"];
+  nameBySku: Map<string, string>;
+}) {
   return (
     <>
       <PanelHeader title="Stock value">
@@ -16,7 +22,7 @@ export function StockTab({ stock }: { stock: Report["stock"] }) {
         Merchant-fulfilled stock only — units held in a
         marketplace&apos;s own warehouses aren&apos;t included yet.
       </PanelHeader>
-      <StockValueTable stock={stock} />
+      <StockValueTable stock={stock} nameBySku={nameBySku} />
     </>
   );
 }

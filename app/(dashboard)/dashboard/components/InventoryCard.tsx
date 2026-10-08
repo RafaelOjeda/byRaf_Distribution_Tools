@@ -7,6 +7,7 @@ import { CostLotsEditor } from "./CostLotsEditor";
 
 export function InventoryCard({
   sku,
+  name,
   onHand,
   onHandTitle,
   stock,
@@ -23,6 +24,7 @@ export function InventoryCard({
   onAliasChange,
 }: {
   sku: string;
+  name: string;
   onHand: number | null;
   onHandTitle?: string;
   stock: ReturnType<typeof reconcileStock>;
@@ -42,7 +44,7 @@ export function InventoryCard({
   return (
     <li className="rounded-lg border border-sc-line p-3">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 font-bold break-words">{sku}</div>
+        <div className="min-w-0 font-bold break-words">{name}</div>
         <div className="shrink-0 text-right">
           <div className="text-xs text-sc-ink-2">Avg cost</div>
           <div className="font-bold">
@@ -113,6 +115,7 @@ export function InventoryCard({
         <div className="mt-2 rounded-lg bg-sc-head p-3">
           <CostLotsEditor
             sku={sku}
+            name={name}
             drafts={drafts}
             onAdd={onAdd}
             onUpdate={onUpdate}

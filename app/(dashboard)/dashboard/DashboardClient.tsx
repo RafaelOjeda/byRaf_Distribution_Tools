@@ -283,6 +283,18 @@ export default function DashboardClient({
     return [...set].sort();
   }, [liveReport]);
 
+  // SKUs mean little to a reader; show each product's name where we have one.
+  const nameBySku = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const l of liveReport?.orderLines ?? []) {
+      if (l.sku && l.itemName) {
+        const key = normalizeSku(l.sku);
+        if (!m.has(key)) m.set(key, l.itemName);
+      }
+    }
+    return m;
+  }, [liveReport]);
+
   const soldBySku = useMemo(() => {
     const m = new Map<string, number>();
     for (const s of liveReport?.bySku ?? []) m.set(s.sku, s.units);
@@ -705,6 +717,7 @@ export default function DashboardClient({
       {tab === "inventory" && (
         <InventoryTab
           skus={skus}
+          nameBySku={nameBySku}
           parsedInputs={parsedInputs}
           inventoryBySku={inventoryBySku}
           soldBySku={soldBySku}
@@ -721,7 +734,7 @@ export default function DashboardClient({
         />
       )}
 
-      {tab === "stock" && <StockTab stock={stockVal} />}
+      {tab === "stock" && <StockTab stock={stockVal} nameBySku={nameBySku} />}
 
       {tab === "fees" && <FeesTab fees={r.marketplaceFees} />}
 

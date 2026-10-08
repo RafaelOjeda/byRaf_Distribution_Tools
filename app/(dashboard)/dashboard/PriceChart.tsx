@@ -216,7 +216,7 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
               <line x1="0" y1="5" x2="22" y2="5" stroke={color(i)} strokeWidth="2" strokeLinecap="round" />
               <circle cx="11" cy="5" r="3" fill={color(i)} />
             </svg>
-            <span style={{ color: "var(--pc-ink)" }}>{s.sku}</span>
+            <span style={{ color: "var(--pc-ink)" }}>{s.itemName || s.sku}</span>
             <span className="text-xs" style={{ color: "var(--pc-ink-2)" }}>
               {s.points.length > 1
                 ? `${usd(s.first.avg)} → ${usd(s.last.avg)} (${pctText(s.changePct ?? 0)})`
@@ -306,8 +306,8 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
               return (
                 <text key={s.sku} x={x0} y={y} dominantBaseline="middle" fontSize="12" fill="var(--pc-ink-2)">
                   <tspan fontWeight="600" fill="var(--pc-ink)">{usd(s.last.avg)}</tspan>
-                  {chars >= 6 && <tspan dx="5">{short(s.sku, chars)}</tspan>}
-                  <title>{`${s.sku}: latest ${usd(s.last.avg)}`}</title>
+                  {chars >= 6 && <tspan dx="5">{short(s.itemName || s.sku, chars)}</tspan>}
+                  <title>{`${s.itemName || s.sku}: latest ${usd(s.last.avg)}`}</title>
                 </text>
               );
             })}
@@ -351,7 +351,7 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
                       <line x1="0" y1="4" x2="14" y2="4" stroke={color(i)} strokeWidth="2" strokeLinecap="round" />
                     </svg>
                     <span className="text-sm font-semibold">{usd(p.avg)}</span>
-                    <span style={{ color: "var(--pc-ink-2)" }}>{short(s.sku, 26)}</span>
+                    <span style={{ color: "var(--pc-ink-2)" }}>{short(s.itemName || s.sku, 26)}</span>
                   </div>
                   <div className="whitespace-nowrap pl-[22px]" style={{ color: "var(--pc-muted)" }}>
                     {p.orders} order{p.orders === 1 ? "" : "s"}
@@ -375,7 +375,7 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
           <Table className="w-full text-sm whitespace-nowrap">
             <thead>
               <tr className="border-b text-left" style={{ borderColor: "var(--pc-border)" }}>
-                <th className="pr-3">SKU</th>
+                <th className="pr-3">Item</th>
                 <th className="pr-3">Date</th>
                 <th className="pr-3 text-right">Avg price</th>
                 <th className="pr-3 text-right">Lowest</th>
@@ -388,7 +388,7 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
               {series.flatMap((s) =>
                 s.points.map((p) => (
                   <tr key={`${s.sku}-${p.date}`} className="border-b" style={{ borderColor: "var(--pc-border)" }}>
-                    <td className="pr-3">{s.sku}</td>
+                    <td className="pr-3">{s.itemName || s.sku}</td>
                     <td className="pr-3">{fmtDate(p.date, true)}</td>
                     <td className="pr-3 text-right font-medium">{usd(p.avg)}</td>
                     <td className="pr-3 text-right">{usd(p.min)}</td>
