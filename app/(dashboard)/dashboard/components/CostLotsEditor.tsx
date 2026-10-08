@@ -5,6 +5,7 @@ import { money } from "../utils/format";
 
 export function CostLotsEditor({
   sku,
+  name,
   drafts,
   onAdd,
   onUpdate,
@@ -13,6 +14,7 @@ export function CostLotsEditor({
   onAliasChange,
 }: {
   sku: string;
+  name: string;
   drafts: LotDraft[];
   onAdd: () => void;
   onUpdate: (index: number, field: keyof LotDraft, value: string) => void;
@@ -30,7 +32,7 @@ export function CostLotsEditor({
   return (
     <div className="flex w-full flex-col items-start gap-2">
       <span className="text-xs text-sc-ink-2">
-        Purchase batches for {sku}
+        Purchase batches for {name}
       </span>
 
       {drafts.map((lot, i) => (

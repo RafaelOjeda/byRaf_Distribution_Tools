@@ -16,9 +16,9 @@ export function OrderLineCard({ m }: { m: MarginRow }) {
             {m.sourceLabel ? `${m.sourceLabel} · ` : ""}
             {est ? `Estimated · ordered ${m.orderDate}` : `Settled · ${m.postedDate ?? ""}`}
           </div>
-          <div className="font-bold break-words">{m.sku}</div>
+          <div className="font-bold break-words">{m.itemName || m.sku}</div>
           <div className="truncate text-xs text-sc-ink-2">
-            {m.qty} × {m.itemName}
+            {m.qty} × {m.sku}
           </div>
         </div>
         <div className="shrink-0 text-right">

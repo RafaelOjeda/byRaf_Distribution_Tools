@@ -17,8 +17,8 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
           <li key={s.sku} className="rounded-lg border border-sc-line p-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="font-bold break-words">{s.sku}</div>
-                <div className="truncate text-xs text-sc-ink-2">{s.itemName}</div>
+                <div className="font-bold break-words">{s.itemName || s.sku}</div>
+                <div className="truncate text-xs text-sc-ink-2">{s.itemName ? s.sku : ""}</div>
                 {s.bySource.length > 1 && (
                   <div className="truncate text-xs text-sc-ink-2">
                     {s.bySource
@@ -110,7 +110,6 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
       <Table className="w-full text-sm whitespace-nowrap">
         <thead>
           <tr className="border-b border-sc-line text-left">
-            <th className="pr-3">SKU</th>
             <th className="pr-3">Item</th>
             <th className="pr-3 text-right">Units</th>
             <th className="pr-3 text-right">Lines</th>
@@ -152,22 +151,17 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                       : undefined
                   }
                 >
-                  {s.sku}
+                  {s.itemName || s.sku}
+                  {s.possibleDuplicates.length > 0 && (
+                    <span
+                      className="ml-1 text-amber-600"
+                      title={`Possible duplicate of ${s.possibleDuplicates.join(", ")}`}
+                    >
+                      ⚠
+                    </span>
+                  )}
                   {s.bySource.length > 1 && (
                     <span className="text-sc-ink-2/70"> ({s.bySource.length} sources)</span>
-                  )}
-                </td>
-                <td
-                  className="max-w-[11rem] truncate pr-3"
-                  title={
-                    s.possibleDuplicates.length > 0
-                      ? `${s.itemName} - possible duplicate of ${s.possibleDuplicates.join(", ")}`
-                      : s.itemName
-                  }
-                >
-                  {s.itemName}
-                  {s.possibleDuplicates.length > 0 && (
-                    <span className="ml-1 text-amber-600">⚠</span>
                   )}
                 </td>
                 <td className="pr-3 text-right">{s.units}</td>
@@ -259,7 +253,7 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
           })}
           {summaries.length === 0 && (
             <tr>
-              <td colSpan={13} className="py-3 text-sc-ink-2">
+              <td colSpan={12} className="py-3 text-sc-ink-2">
                 No SKUs found.
               </td>
             </tr>

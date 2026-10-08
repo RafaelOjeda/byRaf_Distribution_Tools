@@ -82,7 +82,6 @@ export function OrdersTab({
             <tr className="border-b border-sc-line text-left">
               <th className="pr-3">Status</th>
               <th className="pr-3">Source</th>
-              <th className="pr-3">SKU</th>
               <th className="pr-3">Item</th>
               <th className="pr-3">Fulfillment</th>
               <th className="pr-3 text-right">Qty</th>
@@ -121,7 +120,6 @@ export function OrdersTab({
                     {est ? `Est. · ${m.orderDate?.slice(5)}` : "Settled"}
                   </td>
                   <td className="pr-3">{m.sourceLabel ?? "—"}</td>
-                  <td className="pr-3">{m.sku}</td>
                   <td
                     className="max-w-[11rem] truncate pr-3"
                     title={m.itemName}
@@ -201,7 +199,7 @@ export function OrdersTab({
             {margins.length === 0 && (
               <tr>
                 <td
-                  colSpan={14}
+                  colSpan={13}
                   className="py-3 text-sc-ink-2"
                 >
                   No order lines found.

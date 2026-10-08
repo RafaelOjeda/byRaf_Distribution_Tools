@@ -14,6 +14,7 @@ import { CostLotsEditor } from "../CostLotsEditor";
 
 export function InventoryTab({
   skus,
+  nameBySku,
   parsedInputs,
   inventoryBySku,
   soldBySku,
@@ -29,6 +30,7 @@ export function InventoryTab({
   setAliasDrafts,
 }: {
   skus: string[];
+  nameBySku: Map<string, string>;
   parsedInputs: CostInputs;
   inventoryBySku: Map<string, Report["inventory"][number]>;
   soldBySku: Map<string, number>;
@@ -64,6 +66,7 @@ export function InventoryTab({
             <InventoryCard
               key={sku}
               sku={sku}
+              name={nameBySku.get(sku) || sku}
               onHand={inv ? inv.onHand : null}
               onHandTitle={
                 inv
@@ -96,7 +99,7 @@ export function InventoryTab({
         <Table className="w-full text-sm whitespace-nowrap">
           <thead>
             <tr className="border-b border-sc-line text-left">
-              <th className="pr-3">SKU</th>
+              <th className="pr-3">Item</th>
               <th className="pr-3 text-right">On hand</th>
               <th className="pr-3 text-right">Sold</th>
               <th className="pr-3 text-right">Bought</th>
@@ -143,7 +146,7 @@ export function InventoryTab({
                         <span className="text-sc-ink-2/70">
                           {isOpen ? "▾ " : "▸ "}
                         </span>
-                        {sku}
+                        {nameBySku.get(sku) || sku}
                         {drafts.length > 0 && (
                           <span className="text-sc-ink-2/70">
                             {" "}
@@ -221,6 +224,7 @@ export function InventoryTab({
                       <td colSpan={BOX_FIELDS.length + 6} className="px-3 py-3">
                         <CostLotsEditor
                           sku={sku}
+                          name={nameBySku.get(sku) || sku}
                           drafts={drafts}
                           onAdd={() => addLot(sku)}
                           onUpdate={(i, field, value) =>
