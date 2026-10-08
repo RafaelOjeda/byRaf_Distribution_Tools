@@ -167,7 +167,7 @@ app/                              Next.js App Router — the dashboard shell onl
     receipts/                      stateless PDF Receipts folder — see docs/systems/frontend.md
     margins/page.tsx               legacy route, redirects -> "/dashboard"
 components/
-  ui/                              design kit + retro/modern theme switch (Button, Card, ..., styles.ts) — see docs/systems/frontend.md
+  ui/                              design kit + retro/modern themes (config.ts, themes/, Button, Card, ...) — see docs/systems/frontend.md
 lib/
   gateway/                     see docs/systems/gateway-contract.md
     contract/                     public types (SourceDescriptor, Snapshot, Report, ...)

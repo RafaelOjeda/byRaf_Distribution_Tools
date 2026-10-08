@@ -1,8 +1,8 @@
 import "server-only";
 import { cookies } from "next/headers";
-import { THEME_COOKIE, parseTheme, type Theme } from "./theme";
+import { THEME_COOKIE, resolveTheme, type Theme } from "./theme";
 
-/** The visitor's chosen design, so the very first paint is already in it. */
+/** The design for this request, so the very first paint is already in it. */
 export async function getTheme(): Promise<Theme> {
-  return parseTheme((await cookies()).get(THEME_COOKIE)?.value);
+  return resolveTheme((await cookies()).get(THEME_COOKIE)?.value);
 }

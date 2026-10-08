@@ -6,9 +6,10 @@
  * Run with: npx tsx scripts/test-theme.ts
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { themeConfig } from "../components/ui/config";
 import { styles } from "../components/ui/styles";
-import { DEFAULT_THEME, THEMES, parseTheme } from "../components/ui/theme";
+import { THEMES, parseTheme, resolveTheme } from "../components/ui/theme";
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -36,10 +37,34 @@ function shape(node: unknown, path = ""): string[] {
   return Object.entries(node as Record<string, unknown>).flatMap(([k, v]) => shape(v, `${path}.${k}`));
 }
 
-check("parseTheme accepts known themes and falls back to the default", () => {
+check("parseTheme accepts known themes and falls back to the configured default", () => {
   for (const t of THEMES) assert.equal(parseTheme(t), t);
   for (const bad of [undefined, null, "", "dark", "RETRO", "modern ", "__proto__"]) {
-    assert.equal(parseTheme(bad), DEFAULT_THEME, String(bad));
+    assert.equal(parseTheme(bad), themeConfig.defaultTheme, String(bad));
+  }
+});
+
+check("the configured default is a real theme with its own file", () => {
+  assert.ok((THEMES as readonly string[]).includes(themeConfig.defaultTheme));
+  for (const t of THEMES) {
+    assert.ok(existsSync(new URL(`../components/ui/themes/${t}.ts`, import.meta.url)), `themes/${t}.ts`);
+  }
+});
+
+check("a different configured default is honoured for unknown or missing values", () => {
+  const cfg = { defaultTheme: "modern", allowSwitching: true } as const;
+  assert.equal(parseTheme(undefined, cfg), "modern");
+  assert.equal(parseTheme("nonsense", cfg), "modern");
+  assert.equal(parseTheme("retro", cfg), "retro");
+});
+
+check("resolveTheme honours the saved choice only while switching is allowed", () => {
+  const open = { defaultTheme: "retro", allowSwitching: true } as const;
+  const locked = { defaultTheme: "modern", allowSwitching: false } as const;
+  assert.equal(resolveTheme("modern", open), "modern");
+  assert.equal(resolveTheme(undefined, open), "retro");
+  for (const saved of ["retro", "modern", "junk", undefined]) {
+    assert.equal(resolveTheme(saved, locked), "modern", String(saved));
   }
 });
 

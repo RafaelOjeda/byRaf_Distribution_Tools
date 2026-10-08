@@ -172,9 +172,10 @@ The app has two designs, switched live by the **Retro UI / Modern UI** button in
 ```mermaid
 flowchart LR
     Cookie["theme cookie"] --> Root["app/layout.tsx\ngetTheme() -> html data-theme"]
+    Config["config.ts\ndefaultTheme, allowSwitching"] --> Root
     Root --> Provider["ThemeProvider\nuseTheme / useStyles"]
     Provider --> Kit["Button, Card, Input, Table,\nTabList/TabButton, MenuBar, ThemeBody"]
-    Kit --> Map["styles.ts\nretro{} / modern{}"]
+    Kit --> Map["styles.ts registry\nthemes/retro.ts, themes/modern.ts"]
     Map --> Retro["sc-* classes\napp/globals.css"]
     Map --> Modern["daisyUI classes\n+ Tailwind utilities"]
     Toggle["ThemeToggle"] --> Provider
@@ -182,9 +183,12 @@ flowchart LR
 
 | File | Role |
 |---|---|
-| `theme.ts` | `THEMES`, `Theme`, `parseTheme()`, the cookie name. Pure. |
-| `theme.server.ts` | `getTheme()` reads the cookie in a server component (`server-only`). |
-| `styles.ts` | **The class map.** `ThemeStyles` lists every design-dependent slot (`card`, `button.variant.primary`, `input`, `table`, `tabList`, ...); `satisfies Record<Theme, ThemeStyles>` makes a design fail to compile until it styles every slot. |
+| `config.ts` | **The one file to edit to change the design:** `defaultTheme` and `allowSwitching` (see below). |
+| `theme.ts` | `THEMES`, `Theme`, `parseTheme()`, `resolveTheme()`, the cookie name. Pure, so it is unit-tested. |
+| `theme.server.ts` | `getTheme()` reads the cookie in a server component (`server-only`) and applies `resolveTheme`. |
+| `themes/types.ts` | `ThemeStyles`: every design-dependent slot (`card`, `button.variant.primary`, `input`, `table`, `tabList`, ...). |
+| `themes/retro.ts`, `themes/modern.ts` | **One file per design**, each an object of that same shape. |
+| `styles.ts` | The registry `{ retro, modern }`; `satisfies Record<Theme, ThemeStyles>` makes a name in `THEMES` fail to compile until it has a design file. |
 | `ThemeProvider.tsx` | Context + `useTheme()` / `useStyles()`. `setTheme()` updates state, `<html data-theme>` and the cookie. |
 | `ThemeBody.tsx` | `<body>` as a client component so it restyles the moment the theme flips. |
 | `Button.tsx`, `Card.tsx`, `Input.tsx`, `Table.tsx`, `Tabs.tsx`, `MenuBar.tsx` | The kit. Each merges the slot's classes with the caller's `className` (via `clsx`). `useButtonClass()` serves non-`<button>` elements such as `<summary>`. |
@@ -198,7 +202,18 @@ flowchart LR
 
 **Gotcha: a design's card class may set `display`.** daisyUI's `card` is `display: flex`, which overrides a closed `<dialog>`'s `display: none`. The receipts dialog therefore carries `hidden … open:flex`. Anything else that puts a card class on an element with its own display behaviour needs the same care.
 
-**Adding a design:** add its name to `THEMES`, add an entry to `styles` (the compiler lists the slots), and define its colour tokens (for a daisyUI design, another `@plugin "daisyui/theme"` block that also overrides every `--color-sc-*`). `npm run test:theme` checks the pieces line up.
+**Changing the design from config.** Edit `components/ui/config.ts`:
+
+```ts
+export const themeConfig = {
+  defaultTheme: "modern", // what visitors get until they pick one
+  allowSwitching: false,  // true: menu-bar toggle + remembered choice; false: locked to defaultTheme
+};
+```
+
+With `allowSwitching: false` the toggle is hidden and any saved `theme` cookie is ignored, so the whole app is that one design. It is a build-time constant; there is no environment-variable override. A design's class names live in `themes/<name>.ts` and its colours in the matching theme block in `app/globals.css` (colours cannot move into TypeScript because daisyUI reads them from CSS).
+
+**Adding a design:** add its name to `THEMES` in `theme.ts`, create `themes/<name>.ts` exporting a `ThemeStyles` (the compiler lists the slots) and register it in `styles.ts`, then define its colour tokens (for a daisyUI design, another `@plugin "daisyui/theme"` block that also overrides every `--color-sc-*`). `npm run test:theme` checks the pieces line up.
 
 **Adding a kit component:** add a slot to `ThemeStyles`, fill it for both designs, and write a ~10-line component that reads `useStyles()`.
 

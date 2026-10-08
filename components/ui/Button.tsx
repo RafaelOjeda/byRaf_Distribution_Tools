@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import type { ButtonHTMLAttributes } from "react";
-import type { ButtonSize, ButtonVariant } from "./styles";
+import type { ButtonSize, ButtonVariant } from "./themes/types";
 import { useStyles } from "./ThemeProvider";
 
 interface ButtonStyleOptions {

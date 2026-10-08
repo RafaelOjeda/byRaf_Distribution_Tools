@@ -47,7 +47,7 @@ Settled and estimated totals are always shown separately, never blended.
 
 The **Retro UI / Modern UI** button in the top bar switches the whole app between the classic black-and-white Mac look and a modern Bootstrap-style look (clean cards, tables, tabs and buttons), instantly and without losing anything you've typed. Your choice is remembered in a small `theme` cookie (just the word `retro` or `modern`, never any seller data) so the page opens in it next time.
 
-Both designs share the same markup. Pages use a small kit in `components/ui/` (`Button`, `Card`, `Input`, `Table`, `TabList`, ...) and never name a design; `components/ui/styles.ts` is the one place that says what each design looks like. The modern design is [daisyUI](https://daisyui.com) (a Tailwind plugin) with a Bootstrap 5 palette, so there is no hand-written CSS for it. See [docs/systems/frontend.md](docs/systems/frontend.md#design-system-and-themes-componentsui).
+Both designs share the same markup. Pages use a small kit in `components/ui/` (`Button`, `Card`, `Input`, `Table`, `TabList`, ...) and never name a design; each design is one file in `components/ui/themes/`. To change which design the app uses (or to lock it to one and hide the button), edit `components/ui/config.ts`. The modern design is [daisyUI](https://daisyui.com) (a Tailwind plugin) with a Bootstrap 5 palette, so there is no hand-written CSS for it. See [docs/systems/frontend.md](docs/systems/frontend.md#design-system-and-themes-componentsui).
 
 ### Receipts folder
 
