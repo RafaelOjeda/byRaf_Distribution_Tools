@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import { ThemeBody, ThemeProvider } from "@/components/ui";
+import { getTheme } from "@/components/ui/theme.server";
 import { AuthProvider } from "@/lib/auth";
 import "./globals.css";
 
@@ -18,12 +20,15 @@ export const viewport: Viewport = {
   themeColor: "#ffffff",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const theme = await getTheme();
   return (
-    <html lang="en" className="h-full">
-      <body className="min-h-full flex flex-col">
-        <AuthProvider>{children}</AuthProvider>
-      </body>
+    <html lang="en" data-theme={theme} className="h-full">
+      <ThemeProvider initialTheme={theme}>
+        <ThemeBody>
+          <AuthProvider>{children}</AuthProvider>
+        </ThemeBody>
+      </ThemeProvider>
     </html>
   );
 }

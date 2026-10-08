@@ -1,3 +1,4 @@
+import { Button, Table } from "@/components/ui";
 import { orderLinesToCsv, type MarginRow, type Report } from "@/lib/gateway";
 import { downloadCsv, money } from "../../utils/format";
 import { PanelHeader } from "../shared/PanelHeader";
@@ -24,14 +25,13 @@ export function OrdersTab({
       <PanelHeader
         title="Order lines"
         action={
-          <button
+          <Button
             onClick={() => downloadCsv("order-lines", orderLinesToCsv(margins))}
             disabled={margins.length === 0}
-            className="sc-btn"
             title="Downloads this table as a CSV, one row per order line, with a Status column (Settled / Estimated / Not estimable)."
           >
             Download CSV
-          </button>
+          </Button>
         }
       />
       <p className="text-sm text-sc-ink-2">
@@ -77,7 +77,7 @@ export function OrdersTab({
       </ul>
 
       <div className="hidden overflow-x-auto md:block">
-        <table className="sc-table w-full text-sm whitespace-nowrap">
+        <Table className="w-full text-sm whitespace-nowrap">
           <thead>
             <tr className="border-b border-sc-line text-left">
               <th className="pr-3">Status</th>
@@ -238,7 +238,7 @@ export function OrdersTab({
               )}
             </tfoot>
           )}
-        </table>
+        </Table>
       </div>
     </>
   );

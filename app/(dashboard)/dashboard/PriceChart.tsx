@@ -1,5 +1,6 @@
 "use client";
 
+import { Table, TextButton } from "@/components/ui";
 import {
   useEffect,
   useMemo,
@@ -199,12 +200,12 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
               ` Showing the top ${MAX_SERIES} of ${series.length} products by units sold — all are in the table.`}
           </div>
         </div>
-        <button
+        <TextButton
           onClick={() => setTable((t) => !t)}
-          className="sc-link shrink-0 text-sm"
+          className="shrink-0 text-sm"
         >
           {table ? "Show chart" : "Show as table"}
-        </button>
+        </TextButton>
       </div>
 
       {/* Legend: always present for 2+ series, with each product's move. */}
@@ -371,7 +372,7 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
 
       {(table || !canChart) && (
         <div className="overflow-x-auto">
-          <table className="sc-table w-full text-sm whitespace-nowrap">
+          <Table className="w-full text-sm whitespace-nowrap">
             <thead>
               <tr className="border-b text-left" style={{ borderColor: "var(--pc-border)" }}>
                 <th className="pr-3">SKU</th>
@@ -398,7 +399,7 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
                 ))
               )}
             </tbody>
-          </table>
+          </Table>
         </div>
       )}
 

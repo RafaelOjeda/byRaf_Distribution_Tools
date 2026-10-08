@@ -1,4 +1,5 @@
 import type { ChangeEvent, RefObject } from "react";
+import { Button, Card, useButtonClass } from "@/components/ui";
 
 export type ExportKind = "xlsx" | "zip" | "costs-csv";
 
@@ -15,12 +16,13 @@ export function SaveLoadControls({
   onFile: (e: ChangeEvent<HTMLInputElement>) => void;
   onExport?: (kind: ExportKind) => void;
 }) {
+  const buttonClass = useButtonClass();
   return (
     <div className="flex gap-2">
       {onExport && (
         <details className="relative">
-          <summary className="sc-btn cursor-pointer list-none">Export ▾</summary>
-          <div className="sc-card absolute right-0 z-10 mt-1 flex w-64 flex-col p-1">
+          <summary className={`${buttonClass()} cursor-pointer list-none`}>Export ▾</summary>
+          <Card className="absolute right-0 z-10 mt-1 flex w-64 flex-col p-1">
             {(
               [
                 ["xlsx", "Workbook (.xlsx)", "One sheet per table - easiest to edit in Excel."],
@@ -40,12 +42,10 @@ export function SaveLoadControls({
                 <span className="text-xs text-sc-ink-2">{hint}</span>
               </button>
             ))}
-          </div>
+          </Card>
         </details>
       )}
-      <button onClick={() => fileRef.current?.click()} className="sc-btn">
-        Import file
-      </button>
+      <Button onClick={() => fileRef.current?.click()}>Import file</Button>
       <input
         ref={fileRef}
         type="file"

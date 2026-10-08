@@ -13,6 +13,7 @@
     "test:csv": "tsx scripts/test-csv-import.ts",
     "test:portable": "tsx scripts/test-portable.ts",
     "test:receipts": "tsx scripts/test-receipts.ts",
+    "test:theme": "tsx scripts/test-theme.ts",
     "test:engine": "tsx scripts/test-engine.ts",
     "check:boundary": "tsx scripts/check-boundary.ts",
     "test:auth": "tsx scripts/test-auth.ts"
@@ -20,6 +21,8 @@
   "dependencies": {
     "@clerk/nextjs": "^7.9.10",
     "@neondatabase/serverless": "^1.0.2",
+    "clsx": "^2.1.1",
+    "daisyui": "^5.7.47",
     "drizzle-orm": "^0.44.0",
     "fflate": "^0.8.3",
     "next": "16.3.5",

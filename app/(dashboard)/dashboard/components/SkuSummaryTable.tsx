@@ -1,3 +1,4 @@
+import { Table } from "@/components/ui";
 import { SHIPPING_PCT_ALERT, SHIPPING_PCT_WARN, type SkuSummary } from "@/lib/gateway";
 import { money } from "../utils/format";
 import { shipPctClass } from "../utils/shipping";
@@ -106,7 +107,7 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
     </ul>
 
     <div className="hidden overflow-x-auto md:block">
-      <table className="sc-table w-full text-sm whitespace-nowrap">
+      <Table className="w-full text-sm whitespace-nowrap">
         <thead>
           <tr className="border-b border-sc-line text-left">
             <th className="pr-3">SKU</th>
@@ -264,7 +265,7 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
             </tr>
           )}
         </tbody>
-      </table>
+      </Table>
     </div>
     </>
   );

@@ -1,3 +1,4 @@
+import { Button, Input } from "@/components/ui";
 import { reconcileStock } from "@/lib/gateway";
 import { BOX_FIELDS, type LotDraft, type SkuField } from "../types";
 import { money } from "../utils/format";
@@ -83,7 +84,7 @@ export function InventoryCard({
         {BOX_FIELDS.map((f) => (
           <label key={f.key} className="flex min-w-0 flex-col gap-1 text-xs text-sc-ink-2">
             {f.label}
-            <input
+            <Input
               type="number"
               inputMode="decimal"
               step={f.step}
@@ -92,22 +93,22 @@ export function InventoryCard({
               aria-label={`${f.label} for ${sku}`}
               value={boxValues[f.key] ?? ""}
               onChange={(e) => onBoxChange(f.key, e.target.value)}
-              className="sc-input w-full min-w-0 text-right text-sc-ink"
+              className="w-full min-w-0 text-right text-sc-ink"
             />
           </label>
         ))}
       </div>
 
-      <button
+      <Button
         onClick={onToggle}
         aria-expanded={isOpen}
-        className="sc-btn mt-3 w-full justify-between"
+        className="mt-3 w-full justify-between"
       >
         <span>
           Purchase batches{drafts.length > 0 ? ` (${drafts.length})` : ""}
         </span>
         <span aria-hidden="true">{isOpen ? "▾" : "▸"}</span>
-      </button>
+      </Button>
       {isOpen && (
         <div className="mt-2 rounded-lg bg-sc-head p-3">
           <CostLotsEditor

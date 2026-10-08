@@ -1,5 +1,7 @@
 "use client";
 
+import { Button, Input, TextButton, useStyles } from "@/components/ui";
+import clsx from "clsx";
 import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { useReceipts, type Receipt, type UploadResult } from "./ReceiptsProvider";
 import { formatBytes, zipReceipts } from "./utils";
@@ -31,6 +33,7 @@ function saveUrl(url: string, name: string) {
 /** The Receipts folder: a modal window over whatever page is showing. */
 export function ReceiptsPanel() {
   const { receipts, open, setOpen, addFiles, rename, remove, urlFor } = useReceipts();
+  const { card } = useStyles();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
@@ -106,15 +109,17 @@ export function ReceiptsPanel() {
         if (e.target === e.currentTarget) setOpen(false);
       }}
       aria-labelledby="receipts-title"
-      className="sc-card m-auto max-h-[88dvh] w-[calc(100vw-1.5rem)] max-w-2xl p-0 backdrop:bg-black/40 open:flex open:flex-col"
+      // `hidden` because a design's card class may set display, which would defeat the
+      // <dialog> being closed; `open:flex` then restores layout while it is open.
+      className={clsx(card, "hidden m-auto max-h-[88dvh] w-[calc(100vw-1.5rem)] max-w-2xl p-0 backdrop:bg-black/40 open:flex open:flex-col")}
     >
       <div className="flex items-center justify-between gap-3 border-b border-sc-line bg-sc-head px-4 py-2">
         <h2 id="receipts-title" className="text-lg font-bold">
           Receipts
         </h2>
-        <button type="button" onClick={() => setOpen(false)} className="sc-btn px-3 py-0.5 text-xs">
+        <Button size="sm" onClick={() => setOpen(false)}>
           Close
-        </button>
+        </Button>
       </div>
 
       <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
@@ -136,9 +141,9 @@ export function ReceiptsPanel() {
           }`}
         >
           <span className="hidden text-sm text-sc-ink-2 sm:inline">Drag PDFs here, or</span>
-          <button type="button" onClick={() => fileRef.current?.click()} className="sc-btn-primary">
+          <Button variant="primary" onClick={() => fileRef.current?.click()}>
             + Add receipts
-          </button>
+          </Button>
           <span className="text-xs text-sc-ink-2">PDF only, up to 10 MB each</span>
           <input
             ref={fileRef}
@@ -165,20 +170,20 @@ export function ReceiptsPanel() {
                 </li>
               ))}
             </ul>
-            <button type="button" onClick={() => setResults([])} className="sc-link self-start text-xs">
+            <TextButton onClick={() => setResults([])} className="self-start text-xs">
               Dismiss
-            </button>
+            </TextButton>
           </div>
         )}
 
         {receipts.length > 1 && (
-          <input
+          <Input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by name"
             aria-label="Search receipts by name"
-            className="sc-input w-full"
+            className="w-full"
           />
         )}
 
@@ -195,7 +200,7 @@ export function ReceiptsPanel() {
               >
                 {renamingId === r.id ? (
                   <form onSubmit={submitRename} className="flex w-full flex-wrap items-center gap-2">
-                    <input
+                    <Input
                       autoFocus
                       value={renameValue}
                       onChange={(e) => setRenameValue(e.target.value)}
@@ -206,15 +211,15 @@ export function ReceiptsPanel() {
                         }
                       }}
                       aria-label={`New name for ${r.name}`}
-                      className="sc-input min-w-0 flex-1"
+                      className="min-w-0 flex-1"
                     />
                     <span className="text-sm text-sc-ink-2">.pdf</span>
-                    <button type="submit" className="sc-btn px-3 py-0.5 text-xs">
+                    <Button size="sm" type="submit">
                       Save
-                    </button>
-                    <button type="button" onClick={() => setRenamingId(null)} className="sc-link text-xs">
+                    </Button>
+                    <TextButton onClick={() => setRenamingId(null)} className="text-xs">
                       Cancel
-                    </button>
+                    </TextButton>
                   </form>
                 ) : (
                   <>
@@ -229,47 +234,42 @@ export function ReceiptsPanel() {
                     {confirmId === r.id ? (
                       <div className="flex shrink-0 items-center gap-3 text-sm">
                         <span>Delete? Can&apos;t be undone.</span>
-                        <button
-                          type="button"
+                        <TextButton
                           onClick={() => {
                             remove(r.id);
                             setConfirmId(null);
                           }}
-                          className="sc-link font-bold"
+                          className="font-bold"
                         >
                           Yes, delete
-                        </button>
-                        <button type="button" onClick={() => setConfirmId(null)} className="sc-link">
+                        </TextButton>
+                        <TextButton onClick={() => setConfirmId(null)}>
                           Keep
-                        </button>
+                        </TextButton>
                       </div>
                     ) : (
                       <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                        <button type="button" onClick={() => view(r)} className="sc-link" aria-label={`View ${r.name}`}>
+                        <TextButton onClick={() => view(r)} aria-label={`View ${r.name}`}>
                           View
-                        </button>
-                        <button
-                          type="button"
+                        </TextButton>
+                        <TextButton
                           onClick={() => saveUrl(urlFor(r), r.name)}
-                          className="sc-link"
                           aria-label={`Download ${r.name}`}
                         >
                           Download
-                        </button>
-                        <button type="button" onClick={() => startRename(r)} className="sc-link" aria-label={`Rename ${r.name}`}>
+                        </TextButton>
+                        <TextButton onClick={() => startRename(r)} aria-label={`Rename ${r.name}`}>
                           Rename
-                        </button>
-                        <button
-                          type="button"
+                        </TextButton>
+                        <TextButton
                           onClick={() => {
                             setRenamingId(null);
                             setConfirmId(r.id);
                           }}
-                          className="sc-link"
                           aria-label={`Delete ${r.name}`}
                         >
                           Delete
-                        </button>
+                        </TextButton>
                       </div>
                     )}
                   </>
@@ -284,14 +284,13 @@ export function ReceiptsPanel() {
         <span className="text-sm text-sc-ink-2">
           {receipts.length} receipt{receipts.length === 1 ? "" : "s"} · {formatBytes(totalBytes)}
         </span>
-        <button
-          type="button"
+        <Button
+          size="sm"
           onClick={() => void downloadAll()}
           disabled={receipts.length === 0 || zipping}
-          className="sc-btn px-3 py-0.5 text-xs"
         >
           {zipping ? "Zipping…" : "Download all (.zip)"}
-        </button>
+        </Button>
       </div>
     </dialog>
   );

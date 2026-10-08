@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui";
 import { skuSummaryToCsv, type SkuSummary } from "@/lib/gateway";
 import { downloadCsv } from "../../utils/format";
 import { PanelHeader } from "../shared/PanelHeader";
@@ -9,14 +10,13 @@ export function SkuTab({ skuSummaries }: { skuSummaries: SkuSummary[] }) {
       <PanelHeader
         title="By SKU"
         action={
-          <button
+          <Button
             onClick={() => downloadCsv("by-sku", skuSummaryToCsv(skuSummaries))}
             disabled={skuSummaries.length === 0}
-            className="sc-btn"
             title="Downloads this table as a CSV. Estimated rows are included and marked in the Status/line-count columns; cells that aren't known are left blank."
           >
             Download CSV
-          </button>
+          </Button>
         }
       >
         Settled and estimated order lines rolled up per product. A SKU

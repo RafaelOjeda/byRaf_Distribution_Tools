@@ -6,7 +6,7 @@ This is the central map of the repository: what it is, how it's put together, an
 
 ## What this repository is, in one paragraph
 
-**byRaf Distribution Tools** is a Next.js 16 (App Router) application. Its one shipped product is the **Margins Dashboard**: a multi-marketplace seller profit/margin tracker. A seller pastes API credentials for one or more marketplaces (Walmart today; a fixture-backed "Demo" source for development and testing), picks which settlement periods to load, and sees revenue, fees, profit, inventory, and stock value — per order line and rolled up per product — once they've entered what each product actually cost them. The app is **stateless in production**: no database use, sign-in only if auth keys are set in the environment, nothing persisted beyond one `localStorage` flag for a dismissed install banner. A Postgres/Drizzle schema and Neon database are provisioned for a planned persisted version but are not used by the running app.
+**byRaf Distribution Tools** is a Next.js 16 (App Router) application. Its one shipped product is the **Margins Dashboard**: a multi-marketplace seller profit/margin tracker. A seller pastes API credentials for one or more marketplaces (Walmart today; a fixture-backed "Demo" source for development and testing), picks which settlement periods to load, and sees revenue, fees, profit, inventory, and stock value — per order line and rolled up per product — once they've entered what each product actually cost them. The app is **stateless in production**: no database use, sign-in only if auth keys are set in the environment, nothing persisted beyond two UI preferences (a `localStorage` flag for a dismissed install banner, and a `theme` cookie for the retro/modern design). A Postgres/Drizzle schema and Neon database are provisioned for a planned persisted version but are not used by the running app.
 
 ## Start here
 
@@ -22,6 +22,7 @@ This is the central map of the repository: what it is, how it's put together, an
 | Understand env vars, the import-boundary rule, and the security model | [Authentication](./systems/authentication.md) | Optional env-driven sign-in (Clerk), the provider-neutral `lib/auth` adapter, per-platform setup, how to add a provider, and how saved data will key off the user id |
 | [Configuration & Security](./systems/configuration-and-security.md) |
 | Know what's tested, how, and how deploys happen | [Testing & Deployment](./systems/testing-and-deployment.md) |
+| Understand the retro/modern design toggle, or add a design or UI component | [Frontend — Design system and themes](./systems/frontend.md#design-system-and-themes-componentsui) |
 | Find the Receipts folder (PDF upload, stateless) | [Frontend — Receipts folder](./systems/frontend.md#receipts-folder-appdashboardreceipts) |
 | Understand saving/loading inputs as XLSX or CSV (design record) | [`import-export-plan.md`](./import-export-plan.md) · [Engine — Portable save file](./systems/engine.md#portable-save-file-engineportable) |
 | Read the user-facing product description | [`README.md`](../README.md) |
