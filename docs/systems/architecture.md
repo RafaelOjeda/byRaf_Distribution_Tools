@@ -153,10 +153,10 @@ flowchart LR
 
 ```
 app/                              Next.js App Router — the dashboard shell only
-  layout.tsx, manifest.ts         root HTML shell, PWA manifest
+  layout.tsx, manifest.ts         root HTML shell (reads the theme cookie), PWA manifest
   page.tsx                        redirects "/" -> "/dashboard"
   (dashboard)/
-    layout.tsx                    Mac System 1–styled shell (nav bar, card frame)
+    layout.tsx                    app shell (menu bar with design toggle + Receipts, card frame)
     dashboard/                    the actual product
       page.tsx                    server component: calls describeSources(), renders DashboardClient
       DashboardClient.tsx         client component: all wizard/report state
@@ -164,7 +164,10 @@ app/                              Next.js App Router — the dashboard shell onl
       InstallPrompt.tsx            PWA "Add to Home Screen" banner
       types.ts, hooks/, utils/     shared frontend-only types and helpers
       components/                 tables, cards, tabs — see docs/systems/frontend.md
+    receipts/                      stateless PDF Receipts folder — see docs/systems/frontend.md
     margins/page.tsx               legacy route, redirects -> "/dashboard"
+components/
+  ui/                              design kit + retro/modern theme switch (Button, Card, ..., styles.ts) — see docs/systems/frontend.md
 lib/
   gateway/                     see docs/systems/gateway-contract.md
     contract/                     public types (SourceDescriptor, Snapshot, Report, ...)

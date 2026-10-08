@@ -1,3 +1,4 @@
+import { Table } from "@/components/ui";
 import type { Report } from "@/lib/gateway";
 import { money } from "../utils/format";
 import { Fig } from "./shared/Fig";
@@ -129,7 +130,7 @@ export function StockValueTable({ stock }: { stock: Report["stock"] }) {
       </ul>
 
       <div className="hidden overflow-x-auto md:block">
-        <table className="sc-table w-full text-sm whitespace-nowrap">
+        <Table className="w-full text-sm whitespace-nowrap">
           <thead>
             <tr className="border-b border-sc-line text-left">
               <th className="pr-3">SKU</th>
@@ -203,7 +204,7 @@ export function StockValueTable({ stock }: { stock: Report["stock"] }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </Table>
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+import { Input, TextButton } from "@/components/ui";
 import { averageUnitCost, type CostLot } from "@/lib/gateway";
 import type { LotDraft } from "../types";
 import { money } from "../utils/format";
@@ -34,7 +35,7 @@ export function CostLotsEditor({
 
       {drafts.map((lot, i) => (
         <div key={i} className="flex w-full items-center gap-2 sm:w-auto">
-          <input
+          <Input
             type="number"
             min="0"
             step="1"
@@ -43,10 +44,10 @@ export function CostLotsEditor({
             value={lot.qty}
             onChange={(e) => onUpdate(i, "qty", e.target.value)}
             inputMode="numeric"
-            className="sc-input w-16 shrink-0 text-right sm:w-20"
+            className="w-16 shrink-0 text-right sm:w-20"
           />
           <span className="text-sc-ink-2/70">×</span>
-          <input
+          <Input
             type="number"
             min="0"
             step="0.01"
@@ -55,7 +56,7 @@ export function CostLotsEditor({
             value={lot.unitCost}
             onChange={(e) => onUpdate(i, "unitCost", e.target.value)}
             inputMode="decimal"
-            className="sc-input w-24 shrink-0 text-right sm:w-28"
+            className="w-24 shrink-0 text-right sm:w-28"
           />
           <span className="hidden text-right text-sc-ink-2 sm:inline sm:w-24">
             {!Number.isNaN(parseFloat(lot.qty)) &&
@@ -74,9 +75,9 @@ export function CostLotsEditor({
       ))}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-        <button onClick={onAdd} className="sc-link text-sm">
+        <TextButton onClick={onAdd} className="text-sm">
           + Add batch
-        </button>
+        </TextButton>
         {units > 0 && (
           <span className="text-sm text-sc-ink-2">
             {units} unit{units === 1 ? "" : "s"} · {money(spent)} spent ·
@@ -87,13 +88,13 @@ export function CostLotsEditor({
 
       <label className="mt-1 flex w-full flex-col gap-1 text-xs text-sc-ink-2 sm:max-w-xs">
         Alias SKUs (other sources&apos; SKUs for this same product)
-        <input
+        <Input
           type="text"
           placeholder="e.g. SRC2-SKU-01, SRC3-SKU-1"
           aria-label={`Alias SKUs for ${sku}`}
           value={aliasValue}
           onChange={(e) => onAliasChange(e.target.value)}
-          className="sc-input w-full text-sc-ink"
+          className="w-full text-sc-ink"
         />
       </label>
     </div>

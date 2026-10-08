@@ -43,13 +43,19 @@ Walmart only reports fees once a settlement period closes, about two weeks after
 
 Settled and estimated totals are always shown separately, never blended.
 
+### Two designs: retro and modern
+
+The **Retro UI / Modern UI** button in the top bar switches the whole app between the classic black-and-white Mac look and a modern Bootstrap-style look (clean cards, tables, tabs and buttons), instantly and without losing anything you've typed. Your choice is remembered in a small `theme` cookie (just the word `retro` or `modern`, never any seller data) so the page opens in it next time.
+
+Both designs share the same markup. Pages use a small kit in `components/ui/` (`Button`, `Card`, `Input`, `Table`, `TabList`, ...) and never name a design; `components/ui/styles.ts` is the one place that says what each design looks like. The modern design is [daisyUI](https://daisyui.com) (a Tailwind plugin) with a Bootstrap 5 palette, so there is no hand-written CSS for it. See [docs/systems/frontend.md](docs/systems/frontend.md#design-system-and-themes-componentsui).
+
 ### Receipts folder
 
 The **Receipts** button in the header opens a folder for PDF receipts: add several at once (picker or drag-and-drop), then view, download, rename or delete each, search by name, or download everything as one `.zip`. Like the rest of the app it is stateless: receipts live in memory in the open tab and **a refresh or closed tab empties the folder**, so download the zip before you leave. Files never leave the browser, and they aren't attached to any batch or SKU yet. Limits: PDF only (checked by file contents, not name), 10 MB per file, 100 MB in total, and the same file added twice is skipped.
 
 ### Privacy and security model
 
-- **Nothing is stored.** No database is used. Credentials and all fetched data live only in your browser tab and the single server request that needs them. Refresh and it is gone, including anything you typed.
+- **Nothing is stored.** No database is used. Credentials and all fetched data live only in your browser tab and the single server request that needs them. Refresh and it is gone, including anything you typed. The only things your browser keeps are two UI preferences: the dismissed install banner and your chosen design (retro or modern).
 - **Sign-in is optional.** With no auth configured, the app is public and the pasted API key is the access control. Set Clerk keys in the environment and every page and server action requires sign-in. See [docs/systems/authentication.md](docs/systems/authentication.md).
 - **Credentials are used per request and never cached or logged** server-side. Token fetching is deliberately not shared between requests, so one seller's session can never reach another's. Note that Next.js's *dev* server prints every server-action call with its arguments by default, which would print the Client Secret; `next.config.ts` turns that off (`logging.serverFunctions: false`). Production never logged them — verified with fake credentials against `next start`.
 - **Customer data stays on the server.** Walmart's orders include customer names and addresses. Only derived line-level numbers (SKU, quantity, amounts, date) are sent to the browser.
@@ -88,6 +94,7 @@ npm run dev        # http://localhost:3000/margins
 | `npm run test:walmart` | Checks that credentials in `.env.local` can fetch a token and list settlement reports |
 | `npm run test:csv` | Fixture checks for the cost CSV import/export parser |
 | `npm run test:portable` | Round-trip and rejection checks for the xlsx / zip / csv save file |
+| `npm run test:theme` | Theme parsing, both designs styling every UI slot with no cross-leaking classes, and the CSS backing them |
 | `npm run test:receipts` | PDF detection, upload limits, name cleanup, duplicate detection and zip backup for the Receipts folder |
 | `npm run test:auth` | Checks which auth provider each env combination selects, and that half-set keys fail closed |
 | `npm run db:push` | Applies the Drizzle schema to Neon (unused by the app today, see below) |

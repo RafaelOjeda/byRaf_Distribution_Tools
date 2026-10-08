@@ -1,5 +1,6 @@
 "use client";
 
+import { Button, Card, Input, TabButton, TabList, TextButton } from "@/components/ui";
 import {
   type ChangeEvent,
   type FormEvent,
@@ -423,16 +424,16 @@ export default function DashboardClient({
         )}
         <form onSubmit={handleConnect} className="flex flex-col gap-4">
           {sources.map((s) => (
-            <fieldset key={s.id} className="sc-card flex flex-col gap-3 p-4">
+            <Card as="fieldset" key={s.id} className="flex flex-col gap-3 p-4">
               <legend className="px-1 text-sm font-bold">{s.label}</legend>
               {s.credentialFields.map((f) => (
                 <label key={f.key} className="flex flex-col gap-1 text-sm font-bold">
                   {f.label}
-                  <input
+                  <Input
                     type={f.secret ? "password" : "text"}
                     value={connections[s.id]?.[f.key] ?? ""}
                     onChange={(e) => setCredential(s.id, f.key, e.target.value)}
-                    className="sc-input font-normal"
+                    className="font-normal"
                     autoComplete="off"
                   />
                   {f.help && (
@@ -440,15 +441,16 @@ export default function DashboardClient({
                   )}
                 </label>
               ))}
-            </fieldset>
+            </Card>
           ))}
-          <button
+          <Button
+            variant="primary"
             type="submit"
             disabled={loading || filledSourceIds.length === 0}
-            className="sc-btn-primary mt-1 w-full"
+            className="mt-1 w-full"
           >
             {loading ? "Checking…" : "See what's available"}
-          </button>
+          </Button>
           {error && <p className="text-sm text-red-600">{error}</p>}
         </form>
       </div>
@@ -470,9 +472,9 @@ export default function DashboardClient({
       <div className="mx-auto mt-8 flex w-full max-w-md flex-col gap-5">
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-[28px] leading-9 font-normal">Settlement periods</h1>
-          <button onClick={startOver} className="sc-link mt-2 shrink-0 text-sm">
+          <TextButton onClick={startOver} className="mt-2 shrink-0 text-sm">
             Start over
-          </button>
+          </TextButton>
         </div>
         {periodsNotice && <p className="text-sm text-amber-600">{periodsNotice}</p>}
         {settlementSources.map((s) => {
@@ -511,13 +513,14 @@ export default function DashboardClient({
             </div>
           );
         })}
-        <button
+        <Button
+          variant="primary"
           onClick={handleLoadSelected}
           disabled={loading || (settlementSources.length > 0 && totalSelected === 0)}
-          className="sc-btn-primary w-full"
+          className="w-full"
         >
           {loading ? "Loading…" : "Load data"}
-        </button>
+        </Button>
         {error && <p className="text-sm text-red-600">{error}</p>}
       </div>
     );
@@ -560,18 +563,17 @@ export default function DashboardClient({
             onFile={handleImportFile}
             onExport={handleExport}
           />
-          <button
+          <Button
             onClick={() => {
               clearData();
               setStep("periods");
             }}
-            className="sc-btn"
           >
             Change periods
-          </button>
-          <button onClick={startOver} className="sc-btn">
+          </Button>
+          <Button onClick={startOver}>
             Start over
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -587,28 +589,24 @@ export default function DashboardClient({
 
       {r.sources.filter((s) => s.status === "ok").length > 1 && (
         <div className="flex flex-wrap gap-2" aria-label="Filter by source">
-          <button
+          <Button
             onClick={() => setSourceFilter("all")}
-            className={sourceFilter === "all" ? "sc-btn-primary" : "sc-btn"}
+            variant={sourceFilter === "all" ? "primary" : "default"}
             aria-pressed={sourceFilter === "all"}
           >
             All
-          </button>
+          </Button>
           {r.sources
             .filter((s) => s.status === "ok")
             .map((s) => (
-              <button
+              <Button
                 key={s.id}
                 onClick={() => setSourceFilter([s.id])}
-                className={
-                  sourceFilter !== "all" && sourceFilter.includes(s.id)
-                    ? "sc-btn-primary"
-                    : "sc-btn"
-                }
+                variant={sourceFilter !== "all" && sourceFilter.includes(s.id) ? "primary" : "default"}
                 aria-pressed={sourceFilter !== "all" && sourceFilter.includes(s.id)}
               >
                 {s.label}
-              </button>
+              </Button>
             ))}
         </div>
       )}
@@ -640,9 +638,9 @@ export default function DashboardClient({
           value={kpi.costedSettled > 0 ? money(kpi.profitSettled) : "—"}
         >
           {kpi.costedSettled + kpi.costedEstimated === 0 ? (
-            <button onClick={() => setTab("inventory")} className="sc-link">
+            <TextButton onClick={() => setTab("inventory")}>
               Enter purchase costs to see profit
-            </button>
+            </TextButton>
           ) : (
             <>
               settled
@@ -668,12 +666,11 @@ export default function DashboardClient({
         </KpiTile>
       </div>
 
-      <div className="sc-card">
-        <div
+      <Card>
+        <TabList
           role="tablist"
           aria-label="Dashboard views"
           onKeyDown={onTabKey}
-          className="flex gap-6 overflow-x-auto border-b border-sc-line px-4 sm:px-6"
         >
           {(
             [
@@ -685,7 +682,7 @@ export default function DashboardClient({
               ["fees", `Marketplace fees (${r.marketplaceFees.length})`],
             ] as [Tab, string][]
           ).map(([id, label]) => (
-            <button
+            <TabButton
               key={id}
               id={`tab-${id}`}
               role="tab"
@@ -693,12 +690,11 @@ export default function DashboardClient({
               aria-controls={`panel-${id}`}
               tabIndex={tab === id ? 0 : -1}
               onClick={() => setTab(id)}
-              className="sc-tab"
             >
               {label}
-            </button>
+            </TabButton>
           ))}
-        </div>
+        </TabList>
 
         <div
           role="tabpanel"
@@ -744,7 +740,7 @@ export default function DashboardClient({
         />
       )}
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

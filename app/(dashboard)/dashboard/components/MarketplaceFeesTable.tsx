@@ -1,3 +1,4 @@
+import { Table } from "@/components/ui";
 import type { Report } from "@/lib/gateway";
 import { money } from "../utils/format";
 
@@ -12,7 +13,7 @@ export function MarketplaceFeesTable({ fees }: { fees: Report["marketplaceFees"]
   const total = fees.reduce((n, f) => n + f.amount, 0);
   return (
     <div className="overflow-x-auto">
-      <table className="sc-table w-full text-sm whitespace-nowrap">
+      <Table className="w-full text-sm whitespace-nowrap">
         <thead>
           <tr className="border-b border-sc-line text-left">
             <th className="pr-3">Source</th>
@@ -41,7 +42,7 @@ export function MarketplaceFeesTable({ fees }: { fees: Report["marketplaceFees"]
             <td className="py-2 pr-3 text-right">{money(total)}</td>
           </tr>
         </tfoot>
-      </table>
+      </Table>
     </div>
   );
 }

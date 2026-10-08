@@ -1,3 +1,4 @@
+import { Input, Table, TextButton } from "@/components/ui";
 import { Fragment, type Dispatch, type SetStateAction } from "react";
 import {
   averageUnitCost,
@@ -92,7 +93,7 @@ export function InventoryTab({
       </ul>
 
       <div className="hidden overflow-x-auto md:block">
-        <table className="sc-table w-full text-sm whitespace-nowrap">
+        <Table className="w-full text-sm whitespace-nowrap">
           <thead>
             <tr className="border-b border-sc-line text-left">
               <th className="pr-3">SKU</th>
@@ -130,9 +131,9 @@ export function InventoryTab({
                 <Fragment key={sku}>
                   <tr className="border-b border-sc-row">
                     <td className="pr-3">
-                      <button
+                      <TextButton
                         onClick={() => toggleExpanded(sku)}
-                        className="sc-link text-left"
+                        className="text-left"
                         title={
                           drafts.length > 0
                             ? `${drafts.length} batch${drafts.length === 1 ? "" : "es"}`
@@ -149,7 +150,7 @@ export function InventoryTab({
                             ({drafts.length})
                           </span>
                         )}
-                      </button>
+                      </TextButton>
                     </td>
                     <td className="pr-3 text-right">
                       {inv ? (
@@ -199,7 +200,7 @@ export function InventoryTab({
                     </td>
                     {BOX_FIELDS.map((f) => (
                       <td key={f.key} className="pr-3">
-                        <input
+                        <Input
                           type="number"
                           inputMode="decimal"
                           step={f.step}
@@ -210,7 +211,7 @@ export function InventoryTab({
                           onChange={(e) =>
                             setField(sku, f.key, e.target.value)
                           }
-                          className="w-24 sc-input text-right"
+                          className="w-24 text-right"
                         />
                       </td>
                     ))}
@@ -248,7 +249,7 @@ export function InventoryTab({
               </tr>
             )}
           </tbody>
-        </table>
+        </Table>
       </div>
     </>
   );

@@ -162,8 +162,45 @@ Shown on the **connect screen**, before any credentials are entered, so it's vis
 
 - **`beforeinstallprompt` is captured at module load** (not inside the component), because the event fires once, early in page load — long before the wizard reaches this screen.
 - **Platform detection** distinguishes iOS (no install API; Apple only allows Share → Add to Home Screen — the button shows numbered steps instead) from Android/Chromium (native `beforeinstallprompt` flow — the button really installs). iPadOS reports itself as `Macintosh` in its user agent, so touch-point count disambiguates it from a real Mac.
-- **Dismissal** is remembered via `localStorage` (`byraf-install-dismissed`) — the *only* thing this app persists in the browser, consistent with the "nothing is stored" security model (see [Configuration & Security](./configuration-and-security.md)).
+- **Dismissal** is remembered via `localStorage` (`byraf-install-dismissed`). With the `theme` cookie (see [Design system and themes](#design-system-and-themes-componentsui)) it is one of only two UI preferences this app keeps in the browser, consistent with the "nothing is stored" security model (see [Configuration & Security](./configuration-and-security.md)).
 - Uses `useSyncExternalStore` with a `serverSnapshot` of `"hidden"`, so server-rendered HTML always matches the first client render (avoiding a hydration mismatch) and the real platform-detected state appears immediately after hydration.
+
+## Design system and themes (`components/ui/`)
+
+The app has two designs, switched live by the **Retro UI / Modern UI** button in the menu bar (`ThemeToggle`): *retro* (the original classic-Mac look) and *modern* (Bootstrap-style). Pages never name a design; they use kit components and the active design decides the classes.
+
+```mermaid
+flowchart LR
+    Cookie["theme cookie"] --> Root["app/layout.tsx\ngetTheme() -> html data-theme"]
+    Root --> Provider["ThemeProvider\nuseTheme / useStyles"]
+    Provider --> Kit["Button, Card, Input, Table,\nTabList/TabButton, MenuBar, ThemeBody"]
+    Kit --> Map["styles.ts\nretro{} / modern{}"]
+    Map --> Retro["sc-* classes\napp/globals.css"]
+    Map --> Modern["daisyUI classes\n+ Tailwind utilities"]
+    Toggle["ThemeToggle"] --> Provider
+```
+
+| File | Role |
+|---|---|
+| `theme.ts` | `THEMES`, `Theme`, `parseTheme()`, the cookie name. Pure. |
+| `theme.server.ts` | `getTheme()` reads the cookie in a server component (`server-only`). |
+| `styles.ts` | **The class map.** `ThemeStyles` lists every design-dependent slot (`card`, `button.variant.primary`, `input`, `table`, `tabList`, ...); `satisfies Record<Theme, ThemeStyles>` makes a design fail to compile until it styles every slot. |
+| `ThemeProvider.tsx` | Context + `useTheme()` / `useStyles()`. `setTheme()` updates state, `<html data-theme>` and the cookie. |
+| `ThemeBody.tsx` | `<body>` as a client component so it restyles the moment the theme flips. |
+| `Button.tsx`, `Card.tsx`, `Input.tsx`, `Table.tsx`, `Tabs.tsx`, `MenuBar.tsx` | The kit. Each merges the slot's classes with the caller's `className` (via `clsx`). `useButtonClass()` serves non-`<button>` elements such as `<summary>`. |
+| `ThemeToggle.tsx` | The menu-bar switch; shows the design it will switch to. |
+
+**How the designs differ.** *Retro* is the existing `sc-*` classes in `app/globals.css`, untouched. *Modern* is [daisyUI](https://daisyui.com) component classes (`btn`, `card`, `input`, `table`, `tabs`) written as Tailwind class strings in `styles.ts`, plus one `@plugin "daisyui/theme"` block in `globals.css` that sets a Bootstrap 5 palette. That block also redefines the `--color-sc-*` tokens, so the roughly hundred existing `text-sc-ink-2` / `border-sc-line` / `bg-sc-head` utilities follow the theme with no per-file change. There is no hand-written modern CSS.
+
+**Flash-free and mismatch-free.** The server reads the `theme` cookie in the root layout and renders `data-theme` and every class for that design, so the first paint is already right and server and client agree. The cookie holds only `retro` or `modern`; any other value falls back to retro.
+
+**Retro-only global CSS is scoped.** The dithered desktop, Chicago font (`--font-retro`, no longer `--font-sans`) and boxy scrollbars live under `[data-theme="retro"]`. They are unlayered rules, which would otherwise beat Tailwind utilities and leak into modern.
+
+**Gotcha: a design's card class may set `display`.** daisyUI's `card` is `display: flex`, which overrides a closed `<dialog>`'s `display: none`. The receipts dialog therefore carries `hidden … open:flex`. Anything else that puts a card class on an element with its own display behaviour needs the same care.
+
+**Adding a design:** add its name to `THEMES`, add an entry to `styles` (the compiler lists the slots), and define its colour tokens (for a daisyUI design, another `@plugin "daisyui/theme"` block that also overrides every `--color-sc-*`). `npm run test:theme` checks the pieces line up.
+
+**Adding a kit component:** add a slot to `ThemeStyles`, fill it for both designs, and write a ~10-line component that reads `useStyles()`.
 
 ## Receipts folder (`app/(dashboard)/receipts/`)
 

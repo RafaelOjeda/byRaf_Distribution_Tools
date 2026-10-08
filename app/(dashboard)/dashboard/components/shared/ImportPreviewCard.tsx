@@ -1,3 +1,4 @@
+import { Button, Card } from "@/components/ui";
 import type { PortableImportResult } from "@/lib/gateway";
 
 const FORMAT_LABEL = { xlsx: "workbook", zip: "CSV bundle", csv: "CSV" } as const;
@@ -20,7 +21,7 @@ export function ImportPreviewCard({
     0
   );
   return (
-    <div className="sc-card flex flex-col gap-3 border-2 border-sc-line p-4">
+    <Card className="flex flex-col gap-3 border-2 border-sc-line p-4">
       <h3 className="text-base font-bold">
         Review import <span className="font-normal">({FORMAT_LABEL[preview.format]})</span>
       </h3>
@@ -65,26 +66,22 @@ export function ImportPreviewCard({
       <div className="flex flex-wrap gap-2">
         {existingSkuCount > 0 && stats.skus > 0 ? (
           <>
-            <button onClick={() => onApply("merge")} className="sc-btn-primary">
+            <Button variant="primary" onClick={() => onApply("merge")}>
               Merge
-            </button>
-            <button onClick={() => onApply("replace")} className="sc-btn">
-              Replace
-            </button>
+            </Button>
+            <Button onClick={() => onApply("replace")}>Replace</Button>
           </>
         ) : (
-          <button
+          <Button
+            variant="primary"
             onClick={() => onApply("replace")}
             disabled={nothingToApply}
-            className="sc-btn-primary"
           >
             Apply import
-          </button>
+          </Button>
         )}
-        <button onClick={onCancel} className="sc-btn">
-          Cancel
-        </button>
+        <Button onClick={onCancel}>Cancel</Button>
       </div>
-    </div>
+    </Card>
   );
 }

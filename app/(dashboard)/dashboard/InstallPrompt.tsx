@@ -1,5 +1,6 @@
 "use client";
 
+import { Button, TextButton } from "@/components/ui";
 import { useState, useSyncExternalStore } from "react";
 
 /*
@@ -163,12 +164,12 @@ export default function InstallPrompt() {
       )}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-        <button type="button" onClick={install} className="sc-btn-primary">
+        <Button variant="primary" onClick={install}>
           {native ? "Install app" : showSteps ? "Hide steps" : "Show me how"}
-        </button>
-        <button type="button" onClick={dismiss} className="sc-link text-sm">
+        </Button>
+        <TextButton onClick={dismiss} className="text-sm">
           Not now
-        </button>
+        </TextButton>
       </div>
     </section>
   );
