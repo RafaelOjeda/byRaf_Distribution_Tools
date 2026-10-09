@@ -97,7 +97,9 @@ stateDiagram-v2
 | `importPreview` | `PortableImportResult \| null` | Parsed-but-not-yet-applied import file (xlsx, zip or csv) |
 | `pendingPeriods` | `Record<sourceId, string[]> \| null` | Period ids from an imported file, applied (where still offered) when the period list next loads |
 
-**Why raw strings, not parsed numbers:** inputs are kept as strings (`inputs`, `lotDrafts`) so a half-typed value like `"1."` doesn't fight the controlled input's value on every keystroke. A `useMemo` (`parsedInputs`) converts everything to the real `CostInputs` shape — parsing each field with `parseFloat`, dropping `NaN`s — and only *that* derived value is passed to `buildReport`. This keeps `buildReport` itself simple (it only ever sees valid numbers or `undefined`) while the UI stays forgiving of in-progress typing.
+**Why raw strings, not parsed numbers:** inputs are kept as strings (`inputs`, `lotDrafts`) so a half-typed value like `"1."` doesn't fight the controlled input's value on every keystroke. A `useMemo` (`parsedInputs`) calls `parseCostDrafts` (from `lib/gateway`) to convert everything to the real `CostInputs` shape — parsing each field with `parseFloat`, dropping `NaN`s — and only *that* derived value is passed to `buildReport`. Nothing else in the dashboard parses typed costs: the batch editor's "N units · $X spent · avg $Y" line reads `ProductRecord.cost` from the report like every other view.
+
+**Views read figures, never calculate them.** Every per-product number (cost, on hand, sold, left, name, stock value) comes from `Report.products` (see [Engine — One source, many views](./engine.md#one-source-many-views-reportproducts)). `DashboardClient` only builds a `productBySku` index for lookups; components never call engine math. That is why typing a batch updates the Inventory row, the batch editor, Stock value, the KPI tiles and every order line's profit in the same render. This keeps `buildReport` itself simple (it only ever sees valid numbers or `undefined`) while the UI stays forgiving of in-progress typing.
 
 ## Data flow: typing a cost to seeing a new profit figure
 
@@ -127,7 +129,7 @@ Because `snapshot` doesn't change, this entire chain runs with **zero network ca
 | **By SKU** | `SkuTab` → `SkuSummaryTable` | `bySku: SkuSummary[]` | Per-product rollup; flags `possibleDuplicates`; CSV export |
 | **Order lines** | `OrdersTab` → `OrderLineCard` (phone) / table (desktop) | `orderLines: MarginRow[]` | One row per settled or estimated line; settled/estimated totals shown separately, never blended; CSV export |
 | **Price over time** | `PriceTab` → `PriceChart` | `priceSeries: PriceSeries[]` | Hand-built SVG chart — see [below](#price-chart) |
-| **Inventory & costs** | `InventoryTab` → `InventoryCard` (phone) / table (desktop) | derived from `parsedInputs` + `Report.inventory` | The only tab with write operations: cost entry, box cost, CSV import/export |
+| **Inventory & costs** | `InventoryTab` → `InventoryCard` (phone) / table (desktop) | `products: ProductRecord[]` | The only tab with write operations: cost entry, box cost, CSV import/export |
 | **Stock value** | `StockTab` → `StockValueTable` | `stock` (from `stockValue()`, see [Engine](./engine.md#stockvalue-pooled-never-summed-across-sources)) | Merchant-fulfilled only; oversell risk flagged |
 | **Marketplace fees** | `FeesTab` → `MarketplaceFeesTable` | `marketplaceFees: AccountCharge[]` | Charges tied to no single order line |
 

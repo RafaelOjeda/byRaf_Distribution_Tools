@@ -14,14 +14,10 @@ import {
   costsToCsv,
   exportCsvBundle,
   exportWorkbook,
-  normalizeSku,
+  parseCostDrafts,
   parseImportFile,
-  type CostInputs,
-  type CostLot,
   type PortableData,
   type PortableImportResult,
-  type Report,
-  type SkuCostInputs,
   type SkuInputs,
   type Snapshot,
   type SourceDescriptor,
@@ -234,34 +230,11 @@ export default function DashboardClient({
     setSelectedPeriods({});
   }
 
-  const parsedInputs = useMemo(() => {
-    const out: CostInputs = {};
-    for (const [sku, fields] of Object.entries(inputs)) {
-      const parsed: SkuCostInputs = {};
-      for (const { key } of BOX_FIELDS) {
-        const n = parseFloat(fields[key] ?? "");
-        if (!Number.isNaN(n)) parsed[key] = n;
-      }
-      out[sku] = parsed;
-    }
-    for (const [sku, drafts] of Object.entries(lotDrafts)) {
-      const lots: CostLot[] = drafts
-        .map((d) => ({
-          qty: parseFloat(d.qty),
-          unitCost: parseFloat(d.unitCost),
-        }))
-        .filter((l) => !Number.isNaN(l.qty) && !Number.isNaN(l.unitCost));
-      out[sku] = { ...out[sku], lots };
-    }
-    for (const [sku, raw] of Object.entries(aliasDrafts)) {
-      const aliasSkus = raw
-        .split(/[;,]/)
-        .map((a) => a.trim())
-        .filter(Boolean);
-      if (aliasSkus.length > 0) out[sku] = { ...out[sku], aliasSkus };
-    }
-    return out;
-  }, [inputs, lotDrafts, aliasDrafts]);
+  // The one place typed costs become numbers - see parseCostDrafts.
+  const parsedInputs = useMemo(
+    () => parseCostDrafts({ fields: inputs, lots: lotDrafts, aliases: aliasDrafts }),
+    [inputs, lotDrafts, aliasDrafts]
+  );
 
   // The gateway fetched the snapshot once; a cost edit only re-runs
   // buildReport (pure, no network), so this stays instant.
@@ -270,36 +243,13 @@ export default function DashboardClient({
     return buildReport(snapshot, parsedInputs, { sourceFilter });
   }, [snapshot, parsedInputs, sourceFilter]);
 
-  const inventoryBySku = useMemo(() => {
-    const m = new Map<string, Report["inventory"][number]>();
-    for (const item of liveReport?.inventory ?? []) m.set(normalizeSku(item.sku), item);
-    return m;
-  }, [liveReport]);
-
-  const skus = useMemo(() => {
-    const set = new Set<string>();
-    for (const l of liveReport?.orderLines ?? []) if (l.sku) set.add(normalizeSku(l.sku));
-    for (const item of liveReport?.inventory ?? []) set.add(normalizeSku(item.sku));
-    return [...set].sort();
-  }, [liveReport]);
-
-  // SKUs mean little to a reader; show each product's name where we have one.
-  const nameBySku = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const l of liveReport?.orderLines ?? []) {
-      if (l.sku && l.itemName) {
-        const key = normalizeSku(l.sku);
-        if (!m.has(key)) m.set(key, l.itemName);
-      }
-    }
-    return m;
-  }, [liveReport]);
-
-  const soldBySku = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const s of liveReport?.bySku ?? []) m.set(s.sku, s.units);
-    return m;
-  }, [liveReport]);
+  // Every per-product figure lives on these records; this is only an
+  // index for looking one up by SKU, never a second copy of a number.
+  const productBySku = useMemo(
+    () => new Map((liveReport?.products ?? []).map((p) => [p.sku, p])),
+    [liveReport]
+  );
+  const skus = useMemo(() => [...productBySku.keys()], [productBySku]);
 
   async function handleImportFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -716,11 +666,7 @@ export default function DashboardClient({
         >
       {tab === "inventory" && (
         <InventoryTab
-          skus={skus}
-          nameBySku={nameBySku}
-          parsedInputs={parsedInputs}
-          inventoryBySku={inventoryBySku}
-          soldBySku={soldBySku}
+          products={r.products}
           inputs={inputs}
           lotDrafts={lotDrafts}
           expanded={expanded}
@@ -734,7 +680,7 @@ export default function DashboardClient({
         />
       )}
 
-      {tab === "stock" && <StockTab stock={stockVal} nameBySku={nameBySku} />}
+      {tab === "stock" && <StockTab stock={stockVal} productBySku={productBySku} />}
 
       {tab === "fees" && <FeesTab fees={r.marketplaceFees} />}
 

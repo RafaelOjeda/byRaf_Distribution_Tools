@@ -32,7 +32,7 @@ There is **no test framework configured** in this repository (no Jest, Vitest, P
 ```mermaid
 flowchart TD
     subgraph Engine["npm run test:engine — scripts/test-engine.ts"]
-        E1["computeMargins, summarizeBySku,\nstockValue, reconcileStock"]
+        E1["computeMargins, summarizeBySku,\nstockValue, buildReport.products"]
         E2["priceSeriesBySku"]
         E3["buildAliasIndex, resolveSku,\nfindPossibleDuplicates"]
         E4["groupReconRows, estimateUnsettled\n(Walmart connector normalization)"]

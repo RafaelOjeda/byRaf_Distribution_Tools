@@ -1,17 +1,13 @@
 import { Button, Input } from "@/components/ui";
-import { reconcileStock } from "@/lib/gateway";
+import type { ProductRecord } from "@/lib/gateway";
 import { BOX_FIELDS, type LotDraft, type SkuField } from "../types";
 import { money } from "../utils/format";
+import { reportedPhrase, reportedTitle } from "../utils/stock";
 import { Fig } from "./shared/Fig";
 import { CostLotsEditor } from "./CostLotsEditor";
 
 export function InventoryCard({
-  sku,
-  name,
-  onHand,
-  onHandTitle,
-  stock,
-  avg,
+  product,
   boxValues,
   onBoxChange,
   drafts,
@@ -23,12 +19,7 @@ export function InventoryCard({
   aliasValue,
   onAliasChange,
 }: {
-  sku: string;
-  name: string;
-  onHand: number | null;
-  onHandTitle?: string;
-  stock: ReturnType<typeof reconcileStock>;
-  avg: number | null;
+  product: ProductRecord;
   boxValues: Partial<Record<SkuField, string>>;
   onBoxChange: (field: SkuField, value: string) => void;
   drafts: LotDraft[];
@@ -40,6 +31,9 @@ export function InventoryCard({
   aliasValue: string;
   onAliasChange: (value: string) => void;
 }) {
+  const { sku, stock, cost } = product;
+  const name = product.name || sku;
+  const avg = cost.avgCost;
   const muted = <span className="text-sc-ink-2/70">—</span>;
   return (
     <li className="rounded-lg border border-sc-line p-3">
@@ -54,8 +48,8 @@ export function InventoryCard({
       </div>
 
       <dl className="mt-3 grid grid-cols-4 gap-2">
-        <Fig label="On hand" title={onHandTitle}>
-          {onHand ?? muted}
+        <Fig label="On hand" title={reportedTitle(stock)}>
+          {stock.reported ?? muted}
         </Fig>
         <Fig label="Sold">{stock.sold}</Fig>
         <Fig label="Bought">{stock.purchased || muted}</Fig>
@@ -63,22 +57,22 @@ export function InventoryCard({
           label="Left"
           title={
             stock.discrepancy
-              ? `Your batches imply ${stock.impliedOnHand} left, the source says ${stock.onHand}.`
+              ? `Your batches imply ${stock.left} left, ${reportedPhrase(stock)}.`
               : undefined
           }
         >
-          {stock.purchased === 0 ? (
+          {stock.left === null ? (
             muted
           ) : (
             <span className={stock.discrepancy ? "text-amber-600" : ""}>
-              {stock.impliedOnHand}
+              {stock.left}
             </span>
           )}
         </Fig>
       </dl>
       {stock.discrepancy ? (
         <p className="mt-1 text-xs text-amber-600">
-          Batches imply {stock.impliedOnHand} left; the source says {stock.onHand}.
+          Batches imply {stock.left} left; {reportedPhrase(stock)}.
         </p>
       ) : null}
 
@@ -116,6 +110,7 @@ export function InventoryCard({
           <CostLotsEditor
             sku={sku}
             name={name}
+            cost={cost}
             drafts={drafts}
             onAdd={onAdd}
             onUpdate={onUpdate}

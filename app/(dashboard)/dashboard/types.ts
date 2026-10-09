@@ -1,6 +1,6 @@
-import type { SkuCostInputs } from "@/lib/gateway";
+import type { CostField } from "@/lib/gateway";
 
-export type SkuField = Exclude<keyof SkuCostInputs, "lots" | "aliasSkus">;
+export type SkuField = CostField;
 
 export const BOX_FIELDS: { key: SkuField; label: string; step: string }[] = [
   { key: "boxCost", label: "Box cost", step: "0.01" },

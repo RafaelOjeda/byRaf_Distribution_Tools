@@ -11,7 +11,8 @@
 - Turn raw settled + estimated order lines into per-line and per-SKU margins (`margins.ts`).
 - Estimate fees for orders that haven't settled yet, from each SKU's own settled history (this part actually lives in the Walmart connector — see [note below](#where-estimation-actually-lives)).
 - Resolve SKU identity: normalize casing, apply user-declared aliases across marketplaces, and flag likely-duplicate SKUs that *aren't* aliased (`identity.ts`).
-- Compute stock-on-hand and its dollar value, pooled across sources rather than summed (`margins.ts`'s `stockValue`).
+- Compute stock-on-hand and its dollar value, pooled across sources rather than summed (`margins.ts`'s `stockRecords`/`stockValue`).
+- Gather every per-product figure into one record per SKU (`products.ts`'s `buildProducts` → `Report.products`), which every view reads. See [One source, many views](#one-source-many-views-reportproducts).
 - Build day-by-day average selling price series per SKU (`prices.ts`).
 - Define the CSV shapes for order lines, SKU summaries, and cost import/export, including formula-injection guarding (`csv.ts`).
 - Assemble all of the above into the `Report` the dashboard renders (`report.ts`).
@@ -21,7 +22,9 @@
 | File | Exports | Role |
 |---|---|---|
 | [`engine/types.ts`](../../lib/gateway/engine/types.ts) | `OrderLineSummary`, `normalizeSku` | The canonical line-item shape every connector normalizes into |
-| [`engine/margins.ts`](../../lib/gateway/engine/margins.ts) | `computeMargins`, `summarizeBySku`, `sumMargins`, `stockValue`, `reconcileStock`, `buildSkuHistory`, `settlementKey`, `assignSaleDates`, cost-lot helpers | The core margin, stock, and cost math |
+| [`engine/margins.ts`](../../lib/gateway/engine/margins.ts) | `computeMargins`, `summarizeBySku`, `sumMargins`, `skuCost`, `stockRecords`, `summarizeStock`, `stockValue`, `buildSkuHistory`, `settlementKey`, `assignSaleDates` | The core margin, stock, and cost math |
+| [`engine/products.ts`](../../lib/gateway/engine/products.ts) | `buildProducts`, `ProductRecord` | One record per product holding every per-product figure; the dashboard reads these |
+| [`engine/drafts.ts`](../../lib/gateway/engine/drafts.ts) | `parseCostDrafts` | The one place typed cost text becomes `CostInputs` |
 | [`engine/identity.ts`](../../lib/gateway/engine/identity.ts) | `buildAliasIndex`, `resolveSku`, `findPossibleDuplicates` | SKU identity resolution across sources |
 | [`engine/prices.ts`](../../lib/gateway/engine/prices.ts) | `priceSeriesBySku` | Price-over-time series for the chart |
 | [`engine/csv.ts`](../../lib/gateway/engine/csv.ts) | `toCsv`, `orderLinesToCsv`, `skuSummaryToCsv`, `costsToCsv`, `parseCsv`, `parseCostImportCsv` | CSV encode/decode, shared by every export/import feature |
@@ -73,13 +76,13 @@ This is a straight-line pure function: no step performs I/O, and every step afte
 interface CostLot { qty: number; unitCost: number; }
 ```
 
-A SKU's inputs (`SkuInputs`) hold zero or more `CostLot`s. `averageUnitCost` is the **quantity-weighted average** across all valid lots (qty > 0, unitCost ≥ 0) — not FIFO, because batches carry no dates. This is a deliberate design decision recorded in [`walmart-margin-tracker-plan.md`](../../walmart-margin-tracker-plan.md): batches record what was paid *including for units already sold*, so `totalPurchased` legitimately exceeds current on-hand stock.
+A SKU's inputs (`SkuInputs`) hold zero or more `CostLot`s. `skuCost` turns them into a `SkuCost` (`avgCost`, `boxCost`, `purchased`, `spent`, `batches`) - the **only** place cost figures are calculated; `computeMargins`, `stockRecords` and `buildProducts` all call it. `avgCost` is the **quantity-weighted average** across all valid lots (qty > 0, unitCost ≥ 0) — not FIFO, because batches carry no dates. This is a deliberate design decision recorded in [`walmart-margin-tracker-plan.md`](../../walmart-margin-tracker-plan.md): batches record what was paid *including for units already sold*, so `totalPurchased` legitimately exceeds current on-hand stock.
 
 ### `computeMargins`: per-line profit
 
 ```
-itemCostTotal = averageUnitCost(lots) × line.qty      (0 if no lots entered)
-boxCostTotal  = boxCost                                 (flat per shipment, not scaled by qty)
+itemCostTotal = skuCost(inputs).avgCost × line.qty   (0 if no lots entered)
+boxCostTotal  = skuCost(inputs).boxCost                               (flat per shipment, not scaled by qty)
 costTotal     = itemCostTotal + boxCostTotal
 profit        = line.netAmount − costTotal
 margin        = profit / line.revenue   (null if revenue is 0)
@@ -113,20 +116,39 @@ flowchart LR
 
 The same physical inventory shows up in every connected marketplace's own count — summing them would double-count stock. Instead:
 
-- **With any cost lots entered**, the valuation quantity is your own pool figure: `purchased − sold`, from `reconcileStock`/`totalPurchased`. Each source's own reported count is still shown (`bySource`), never summed.
+- **With any cost lots entered**, the valuation quantity is your own pool figure: `purchased − sold`, from `skuCost`. Each source's own reported count is still shown (`bySource`), never summed.
 - **With no lots entered**, it falls back to the largest single source's count, marked `onHandIsEstimate: true`.
 - **`oversellRisk`** fires when a source's count exceeds what your purchase records imply is left — advisory only; it is never blocking, because real stock drift happens (damage, returns, stock held but not listed) and blocking data entry on it would be unusable.
 - **Unpublished listings** (`isPublished: false`) show a price but are excluded from `valueAtPrice`'s total, because that stock can't currently sell.
 - A missing figure is `null`, never `0`; totals report how many SKUs they cover (`costedSkus`, `pricedSkus`) so a partial total can never silently read as the whole picture.
 
-### `reconcileStock`: advisory discrepancy check
+`stockRecords` builds one `SkuStockRecord` per SKU (every SKU a source reports, plus every SKU sold); `summarizeStock` keeps the ones a source reports that are in stock, sorts them and totals them into `Report.stock`. The rows in `Report.stock.rows` are the same objects as `Report.products[].stock`.
+
+### Stock reconciliation: advisory discrepancy check
+
+Each `SkuStockRecord` also carries what the inventory view shows:
 
 ```ts
-impliedOnHand = purchased − sold
-discrepancy   = onHand === null || purchased === 0 ? null : impliedOnHand − onHand
+reported    = max(source counts)        // null when no source reports the SKU
+left        = purchased − sold          // null with no batches entered
+discrepancy = left === null || reported === null ? null : left − reported
 ```
 
-Used by the Inventory & Costs tab's "Left" column (amber when nonzero) — a hint that a batch is missing or mistyped, never a hard constraint. See [Frontend — Inventory & costs tab](./frontend.md#inventory--costs-tab).
+`reported` is the largest single-source count, the same figure the pooling fallback and `oversellRisk` use, so it doesn't depend on which source loaded last. Used by the Inventory & Costs tab's "Left" column (amber when nonzero) — a hint that a batch is missing or mistyped, never a hard constraint. See [Frontend — Inventory & costs tab](./frontend.md#inventory--costs-tab).
+
+### One source, many views (`Report.products`)
+
+Every per-product figure the dashboard shows is calculated once and read everywhere, so a cost or count shown in two places can never disagree (see [`docs/tab-consolidation-plan.md`](../tab-consolidation-plan.md), "Rule: one source, many views"). `buildProducts` gives one `ProductRecord` per SKU (sorted by SKU):
+
+| Field | What | Same object as |
+|---|---|---|
+| `sku`, `name` | normalized key; name from its order lines | `bySku[].itemName` |
+| `cost` | `skuCost(inputs)` | the cost behind every margin row and stock record |
+| `stock` | the `SkuStockRecord` | its row in `stock.rows` (when in stock) |
+| `sales` | the `SkuSummary`, or null with no sales | its entry in `bySku` |
+| `orderLines` | its `MarginRow`s | the rows in `orderLines` |
+
+Calculation helpers (`averageUnitCost`, `stockValue`, ...) are not exported from `lib/gateway`, so the dashboard can't work a figure out itself; it reads `Report`. `scripts/test-engine.ts` checks across a two-source fixture with an alias that every view's figures are the same objects and numbers.
 
 ## SKU identity resolution (`identity.ts`)
 
@@ -203,7 +225,7 @@ One subtlety worth flagging for anyone modifying this area: **`buildSkuHistory` 
 
 ## Testing
 
-`scripts/test-engine.ts` is a hand-written fixture regression check (no test framework is configured in this repo — see [Testing & Deployment](./testing-and-deployment.md)) covering `computeMargins`, `summarizeBySku`, `stockValue`, `reconcileStock`, `priceSeriesBySku`, `buildAliasIndex`/`findPossibleDuplicates`, and the Walmart-specific `groupReconRows`/`estimateUnsettled`. It exists specifically to prove the `lib/gateway/` carve-out (phase 1 of the multi-marketplace plan) changed zero dollar figures. `scripts/test-csv-import.ts` covers `csv.ts` separately. Run both with `npm run test:engine` / `npm run test:csv`.
+`scripts/test-engine.ts` is a hand-written fixture regression check (no test framework is configured in this repo — see [Testing & Deployment](./testing-and-deployment.md)) covering `computeMargins`, `summarizeBySku`, `stockValue` (and the reconciliation fields on its records), `buildReport`'s `products` (one source, many views), `parseCostDrafts`, `priceSeriesBySku`, `buildAliasIndex`/`findPossibleDuplicates`, and the Walmart-specific `groupReconRows`/`estimateUnsettled`. It exists specifically to prove the `lib/gateway/` carve-out (phase 1 of the multi-marketplace plan) changed zero dollar figures. `scripts/test-csv-import.ts` covers `csv.ts` separately. Run both with `npm run test:engine` / `npm run test:csv`.
 
 ## Related documentation
 

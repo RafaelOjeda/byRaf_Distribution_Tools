@@ -141,6 +141,12 @@ export interface Report {
   orderLines: import("../engine/margins").MarginRow[];
   priceSeries: import("../engine/prices").PriceSeries[];
   stock: ReturnType<typeof import("../engine/margins").stockValue>;
+  /**
+   * One record per product (every SKU a source reports or sold), sorted
+   * by SKU. Holds every per-product figure the dashboard shows - views
+   * read from here rather than working a figure out again.
+   */
+  products: import("../engine/products").ProductRecord[];
   /** Every SKU any connected source reports, including SKUs with nothing in stock right now - unlike `stock.rows`, which only lists what's on hand. */
   inventory: StockItem[];
   marketplaceFees: AccountCharge[];

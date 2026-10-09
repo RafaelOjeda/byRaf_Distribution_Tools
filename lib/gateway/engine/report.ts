@@ -6,10 +6,18 @@ import type {
   SnapshotData,
   SourceStatus,
 } from "../contract";
-import { assignSaleDates, computeMargins, stockValue, summarizeBySku, sumMargins } from "./margins";
+import {
+  assignSaleDates,
+  computeMargins,
+  stockRecords,
+  summarizeBySku,
+  summarizeStock,
+  sumMargins,
+} from "./margins";
 import type { SkuInputs } from "./margins";
 import { buildAliasIndex, resolveSku } from "./identity";
 import { priceSeriesBySku } from "./prices";
+import { buildProducts } from "./products";
 import type { OrderLineSummary } from "./types";
 
 function toSkuInputs(costs: CostInputs): Record<string, SkuInputs> {
@@ -86,7 +94,17 @@ export function buildReport(
     .flatMap((s) => s.catalog)
     .map((c) => ({ ...c, sku: resolveSku(c.sku, aliasIndex) }));
   const sold = Object.fromEntries(bySku.map((s) => [s.sku, s.units]));
-  const stock = stockValue(inventory, catalog, skuInputs, sold);
+  // One stock record per SKU - every SKU a source reports or sold -
+  // shared by the stock value table and the product records.
+  const stockBySku = stockRecords(
+    inventory,
+    catalog,
+    skuInputs,
+    sold,
+    margins.map((m) => m.sku).filter(Boolean)
+  );
+  const stock = summarizeStock(stockBySku.values());
+  const products = buildProducts(stockBySku, bySku, margins, skuInputs);
 
   const marketplaceFees = included.flatMap((s) => s.charges);
 
@@ -124,6 +142,7 @@ export function buildReport(
     orderLines: margins,
     priceSeries,
     stock,
+    products,
     inventory,
     marketplaceFees,
     settledTotals,

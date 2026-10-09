@@ -1,13 +1,14 @@
-import type { Report } from "@/lib/gateway";
+import type { ProductRecord, Report } from "@/lib/gateway";
 import { PanelHeader } from "../shared/PanelHeader";
 import { StockValueTable } from "../StockValueTable";
 
 export function StockTab({
   stock,
-  nameBySku,
+  productBySku,
 }: {
   stock: Report["stock"];
-  nameBySku: Map<string, string>;
+  /** Product records by SKU - names come from here, the same as every other view. */
+  productBySku: Map<string, ProductRecord>;
 }) {
   return (
     <>
@@ -22,7 +23,7 @@ export function StockTab({
         Merchant-fulfilled stock only — units held in a
         marketplace&apos;s own warehouses aren&apos;t included yet.
       </PanelHeader>
-      <StockValueTable stock={stock} nameBySku={nameBySku} />
+      <StockValueTable stock={stock} productBySku={productBySku} />
     </>
   );
 }

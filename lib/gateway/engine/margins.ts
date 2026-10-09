@@ -101,17 +101,47 @@ function validLots(lots: CostLot[] | undefined): CostLot[] {
   );
 }
 
+/**
+ * Everything about one SKU's cost, worked out from what was entered for
+ * it. This is the one place these figures are calculated: margins, stock
+ * value and the product record all call it, so a cost shown in two
+ * places can never disagree.
+ */
+export interface SkuCost {
+  /** Quantity-weighted average across batches; null when nothing usable is entered. */
+  avgCost: number | null;
+  /** Per shipment; null when not entered. */
+  boxCost: number | null;
+  /** Total units across every usable batch. */
+  purchased: number;
+  /** Total paid across every usable batch. */
+  spent: number;
+  /** Usable batches - a half-typed or zero-quantity batch doesn't count. */
+  batches: number;
+}
+
+export function skuCost(inputs: SkuInputs | undefined): SkuCost {
+  const lots = validLots(inputs?.lots);
+  const purchased = lots.reduce((n, l) => n + l.qty, 0);
+  const spent = lots.reduce((n, l) => n + l.qty * l.unitCost, 0);
+  const boxCost = inputs?.boxCost;
+  return {
+    avgCost: purchased === 0 ? null : spent / purchased,
+    boxCost: typeof boxCost === "number" && !Number.isNaN(boxCost) ? boxCost : null,
+    purchased,
+    spent,
+    batches: lots.length,
+  };
+}
+
 /** Total units purchased across every batch. */
 export function totalPurchased(lots: CostLot[] | undefined): number {
-  return validLots(lots).reduce((n, l) => n + l.qty, 0);
+  return skuCost({ lots }).purchased;
 }
 
 /** Quantity-weighted average cost, or null when nothing usable is entered. */
 export function averageUnitCost(lots: CostLot[] | undefined): number | null {
-  const valid = validLots(lots);
-  const units = valid.reduce((n, l) => n + l.qty, 0);
-  if (units === 0) return null;
-  return valid.reduce((sum, l) => sum + l.qty * l.unitCost, 0) / units;
+  return skuCost({ lots }).avgCost;
 }
 
 export interface StockValueRow {
@@ -125,7 +155,14 @@ export interface StockValueRow {
   /** true => `onHand` is a fallback (no cost batches entered yet), not the real pool figure. */
   onHandIsEstimate: boolean;
   /** Every source's own reported count - never summed, because it's the same physical units seen twice. */
-  bySource: { source: string; sourceLabel: string; onHand: number }[];
+  bySource: {
+    source: string;
+    sourceLabel: string;
+    onHand: number;
+    /** null when the source didn't split its count. */
+    availToSell: number | null;
+    reserved: number | null;
+  }[];
   /** A source reports more on hand than your own purchase records support. */
   oversellRisk: boolean;
   avgCost: number | null; // null = no batches entered
@@ -170,57 +207,126 @@ export interface StockValueTotals {
  * sell right now, so counting it would overstate what's realisable.
  */
 export function stockValue(
-  inventory: {
-    sku: string;
-    onHand: number;
-    source?: string;
-    sourceLabel?: string;
-  }[],
-  catalog: { sku: string; price: number | null; publishedStatus: string }[],
+  inventory: StockInput[],
+  catalog: CatalogInput[],
   inputs: Record<string, SkuInputs>,
   sold: Record<string, number> = {}
-): { rows: StockValueRow[]; totals: StockValueTotals } {
+): { rows: SkuStockRecord[]; totals: StockValueTotals } {
+  return summarizeStock(stockRecords(inventory, catalog, inputs, sold).values());
+}
+
+type StockInput = {
+  sku: string;
+  onHand: number;
+  availToSell?: number;
+  reserved?: number;
+  source?: string;
+  sourceLabel?: string;
+};
+type CatalogInput = { sku: string; price: number | null; publishedStatus: string };
+
+/**
+ * One SKU's stock as every view sees it: the valuation row plus the
+ * reconciliation figures (bought, left, mismatch) the inventory view
+ * shows. Built once per SKU by stockRecords - the stock value table and
+ * the product record hold the same object.
+ */
+export interface SkuStockRecord extends StockValueRow {
+  /**
+   * The largest count any single source reports, or null when no source
+   * reports this SKU. Not a sum - see stockValue.
+   */
+  reported: number | null;
+  purchased: number; // from the cost batches entered
+  sold: number; // units on settled + estimated order lines
+  /** purchased − sold: what your own records imply is left. null with no batches entered. */
+  left: number | null;
+  /**
+   * left − reported. Non-zero means the two disagree - usually a missing
+   * or mistyped batch. Null when either side is unknown. Deliberately
+   * advisory: real drift happens (damage, returns, stock held but not
+   * listed), so this never blocks entry.
+   */
+  discrepancy: number | null;
+}
+
+/**
+ * A stock record for every SKU the sources report, plus any in
+ * `extraSkus` (e.g. sold but not in any inventory feed), keyed by
+ * normalizeSku. The pooling rules are the ones documented on stockValue.
+ */
+export function stockRecords(
+  inventory: StockInput[],
+  catalog: CatalogInput[],
+  inputs: Record<string, SkuInputs>,
+  sold: Record<string, number> = {},
+  extraSkus: string[] = []
+): Map<string, SkuStockRecord> {
   const cat = new Map(catalog.map((c) => [normalizeSku(c.sku), c]));
 
-  const bySku = new Map<string, typeof inventory>();
+  const bySku = new Map<string, { display: string; items: StockInput[] }>();
   for (const i of inventory) {
     const key = normalizeSku(i.sku);
     const group = bySku.get(key);
-    if (group) group.push(i);
-    else bySku.set(key, [i]);
+    if (group) group.items.push(i);
+    else bySku.set(key, { display: i.sku, items: [i] });
+  }
+  for (const sku of extraSkus) {
+    const key = normalizeSku(sku);
+    if (!bySku.has(key)) bySku.set(key, { display: sku, items: [] });
   }
 
-  const rows: StockValueRow[] = [...bySku.entries()]
-    .map(([key, items]) => {
-      const bySource = items.map((i) => ({
-        source: i.source ?? "unknown",
-        sourceLabel: i.sourceLabel ?? i.source ?? "unknown",
-        onHand: i.onHand,
-      }));
-      const maxSourceOnHand = Math.max(0, ...bySource.map((b) => b.onHand));
+  const out = new Map<string, SkuStockRecord>();
+  for (const [key, { display, items }] of bySku) {
+    const bySource = items.map((i) => ({
+      source: i.source ?? "unknown",
+      sourceLabel: i.sourceLabel ?? i.source ?? "unknown",
+      onHand: i.onHand,
+      availToSell: i.availToSell ?? null,
+      reserved: i.reserved ?? null,
+    }));
+    const reported =
+      bySource.length > 0 ? Math.max(0, ...bySource.map((b) => b.onHand)) : null;
 
-      const purchased = totalPurchased(inputs[key]?.lots);
-      const poolOnHand = purchased - (sold[key] ?? 0);
-      const onHandIsEstimate = purchased === 0;
-      const onHand = onHandIsEstimate ? maxSourceOnHand : poolOnHand;
+    const cost = skuCost(inputs[key]);
+    const soldUnits = sold[key] ?? 0;
+    const poolOnHand = cost.purchased - soldUnits;
+    const onHandIsEstimate = cost.purchased === 0;
+    const onHand = onHandIsEstimate ? (reported ?? 0) : poolOnHand;
+    const left = onHandIsEstimate ? null : poolOnHand;
 
-      const item = cat.get(key);
-      const avgCost = averageUnitCost(inputs[key]?.lots);
-      const listedPrice = item?.price ?? null;
-      return {
-        sku: items[0].sku,
-        onHand,
-        onHandIsEstimate,
-        bySource,
-        oversellRisk: !onHandIsEstimate && maxSourceOnHand > poolOnHand,
-        avgCost,
-        listedPrice,
-        publishedStatus: item?.publishedStatus ?? null,
-        isPublished: item?.publishedStatus === "PUBLISHED",
-        valueAtCost: avgCost === null ? null : onHand * avgCost,
-        valueAtPrice: listedPrice === null ? null : onHand * listedPrice,
-      };
-    })
+    const item = cat.get(key);
+    const listedPrice = item?.price ?? null;
+    out.set(key, {
+      sku: display,
+      onHand,
+      onHandIsEstimate,
+      bySource,
+      oversellRisk: !onHandIsEstimate && reported !== null && reported > poolOnHand,
+      avgCost: cost.avgCost,
+      listedPrice,
+      publishedStatus: item?.publishedStatus ?? null,
+      isPublished: item?.publishedStatus === "PUBLISHED",
+      valueAtCost: cost.avgCost === null ? null : onHand * cost.avgCost,
+      valueAtPrice: listedPrice === null ? null : onHand * listedPrice,
+      reported,
+      purchased: cost.purchased,
+      sold: soldUnits,
+      left,
+      discrepancy: left === null || reported === null ? null : left - reported,
+    });
+  }
+  return out;
+}
+
+/** The stock value table and its totals: the in-stock subset of the records, biggest money first. */
+export function summarizeStock(
+  records: Iterable<SkuStockRecord>
+): { rows: SkuStockRecord[]; totals: StockValueTotals } {
+  const rows = [...records]
+    // Only SKUs a source reports - a SKU missing from every inventory
+    // feed has no count to value.
+    .filter((r) => r.bySource.length > 0)
     .filter((r) => r.onHand > 0 || r.bySource.some((b) => b.onHand > 0))
     // Biggest money first; SKUs with no figure sink to the bottom.
     .sort(
@@ -248,38 +354,6 @@ export function stockValue(
   };
 }
 
-export interface SkuStock {
-  purchased: number; // from the cost lots you entered
-  sold: number; // units on settled + estimated order lines
-  onHand: number | null; // the source's count, null if inventory wasn't loaded
-  /** purchased - sold: what your own records imply is left. */
-  impliedOnHand: number;
-  /**
-   * Your implied stock minus the source's. Non-zero means the two
-   * disagree - usually a missing or mistyped lot. Null when either side
-   * is unknown. Deliberately advisory: real drift happens (damage,
-   * returns, stock held but not listed), so this never blocks entry.
-   */
-  discrepancy: number | null;
-}
-
-export function reconcileStock(
-  lots: CostLot[] | undefined,
-  sold: number,
-  onHand: number | null
-): SkuStock {
-  const purchased = totalPurchased(lots);
-  const impliedOnHand = purchased - sold;
-  return {
-    purchased,
-    sold,
-    onHand,
-    impliedOnHand,
-    discrepancy:
-      onHand === null || purchased === 0 ? null : impliedOnHand - onHand,
-  };
-}
-
 export interface MarginRow extends OrderLineSummary {
   hasCost: boolean;
   itemCostTotal: number;
@@ -301,14 +375,16 @@ export function computeMargins(
   lines: OrderLineSummary[],
   inputs: Record<string, SkuInputs>
 ): MarginRow[] {
+  const costs = new Map<string, SkuCost>();
   return lines.map((line) => {
-    const { lots, boxCost } = inputs[normalizeSku(line.sku)] ?? {};
-    const unitCost = averageUnitCost(lots);
+    const key = normalizeSku(line.sku);
+    let cost = costs.get(key);
+    if (!cost) costs.set(key, (cost = skuCost(inputs[key])));
+    const unitCost = cost.avgCost;
     const hasCost = unitCost !== null;
 
     const itemCostTotal = hasCost ? unitCost * line.qty : 0;
-    const boxCostTotal =
-      typeof boxCost === "number" && !Number.isNaN(boxCost) ? boxCost : 0;
+    const boxCostTotal = cost.boxCost ?? 0;
     const costTotal = itemCostTotal + boxCostTotal;
 
     const profit = line.netAmount - costTotal;

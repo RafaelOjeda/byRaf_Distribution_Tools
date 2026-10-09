@@ -1,11 +1,12 @@
 import { Input, TextButton } from "@/components/ui";
-import { averageUnitCost, type CostLot } from "@/lib/gateway";
+import type { SkuCost } from "@/lib/gateway";
 import type { LotDraft } from "../types";
 import { money } from "../utils/format";
 
 export function CostLotsEditor({
   sku,
   name,
+  cost,
   drafts,
   onAdd,
   onUpdate,
@@ -15,6 +16,8 @@ export function CostLotsEditor({
 }: {
   sku: string;
   name: string;
+  /** The product's cost as the report worked it out - the same figures every other view shows. */
+  cost: SkuCost;
   drafts: LotDraft[];
   onAdd: () => void;
   onUpdate: (index: number, field: keyof LotDraft, value: string) => void;
@@ -22,12 +25,7 @@ export function CostLotsEditor({
   aliasValue: string;
   onAliasChange: (value: string) => void;
 }) {
-  const parsed: CostLot[] = drafts
-    .map((d) => ({ qty: parseFloat(d.qty), unitCost: parseFloat(d.unitCost) }))
-    .filter((l) => !Number.isNaN(l.qty) && !Number.isNaN(l.unitCost));
-  const avg = averageUnitCost(parsed);
-  const units = parsed.reduce((n, l) => n + l.qty, 0);
-  const spent = parsed.reduce((n, l) => n + l.qty * l.unitCost, 0);
+  const { purchased: units, spent, avgCost: avg } = cost;
 
   return (
     <div className="flex w-full flex-col items-start gap-2">
