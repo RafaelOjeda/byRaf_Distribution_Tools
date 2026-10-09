@@ -1,6 +1,6 @@
 # Dashboard tab consolidation plan
 
-**Goal:** reduce the dashboard from six tabs to four with no loss of information.
+**Goal:** reduce the dashboard from six tabs to three with no loss of information.
 Two pairs of tabs show the same SKUs from two angles, so you have to switch tabs to connect them.
 
 | Today | After |
@@ -9,9 +9,74 @@ Two pairs of tabs show the same SKUs from two angles, so you have to switch tabs
 | Inventory & costs · Stock value | **Inventory** (costs, on hand and value in one row) |
 | Marketplace fees | **Fees** (unchanged apart from the shorter name) |
 
-This is a frontend-only change. `buildReport`, `Report`, the CSV builders and the portable save file keep their current behavior. The only engine change is a small helper, which is optional (see "Inventory").
+Every number in the dashboard is a **view of one source**, never its own copy. See "Rule: one source, many views" below. This adds one engine change (PR 0) before the tab merges.
 
-Ship it as two PRs, Inventory first. Each PR is useful by itself, and the Inventory merge is the safer one.
+Ship it as three PRs: **0 → 1 → 2**. Each one is useful by itself.
+
+---
+
+## Rule: one source, many views
+
+When a figure shows up in several places (a product's cost, its on-hand count, its name), there must be **one place it's stored and one place it's calculated**. Every tab, card, tooltip, KPI tile and CSV reads that one result. No screen recomputes a figure from raw inputs on its own. That way an edit anywhere shows up everywhere at once, and two screens can never disagree.
+
+### Where things stand today (audit, 2026-10-09)
+
+**What you type is already stored in one place.** Batches, box cost and aliases live only in `DashboardClient` state (`lotDrafts`, `inputs`, `aliasDrafts`). That state goes through `parsedInputs` → `buildReport()`. The Export file is written from the same state. There is no second copy of an entered cost.
+
+**What's calculated from it is not.** Several screens work out the same figure separately:
+
+| Figure | Calculated in | Problem |
+|---|---|---|
+| **On hand** | `inventoryBySku` (DashboardClient, last source wins) **and** `stockValue()` (engine, pooled) | **Already disagree** with several sources connected. Inventory & costs and Stock value can show different numbers for the same SKU. |
+| **Avg cost** | `InventoryTab` (calls `averageUnitCost` itself), `stockValue()`, `computeMargins()` per line, and `CostLotsEditor` (re-parses the typed batches with a copy of the `parsedInputs` code) | Same today, but four call sites and two copies of the parsing code. A change to one (e.g. ignoring zero-qty batches) silently splits them. |
+| **Bought / Left / discrepancy** | `InventoryTab` calls `reconcileStock()` with the last-source on-hand count | Built on the wrong On hand (above). |
+| **Product name** | `nameBySku` (DashboardClient) **and** `SkuSummary.itemName` (engine) | Two separate rules for picking the name. Same result today, could drift. |
+| **Sold** | `bySku[].units`, read by both the UI (`soldBySku`) and `stockValue()` | ✅ Already one source. |
+| **Line cost / profit** | `computeMargins()`, read by Order lines, By SKU, KPIs and the CSVs | ✅ Already one source. |
+
+---
+
+## PR 0 — One product record per SKU (engine)
+
+Add `Report.products` to `buildReport()`: one record per normalized SKU, after aliases are resolved. It holds **every** per-product figure the dashboard shows:
+
+```ts
+interface ProductRecord {
+  sku: string;              // normalized key, the same one every other map uses
+  name: string;             // one naming rule, here only
+  cost: { avgCost: number | null; boxCost: number | null; purchased: number; batches: number };
+  stock: {
+    onHand: number;         // pooled; falls back to the largest source count
+    onHandIsEstimate: boolean;
+    bySource: { source: string; sourceLabel: string; onHand: number; availToSell: number; reserved: number }[];
+    left: number | null;    // purchased − sold, null with no batches
+    discrepancy: number | null; // left − largest source count
+    oversellRisk: boolean;
+  };
+  listing: { price: number | null; publishedStatus: string | null; isPublished: boolean };
+  value: { atCost: number | null; atPrice: number | null };
+  sales: SkuSummary | null; // the existing rollup object, by reference, not copied
+  orderLines: MarginRow[];  // the existing rows, by reference, not copied
+}
+```
+
+- `stockValue()` and `summarizeBySku()` stay. `products` is assembled from their output plus the cost inputs, so there is still exactly one calculation per figure.
+- `Report.stock.rows` and `Report.bySku` remain for the CSV builders and the save file. They are now *derived from the same objects* the product records point to.
+- `computeMargins()` and `products[sku].cost.avgCost` both get the unit cost from one per-SKU cost table. That table is built once in `buildReport`, instead of calling `averageUnitCost` per line.
+- **Move draft parsing into one helper,** `parseCostDrafts(inputs, lotDrafts, aliasDrafts)` in `lib/gateway`. Both `parsedInputs` and `CostLotsEditor` call it. The editor's live "avg / spent" line then reads `products[sku].cost` (the report rebuilds on each keystroke anyway).
+- **UI cleanup:**
+  - Delete `inventoryBySku`, `nameBySku` and `soldBySku` from `DashboardClient`.
+  - Remove the `averageUnitCost` / `reconcileStock` calls from `InventoryTab` and `InventoryCard`.
+  - Every component takes a `ProductRecord` (or a list of them) instead of raw maps.
+- **Guard test** in `scripts/test-engine.ts`: for a fixture with two sources and an alias, check for every SKU that:
+  - `products[sku].cost.avgCost` equals each of that SKU's order-line unit costs and its stock row's `avgCost`;
+  - `products[sku].stock.onHand` equals its stock row's;
+  - `products[sku].name` equals `sales.itemName`.
+
+  If someone later adds a second calculation path, this test fails.
+- **Write the rule into `docs/systems/frontend.md`:** "Components never call engine calculation helpers; they read `Report`." Add a lint-level check to `scripts/check-boundary.ts`: no imports of `averageUnitCost`, `reconcileStock` or `stockValue` under `app/`.
+
+No visible change apart from the On hand fix, which this PR delivers early. PRs 1 and 2 then just choose which fields of `products` each view shows.
 
 ---
 
@@ -23,7 +88,7 @@ Ship it as two PRs, Inventory first. Each PR is useful by itself, and the Invent
 - The two tabs also disagree on **On hand**, and that is a real bug:
   - Inventory & costs reads `inventoryBySku`. That map is built with `Map.set` per source, so when several sources are connected, the **last source wins**. The "Left" discrepancy check then compares your batches against that one source.
   - Stock value uses `stockValue()`, which pools units per SKU and is never summed across sources (see engine.md).
-- Merging the tabs means there is one definition of On hand, the pooled one.
+- PR 0 fixes the number itself. Merging the tabs means you also only ever *see* it in one place.
 
 ### Table (desktop)
 
@@ -32,8 +97,9 @@ One row per SKU, keyed by normalized SKU, as `skus` is today. The current Invent
 | Item ▸ | On hand | Sold | Bought | Left | Avg cost | Box cost | Listed price | Value @ cost | Value @ price |
 |---|---|---|---|---|---|---|---|---|---|
 
-- **On hand** comes from the matching `stock.rows` entry, not `inventoryBySku`. Keep what the current Stock value tab shows: the `(est.)` suffix, the amber oversell colour, and the per-source tooltip. Where a SKU has no stock row, show `—`.
-- **Left** keeps its amber discrepancy check. It compares against the largest single-source count (`max(bySource.onHand)`), because the pooled On hand already *is* the batch-implied number once batches exist. Comparing against the pool would make the check meaningless.
+- Every cell reads `products[sku]`, the same record the Sales view and the KPI tiles read. Typing a batch updates Avg cost, Left, Value @ cost, the Stock value tile and every order line's profit in the same render, because all of them are that one record.
+- **On hand** is `stock.onHand`, pooled (PR 0 already fixed this). Keep the `(est.)` suffix, the amber oversell colour, and the per-source tooltip, which now includes `availToSell` / `reserved` for each source.
+- **Left** / its amber check read `stock.left` / `stock.discrepancy`. The engine compares against the largest single-source count, because the pooled On hand already *is* the batch-implied number once batches exist.
 - **Value @ price**: unpublished listings stay amber with the "unpublished" note and stay out of the total, as today.
 - Rows the user expands (▸) still open `CostLotsEditor` underneath. Change `colSpan` from `BOX_FIELDS.length + 6` to `+ 9`.
 - Sort and order stay the same, with one change: SKUs that are in stock come first. That is the main reason to open the tab, and it keeps sold-out SKUs from pushing stocked ones down.
@@ -58,8 +124,8 @@ Optionally, drop **Sold** from the inventory row: By SKU already has Units, and 
 
 ### Files
 
-- `components/tabs/InventoryTab.tsx`: take a `stock: Report["stock"]` prop, build `stockBySku` (normalized) with `useMemo`, render `StockTotals` and the new columns.
-- `components/InventoryCard.tsx`: accept the stock row.
+- `components/tabs/InventoryTab.tsx`: take `products: ProductRecord[]` and `stockTotals`, render `StockTotals` and the new columns. No calculations of its own.
+- `components/InventoryCard.tsx`: take a `ProductRecord`.
 - `components/StockValueTable.tsx` → reduced to `StockTotals.tsx` (the totals and the oversell banner). Delete the rest.
 - `components/tabs/StockTab.tsx`: delete.
 - `types.ts`: `Tab` drops `"stock"`.
@@ -68,8 +134,6 @@ Optionally, drop **Sold** from the inventory row: By SKU already has Units, and 
   - Remove the tab entry and its render branch.
   - Pass `stockVal` into `InventoryTab`.
   - Make the **Stock value KPI tile** a link to Inventory, as the Profit tile already is: `setTab("inventory")`.
-  - `inventoryBySku` is still needed for the On-hand tooltip (`availToSell` / `reserved`). Change it to collect *all* entries per SKU so the tooltip can list every source, instead of keeping only the last one.
-- Optional engine helper: `stockRowBySku(stock)` in `lib/gateway`, if `nameBySku`-style lookups multiply. Not required.
 
 ### Docs
 
@@ -122,7 +186,7 @@ The settled/estimated `TotalsRow` footer moves to the bottom of both table views
 
 ### Data
 
-- Group order lines per SKU once, with `useMemo`: `linesBySku = Map<normalizeSku(sku), MarginRow[]>`. That is the same key `summarizeBySku` uses, so they always agree. No engine change.
+- The rollup row is `products[sku].sales`, and its expanded lines are `products[sku].orderLines`: the same `MarginRow` objects the All lines view and the CSVs use, not a regrouped copy. So the parent row and its children can't disagree, and a cost edit on Inventory changes both in the same render.
 - Lines with no SKU (`!row.sku`) don't appear in the rollup today, and they still won't. **All lines** keeps showing them. The Rollup footer notes "N lines with no SKU — see All lines" when N > 0, so they aren't silently missing.
 - The expanded set is `Set<string>` state in the tab, the same pattern as Inventory's `expanded`.
 
@@ -140,7 +204,7 @@ One **Download CSV ▾** menu with two items: "By SKU" (`skuSummaryToCsv`) and "
 ### Files
 
 - New `components/tabs/SalesTab.tsx`: view state, the CSV menu, the footer. Composes:
-  - `SkuSummaryTable`, with new `expanded` / `onToggle` / `linesBySku` props and a nested lines row.
+  - `SkuSummaryTable`, with new `expanded` / `onToggle` props, reading lines from `products[sku].orderLines` and a nested lines row.
   - New `OrderLinesTable.tsx`, extracted from `OrdersTab` (table + cards). Reused by the All lines view and, with `compact`, inside expanded rows.
   - `PriceChart`, with a new optional `prefer?: string[]` prop for the expanded-first ordering.
 - Delete `SkuTab.tsx`, `OrdersTab.tsx`, `PriceTab.tsx`.
@@ -161,7 +225,7 @@ One **Download CSV ▾** menu with two items: "By SKU" (`skuSummaryToCsv`) and "
 
 ### Checks
 
-- Same commands as PR 1.
+- Same commands as PR 1, including PR 0's guard test.
 - Manually check:
   - The expanded SKU's lines sum to its rollup row: units and revenue exactly; money columns over non-`noEstimate` lines only.
   - Both CSVs are byte-identical to the current exports on the same data.
@@ -183,7 +247,8 @@ Rename the tab label to **Fees**; the panel title stays "Marketplace fees".
 
 - Adding a fee total to the KPI tiles.
 - Per-source breakdown rows (still planned in multi-marketplace-plan.md and unaffected).
-- Any engine or `Report` change.
+- `Report` changes beyond `products` (PR 0).
+- Persisting entered costs server-side. They stay in session state + the Export file, as today. The one-source rule is about not keeping *copies*; where that one copy is saved is a separate decision.
 
 ## Risks
 
