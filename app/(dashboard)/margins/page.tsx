@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import MarginsClient from "./MarginsClient";
 
 export default function MarginsPage() {
-  redirect("/dashboard");
+  return <MarginsClient />;
 }

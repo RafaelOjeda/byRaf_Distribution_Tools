@@ -12,6 +12,8 @@ export interface ThemeStyles {
   /** Shape of the top bar (its colours come from the shared sc-* tokens). */
   menuBar: string;
   card: string;
+  /** A link in the top bar's page navigation; `active` is added for the current page. */
+  nav: { link: string; active: string };
   /** The wrapper around a page's content: the retro window, or nothing on modern. */
   page: string;
   /** The summary tiles at the top of the dashboard. */

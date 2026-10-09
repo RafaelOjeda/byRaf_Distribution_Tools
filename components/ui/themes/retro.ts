@@ -5,6 +5,10 @@ export const retro: ThemeStyles = {
   body: "",
   menuBar: "border-b-[1.5px]",
   card: "sc-card",
+  nav: {
+    link: "px-2 py-1 text-sm underline-offset-2 hover:underline max-md:inline-flex max-md:min-h-11 max-md:items-center",
+    active: "font-bold underline",
+  },
   page: "sc-card px-4 py-6 sm:px-6",
   kpi: {
     // Phone: one swipeable row, so the data isn't pushed a screen and a
