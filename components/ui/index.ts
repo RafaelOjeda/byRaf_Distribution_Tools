@@ -1,3 +1,4 @@
+export { Brand } from "./Brand";
 export { Button, TextButton, useButtonClass } from "./Button";
 export { Card } from "./Card";
 export { Input } from "./Input";

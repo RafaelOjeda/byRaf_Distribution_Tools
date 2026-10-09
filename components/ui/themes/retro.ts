@@ -3,9 +3,17 @@ import type { ThemeStyles } from "./types";
 /** The classic-Mac look: the existing sc-* classes in app/globals.css. */
 export const retro: ThemeStyles = {
   body: "",
-  menuBar: "border-b-[1.5px]",
+  menuBar: "border-b-[1.5px] bg-sc-nav",
+  menuBarInner: "h-11",
+  brand: {
+    checker: "grid h-4 w-4 shrink-0 grid-cols-2 grid-rows-2 overflow-hidden border border-sc-line",
+    tile: "hidden",
+    name: "text-[15px] font-bold tracking-tight uppercase",
+    divider: "hidden h-4 w-px bg-sc-ink/30 sm:block",
+  },
   card: "sc-card",
   nav: {
+    list: "flex items-center gap-1",
     link: "px-2 py-1 text-sm underline-offset-2 hover:underline max-md:inline-flex max-md:min-h-11 max-md:items-center",
     active: "font-bold underline",
   },
