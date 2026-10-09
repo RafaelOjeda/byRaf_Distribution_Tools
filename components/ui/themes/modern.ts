@@ -7,8 +7,20 @@ import type { ThemeStyles } from "./types";
  */
 export const modern: ThemeStyles = {
   body: "bg-base-200 text-base-content antialiased",
-  menuBar: "border-b border-base-300",
+  menuBar: "bg-transparent",
+  menuBarInner: "min-h-16 flex-wrap gap-y-2 py-2",
+  brand: {
+    checker: "hidden",
+    tile: "grid size-9 shrink-0 place-items-center rounded-xl bg-neutral text-sm font-extrabold text-neutral-content",
+    name: "text-lg font-extrabold tracking-tight",
+    divider: "hidden",
+  },
   card: "card bg-base-100",
+  nav: {
+    list: "order-last flex w-full items-center gap-1 overflow-x-auto md:order-none md:w-auto",
+    link: "inline-flex min-h-9 items-center rounded-full px-4 text-sm font-semibold text-sc-ink-2 hover:text-sc-ink max-md:min-h-11",
+    active: "bg-neutral text-neutral-content hover:text-neutral-content",
+  },
   // No outer window: the page's own cards sit straight on the page colour.
   page: "py-1 sm:py-2",
   kpi: {

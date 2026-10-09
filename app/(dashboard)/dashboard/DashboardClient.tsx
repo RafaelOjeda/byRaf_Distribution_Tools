@@ -10,20 +10,18 @@ import {
 } from "react";
 import {
   applyImport as applyPortableImport,
-  buildReport,
   costsToCsv,
   exportCsvBundle,
   exportWorkbook,
-  parseCostDrafts,
   parseImportFile,
   type PortableData,
   type PortableImportResult,
   type SkuInputs,
-  type Snapshot,
   type SourceDescriptor,
 } from "@/lib/gateway";
 import { fetchSnapshot, listPeriods } from "@/lib/gateway/actions";
 import InstallPrompt from "./InstallPrompt";
+import { useDashboardData } from "./DashboardDataProvider";
 import { downloadBytes, downloadCsv, money } from "./utils/format";
 import { KpiTile } from "./components/shared/KpiTile";
 import { ImportPreviewCard } from "./components/shared/ImportPreviewCard";
@@ -33,43 +31,33 @@ import { FeesTab } from "./components/tabs/FeesTab";
 import { SalesTab } from "./components/tabs/SalesTab";
 import { useTabNavigation } from "./hooks/useTabNavigation";
 
-import { BOX_FIELDS, type LotDraft, type SkuField, type Step, type Tab } from "./types";
+import { BOX_FIELDS, type LotDraft, type SkuField, type Tab } from "./types";
 
 export default function DashboardClient({
   sources,
 }: {
   sources: SourceDescriptor[];
 }) {
-  const [step, setStep] = useState<Step>("connect");
   const { kpi: kpiStyle } = useStyles();
+  const {
+    step, setStep,
+    connections, setConnections,
+    periodsBySource, setPeriodsBySource,
+    selectedPeriods, setSelectedPeriods,
+    pendingPeriods, setPendingPeriods,
+    setSnapshot,
+    sourceFilter, setSourceFilter,
+    inputs, setInputs,
+    lotDrafts, setLotDrafts,
+    aliasDrafts, setAliasDrafts,
+    parsedInputs,
+    liveReport,
+  } = useDashboardData();
   const { tab, setTab, onTabKey } = useTabNavigation(step);
-  // connections[sourceId][fieldKey] = pasted value.
-  const [connections, setConnections] = useState<Record<string, Record<string, string>>>(
-    {}
-  );
-  const [periodsBySource, setPeriodsBySource] = useState<
-    Record<string, { periods: { id: string; label: string }[]; error?: string }>
-  >({});
-  const [selectedPeriods, setSelectedPeriods] = useState<Record<string, Set<string>>>(
-    {}
-  );
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [sourceFilter, setSourceFilter] = useState<string[] | "all">("all");
-  // Raw strings keyed by normalized SKU, so a half-typed "1." doesn't fight the input.
-  const [inputs, setInputs] = useState<
-    Record<string, Partial<Record<SkuField, string>>>
-  >({});
-  const [lotDrafts, setLotDrafts] = useState<Record<string, LotDraft[]>>({});
-  const [aliasDrafts, setAliasDrafts] = useState<Record<string, string>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [importPreview, setImportPreview] = useState<PortableImportResult | null>(
-    null
-  );
-  // Periods from an imported file, applied (where still offered) the next
-  // time the period list loads.
-  const [pendingPeriods, setPendingPeriods] = useState<Record<string, string[]> | null>(
     null
   );
   const [periodsNotice, setPeriodsNotice] = useState<string | null>(null);
@@ -227,19 +215,6 @@ export default function DashboardClient({
     setPeriodsBySource({});
     setSelectedPeriods({});
   }
-
-  // The one place typed costs become numbers - see parseCostDrafts.
-  const parsedInputs = useMemo(
-    () => parseCostDrafts({ fields: inputs, lots: lotDrafts, aliases: aliasDrafts }),
-    [inputs, lotDrafts, aliasDrafts]
-  );
-
-  // The gateway fetched the snapshot once; a cost edit only re-runs
-  // buildReport (pure, no network), so this stays instant.
-  const liveReport = useMemo(() => {
-    if (!snapshot) return null;
-    return buildReport(snapshot, parsedInputs, { sourceFilter });
-  }, [snapshot, parsedInputs, sourceFilter]);
 
   // Every per-product figure lives on Report.products; views read those
   // records rather than keeping their own copy of a number.

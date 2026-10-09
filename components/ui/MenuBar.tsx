@@ -6,9 +6,10 @@ import { useStyles } from "./ThemeProvider";
 
 /** The top bar. Pass the contents; the width, spacing and colours are the kit's. */
 export function MenuBar({ children }: { children: ReactNode }) {
+  const { menuBar, menuBarInner } = useStyles();
   return (
-    <header className={clsx("bg-sc-nav border-sc-line text-sc-ink", useStyles().menuBar)}>
-      <div className="mx-auto flex h-11 max-w-[1600px] items-center gap-3 px-4 sm:px-6">
+    <header className={clsx("border-sc-line text-sc-ink", menuBar)}>
+      <div className={clsx("mx-auto flex max-w-[1600px] items-center gap-3 px-4 sm:px-6", menuBarInner)}>
         {children}
       </div>
     </header>

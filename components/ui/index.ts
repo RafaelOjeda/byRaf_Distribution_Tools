@@ -1,7 +1,9 @@
+export { Brand } from "./Brand";
 export { Button, TextButton, useButtonClass } from "./Button";
 export { Card } from "./Card";
 export { Input } from "./Input";
 export { MenuBar } from "./MenuBar";
+export { NavLinks } from "./NavLinks";
 export { Page } from "./Page";
 export { Table } from "./Table";
 export { TabButton, TabList } from "./Tabs";
