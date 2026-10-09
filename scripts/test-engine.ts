@@ -14,7 +14,6 @@ import {
   assignSaleDates,
   buildSkuHistory,
   computeMargins,
-  reconcileStock,
   settlementKey,
   stockValue,
   summarizeBySku,
@@ -22,6 +21,10 @@ import {
   type SkuInputs,
 } from "../lib/gateway/engine/margins";
 import { priceSeriesBySku } from "../lib/gateway/engine/prices";
+import { buildReport } from "../lib/gateway/engine/report";
+import { parseCostDrafts } from "../lib/gateway/engine/drafts";
+import { normalizeSku } from "../lib/gateway/engine/types";
+import { brandSnapshot, type CostInputs, type SnapshotData } from "../lib/gateway/contract";
 import { buildAliasIndex, findPossibleDuplicates, resolveSku } from "../lib/gateway/engine/identity";
 import {
   estimateUnsettled,
@@ -369,7 +372,9 @@ check("stockValue pools quantity across sources and flags oversell risk", () => 
   // Pool: purchased 10 - sold 3 = 7. Not the raw inventory count (8).
   assert.equal(a.onHand, 7);
   assert.equal(a.onHandIsEstimate, false);
-  assert.deepEqual(a.bySource, [{ source: "s1", sourceLabel: "Source 1", onHand: 8 }]);
+  assert.deepEqual(a.bySource, [
+    { source: "s1", sourceLabel: "Source 1", onHand: 8, availToSell: null, reserved: null },
+  ]);
   // A source claims 8 on hand but the pool only supports 7.
   assert.equal(a.oversellRisk, true);
   assert.equal(cents(a.valueAtCost ?? 0), 35); // 7 * 5
@@ -396,10 +401,14 @@ check("stockValue pools quantity across sources and flags oversell risk", () => 
   assert.equal(cents(totals.atCost), 50); // 35 + 15
   assert.equal(cents(totals.atPrice), 209.93);
 
-  const stock = reconcileStock(costs["WIDGET-A"].lots, soldA, 8);
-  assert.equal(stock.purchased, 10);
-  assert.equal(stock.impliedOnHand, 7);
-  assert.equal(stock.discrepancy, -1);
+  // The same record carries the reconciliation the inventory view shows.
+  assert.equal(a.reported, 8);
+  assert.equal(a.purchased, 10);
+  assert.equal(a.sold, 3);
+  assert.equal(a.left, 7);
+  assert.equal(a.discrepancy, -1);
+  assert.equal(d.left, null); // no batches: nothing to reconcile
+  assert.equal(d.discrepancy, null);
 });
 
 check("buildAliasIndex/resolveSku merge an alias SKU into its canonical key", () => {
@@ -438,6 +447,134 @@ check("summarizeBySku surfaces possibleDuplicates per row", () => {
   const summaries = summarizeBySku(dupeMargins);
   const a = summaries.find((s) => s.sku === "WIDGET-A")!;
   assert.deepEqual(a.possibleDuplicates, ["WIDGETA"]);
+});
+
+// ---------------------------------------------------------------------
+// One source, many views: every per-product figure the dashboard shows
+// is calculated once and read everywhere - see
+// docs/tab-consolidation-plan.md, "Rule: one source, many views". If a
+// second calculation path creeps in, one of these breaks.
+// ---------------------------------------------------------------------
+const twoSourceSnapshot = brandSnapshot<SnapshotData>({
+  sources: [
+    {
+      id: "s1",
+      label: "Source 1",
+      status: "ok",
+      lines: lines.map((l) => ({ ...l, source: "s1", sourceLabel: "Source 1" })),
+      charges: [],
+      orderDates: {},
+      inventory: [
+        { sku: "widget-a", onHand: 8, availToSell: 7, reserved: 1, source: "s1", sourceLabel: "Source 1" },
+        { sku: "WIDGET-D", onHand: 3, availToSell: 3, reserved: 0, source: "s1", sourceLabel: "Source 1" },
+      ],
+      catalog: [{ sku: "WIDGET-A", price: 29.99, publishedStatus: "PUBLISHED" }],
+    },
+    {
+      id: "s2",
+      label: "Source 2",
+      status: "ok",
+      // Same product sold under the second source's own SKU, aliased below.
+      lines: [{ ...settled[0], sku: "amz-widget-1", source: "s2", sourceLabel: "Source 2" }],
+      charges: [],
+      orderDates: {},
+      // Listed last, and lower than source 1's count: the old dashboard
+      // map kept whichever source came last, so it would have shown 6.
+      inventory: [
+        { sku: "AMZ-WIDGET-1", onHand: 6, availToSell: 6, reserved: 0, source: "s2", sourceLabel: "Source 2" },
+      ],
+      catalog: [],
+    },
+  ],
+});
+const sharedCosts: CostInputs = {
+  "WIDGET-A": { ...costs["WIDGET-A"], aliasSkus: ["amz-widget-1"] },
+  "WIDGET-B": costs["WIDGET-B"],
+};
+const report = buildReport(twoSourceSnapshot, sharedCosts, { sourceFilter: "all" });
+
+check("products: one record per SKU sold or reported, aliases merged", () => {
+  assert.deepEqual(
+    report.products.map((p) => p.sku),
+    ["WIDGET-A", "WIDGET-B", "WIDGET-C", "WIDGET-D"]
+  );
+});
+
+check("products: every view reads the same objects, never a copy", () => {
+  const stockRows = new Map(report.stock.rows.map((r) => [normalizeSku(r.sku), r]));
+  for (const p of report.products) {
+    const row = stockRows.get(p.sku);
+    if (row) assert.equal(row, p.stock, `${p.sku}: stock row is the product's own record`);
+    if (p.sales) assert.ok(report.bySku.includes(p.sales), `${p.sku}: sales is the bySku entry`);
+    for (const line of p.orderLines) {
+      assert.ok(report.orderLines.includes(line), `${p.sku}: order line is the report's own row`);
+    }
+  }
+  assert.equal(
+    report.products.reduce((n, p) => n + p.orderLines.length, 0),
+    report.orderLines.filter((l) => l.sku).length
+  );
+});
+
+check("products: a SKU's cost is the same number in every view", () => {
+  for (const p of report.products) {
+    assert.equal(p.stock.avgCost, p.cost.avgCost, `${p.sku}: stock value avg cost`);
+    assert.equal(p.stock.purchased, p.cost.purchased, `${p.sku}: bought`);
+    for (const line of p.orderLines) {
+      assert.equal(line.hasCost, p.cost.avgCost !== null, `${p.sku}: line has cost`);
+      if (p.cost.avgCost !== null) {
+        assert.equal(cents(line.itemCostTotal), cents(p.cost.avgCost * line.qty), `${p.sku}: line item cost`);
+      }
+      assert.equal(line.boxCostTotal, p.cost.boxCost ?? 0, `${p.sku}: line box cost`);
+    }
+  }
+});
+
+check("products: name, sold and on hand agree across views", () => {
+  for (const p of report.products) {
+    assert.equal(p.name, p.sales?.itemName ?? "", `${p.sku}: name`);
+    assert.equal(p.stock.sold, p.sales?.units ?? 0, `${p.sku}: sold`);
+  }
+  const a = report.products.find((p) => p.sku === "WIDGET-A")!;
+  // Alias line from source 2 is part of WIDGET-A: 3 own + 1 aliased.
+  assert.equal(a.sales?.units, 4);
+  assert.ok(a.orderLines.some((l) => l.source === "s2"));
+  // Reported = largest single-source count, not the last source's (6).
+  assert.equal(a.stock.reported, 8);
+  assert.deepEqual(
+    a.stock.bySource.map((b) => [b.sourceLabel, b.onHand, b.availToSell, b.reserved]),
+    [["Source 1", 8, 7, 1], ["Source 2", 6, 6, 0]]
+  );
+  // Pool: bought 10 - sold 4 = 6, and the inventory view's "Left" is the same figure.
+  assert.equal(a.stock.onHand, 6);
+  assert.equal(a.stock.left, 6);
+  assert.equal(a.stock.discrepancy, -2);
+
+  const c = report.products.find((p) => p.sku === "WIDGET-C")!;
+  // Sold, but no source reports it: a record with no count, kept out of stock value.
+  assert.equal(c.stock.reported, null);
+  assert.ok(!report.stock.rows.includes(c.stock));
+});
+
+check("parseCostDrafts: typed text becomes the same inputs everywhere", () => {
+  const parsed = parseCostDrafts({
+    fields: { "WIDGET-A": { boxCost: "2" }, "WIDGET-B": { boxCost: "" } },
+    lots: {
+      "WIDGET-A": [
+        { qty: "10", unitCost: "5" },
+        { qty: "3", unitCost: "" }, // half-typed: ignored
+      ],
+    },
+    aliases: { "WIDGET-A": "amz-widget-1; , EBAY-1" },
+  });
+  assert.deepEqual(parsed, {
+    "WIDGET-A": {
+      boxCost: 2,
+      lots: [{ qty: 10, unitCost: 5 }],
+      aliasSkus: ["amz-widget-1", "EBAY-1"],
+    },
+    "WIDGET-B": {},
+  });
 });
 
 console.log(`\n${passed} check(s) passed.`);

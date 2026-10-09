@@ -1,23 +1,15 @@
 import { Input, Table, TextButton } from "@/components/ui";
 import { Fragment, type Dispatch, type SetStateAction } from "react";
-import {
-  averageUnitCost,
-  reconcileStock,
-  type CostInputs,
-  type Report,
-} from "@/lib/gateway";
+import type { ProductRecord } from "@/lib/gateway";
 import { BOX_FIELDS, type LotDraft, type SkuField } from "../../types";
 import { money } from "../../utils/format";
+import { reportedPhrase, reportedTitle } from "../../utils/stock";
 import { PanelHeader } from "../shared/PanelHeader";
 import { InventoryCard } from "../InventoryCard";
 import { CostLotsEditor } from "../CostLotsEditor";
 
 export function InventoryTab({
-  skus,
-  nameBySku,
-  parsedInputs,
-  inventoryBySku,
-  soldBySku,
+  products,
   inputs,
   lotDrafts,
   expanded,
@@ -29,11 +21,8 @@ export function InventoryTab({
   toggleExpanded,
   setAliasDrafts,
 }: {
-  skus: string[];
-  nameBySku: Map<string, string>;
-  parsedInputs: CostInputs;
-  inventoryBySku: Map<string, Report["inventory"][number]>;
-  soldBySku: Map<string, number>;
+  /** Every figure shown here comes from these records - this tab works nothing out itself. */
+  products: ProductRecord[];
   inputs: Record<string, Partial<Record<SkuField, string>>>;
   lotDrafts: Record<string, LotDraft[]>;
   expanded: Set<string>;
@@ -59,22 +48,12 @@ export function InventoryTab({
       </PanelHeader>
       {/* Phone: one card per SKU. Tables take over from md up. */}
       <ul className="flex flex-col gap-3 md:hidden">
-        {skus.map((sku) => {
-          const parsed = parsedInputs[sku] ?? {};
-          const inv = inventoryBySku.get(sku);
+        {products.map((p) => {
+          const sku = p.sku;
           return (
             <InventoryCard
               key={sku}
-              sku={sku}
-              name={nameBySku.get(sku) || sku}
-              onHand={inv ? inv.onHand : null}
-              onHandTitle={
-                inv
-                  ? `${inv.availToSell} available to sell + ${inv.reserved} ordered but not shipped`
-                  : undefined
-              }
-              stock={reconcileStock(parsed.lots, soldBySku.get(sku) ?? 0, inv ? inv.onHand : null)}
-              avg={averageUnitCost(parsed.lots)}
+              product={p}
               boxValues={inputs[sku] ?? {}}
               onBoxChange={(field, value) => setField(sku, field, value)}
               drafts={lotDrafts[sku] ?? []}
@@ -90,7 +69,7 @@ export function InventoryTab({
             />
           );
         })}
-        {skus.length === 0 && (
+        {products.length === 0 && (
           <li className="text-sm text-sc-ink-2">No SKUs found in the returned data.</li>
         )}
       </ul>
@@ -118,16 +97,11 @@ export function InventoryTab({
             </tr>
           </thead>
           <tbody>
-            {skus.map((sku) => {
-              const parsed = parsedInputs[sku] ?? {};
+            {products.map((p) => {
+              const { sku, stock } = p;
+              const name = p.name || sku;
               const drafts = lotDrafts[sku] ?? [];
-              const inv = inventoryBySku.get(sku);
-              const stock = reconcileStock(
-                parsed.lots,
-                soldBySku.get(sku) ?? 0,
-                inv ? inv.onHand : null
-              );
-              const avg = averageUnitCost(parsed.lots);
+              const avg = p.cost.avgCost;
               const isOpen = expanded.has(sku);
 
               return (
@@ -146,7 +120,7 @@ export function InventoryTab({
                         <span className="text-sc-ink-2/70">
                           {isOpen ? "▾ " : "▸ "}
                         </span>
-                        {nameBySku.get(sku) || sku}
+                        {name}
                         {drafts.length > 0 && (
                           <span className="text-sc-ink-2/70">
                             {" "}
@@ -156,12 +130,8 @@ export function InventoryTab({
                       </TextButton>
                     </td>
                     <td className="pr-3 text-right">
-                      {inv ? (
-                        <span
-                          title={`${inv.availToSell} available to sell + ${inv.reserved} ordered but not shipped.`}
-                        >
-                          {inv.onHand}
-                        </span>
+                      {stock.reported !== null ? (
+                        <span title={reportedTitle(stock)}>{stock.reported}</span>
                       ) : (
                         <span className="text-sc-ink-2/70">
                           —
@@ -169,7 +139,7 @@ export function InventoryTab({
                       )}
                     </td>
                     <td className="pr-3 text-right">
-                      {soldBySku.get(sku) ?? 0}
+                      {stock.sold}
                     </td>
                     <td className="pr-3 text-right">
                       {stock.purchased || (
@@ -182,16 +152,16 @@ export function InventoryTab({
                       className={`pr-3 text-right ${stock.discrepancy ? "text-amber-600" : ""}`}
                       title={
                         stock.discrepancy
-                          ? `Your batches imply ${stock.impliedOnHand} left, the source says ${stock.onHand}. Off by ${stock.discrepancy > 0 ? "+" : ""}${stock.discrepancy} — likely a missing or mistyped batch.`
+                          ? `Your batches imply ${stock.left} left, ${reportedPhrase(stock)}. Off by ${stock.discrepancy > 0 ? "+" : ""}${stock.discrepancy} — likely a missing or mistyped batch.`
                           : undefined
                       }
                     >
-                      {stock.purchased === 0 ? (
+                      {stock.left === null ? (
                         <span className="text-sc-ink-2/70">
                           —
                         </span>
                       ) : (
-                        stock.impliedOnHand
+                        stock.left
                       )}
                     </td>
                     <td className="pr-3 text-right font-medium">
@@ -224,7 +194,8 @@ export function InventoryTab({
                       <td colSpan={BOX_FIELDS.length + 6} className="px-3 py-3">
                         <CostLotsEditor
                           sku={sku}
-                          name={nameBySku.get(sku) || sku}
+                          name={name}
+                          cost={p.cost}
                           drafts={drafts}
                           onAdd={() => addLot(sku)}
                           onUpdate={(i, field, value) =>
@@ -242,7 +213,7 @@ export function InventoryTab({
                 </Fragment>
               );
             })}
-            {skus.length === 0 && (
+            {products.length === 0 && (
               <tr>
                 <td
                   colSpan={BOX_FIELDS.length + 6}

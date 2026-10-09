@@ -1,14 +1,15 @@
 import { Table } from "@/components/ui";
-import { normalizeSku, type Report } from "@/lib/gateway";
+import { normalizeSku, type ProductRecord, type Report } from "@/lib/gateway";
 import { money } from "../utils/format";
 import { Fig } from "./shared/Fig";
 
 export function StockValueTable({
   stock,
-  nameBySku,
+  productBySku,
 }: {
   stock: Report["stock"];
-  nameBySku: Map<string, string>;
+  /** Product records by SKU - names come from here, the same as every other view. */
+  productBySku: Map<string, ProductRecord>;
 }) {
   const { rows, totals: t } = stock;
   const dash = <span className="text-sc-ink-2/70">—</span>;
@@ -83,7 +84,7 @@ export function StockValueTable({
         {rows.map((r) => (
           <li key={r.sku} className="rounded-lg border border-sc-line p-3">
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 font-bold break-words">{nameBySku.get(normalizeSku(r.sku)) || r.sku}</div>
+              <div className="min-w-0 font-bold break-words">{productBySku.get(normalizeSku(r.sku))?.name || r.sku}</div>
               <div
                 className={`shrink-0 text-sm ${r.oversellRisk ? "text-amber-600" : "text-sc-ink-2"}`}
                 title={r.onHandIsEstimate ? "No cost batches entered - falling back to the largest source count" : undefined}
@@ -153,7 +154,7 @@ export function StockValueTable({
                 key={r.sku}
                 className="border-b border-sc-row"
               >
-                <td className="pr-3">{nameBySku.get(normalizeSku(r.sku)) || r.sku}</td>
+                <td className="pr-3">{productBySku.get(normalizeSku(r.sku))?.name || r.sku}</td>
                 <td
                   className={`pr-3 text-right ${r.oversellRisk ? "text-amber-600" : ""}`}
                   title={

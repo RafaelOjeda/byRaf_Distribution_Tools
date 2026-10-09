@@ -53,7 +53,7 @@ flowchart TB
     Gateway --> M2["actions.ts — describeSources, listPeriods, fetchSnapshot"]
     Gateway --> M3["index.ts — buildReport, parseCostCsv, exportCsv"]
 
-    Engine --> E1["margins.ts — computeMargins, stockValue, reconcileStock"]
+    Engine --> E1["margins.ts — computeMargins, skuCost, stockValue"]
     Engine --> E2["identity.ts — SKU aliasing, duplicate detection"]
     Engine --> E3["prices.ts — priceSeriesBySku"]
     Engine --> E4["csv.ts — export/import + formula-injection guard"]

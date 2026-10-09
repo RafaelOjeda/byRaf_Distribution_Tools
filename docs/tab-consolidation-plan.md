@@ -36,49 +36,33 @@ When a figure shows up in several places (a product's cost, its on-hand count, i
 
 ---
 
-## PR 0 — One product record per SKU (engine)
+## PR 0 — One product record per SKU (engine) ✅ done
 
-Add `Report.products` to `buildReport()`: one record per normalized SKU, after aliases are resolved. It holds **every** per-product figure the dashboard shows:
+`buildReport()` now returns `Report.products`: one record per normalized SKU, after aliases are resolved. It covers every SKU a source reports or sold, and holds **every** per-product figure the dashboard shows:
 
 ```ts
 interface ProductRecord {
   sku: string;              // normalized key, the same one every other map uses
-  name: string;             // one naming rule, here only
-  cost: { avgCost: number | null; boxCost: number | null; purchased: number; batches: number };
-  stock: {
-    onHand: number;         // pooled; falls back to the largest source count
-    onHandIsEstimate: boolean;
-    bySource: { source: string; sourceLabel: string; onHand: number; availToSell: number; reserved: number }[];
-    left: number | null;    // purchased − sold, null with no batches
-    discrepancy: number | null; // left − largest source count
-    oversellRisk: boolean;
-  };
-  listing: { price: number | null; publishedStatus: string | null; isPublished: boolean };
-  value: { atCost: number | null; atPrice: number | null };
-  sales: SkuSummary | null; // the existing rollup object, by reference, not copied
-  orderLines: MarginRow[];  // the existing rows, by reference, not copied
+  name: string;             // one naming rule (the SkuSummary's), "" when no line names it
+  cost: SkuCost;            // { avgCost, boxCost, purchased, spent, batches } from skuCost()
+  stock: SkuStockRecord;    // stock value row + { reported, purchased, sold, left, discrepancy }
+  sales: SkuSummary | null; // the bySku entry, by reference
+  orderLines: MarginRow[];  // the report's own rows, by reference
 }
 ```
 
-- `stockValue()` and `summarizeBySku()` stay. `products` is assembled from their output plus the cost inputs, so there is still exactly one calculation per figure.
-- `Report.stock.rows` and `Report.bySku` remain for the CSV builders and the save file. They are now *derived from the same objects* the product records point to.
-- `computeMargins()` and `products[sku].cost.avgCost` both get the unit cost from one per-SKU cost table. That table is built once in `buildReport`, instead of calling `averageUnitCost` per line.
-- **Move draft parsing into one helper,** `parseCostDrafts(inputs, lotDrafts, aliasDrafts)` in `lib/gateway`. Both `parsedInputs` and `CostLotsEditor` call it. The editor's live "avg / spent" line then reads `products[sku].cost` (the report rebuilds on each keystroke anyway).
-- **UI cleanup:**
-  - Delete `inventoryBySku`, `nameBySku` and `soldBySku` from `DashboardClient`.
-  - Remove the `averageUnitCost` / `reconcileStock` calls from `InventoryTab` and `InventoryCard`.
-  - Every component takes a `ProductRecord` (or a list of them) instead of raw maps.
-- **Guard test** in `scripts/test-engine.ts`: for a fixture with two sources and an alias, check for every SKU that:
-  - `products[sku].cost.avgCost` equals each of that SKU's order-line unit costs and its stock row's `avgCost`;
-  - `products[sku].stock.onHand` equals its stock row's;
-  - `products[sku].name` equals `sales.itemName`.
+What it changed:
 
-  If someone later adds a second calculation path, this test fails.
-- **Write the rule into `docs/systems/frontend.md`:** "Components never call engine calculation helpers; they read `Report`." Add a lint-level check to `scripts/check-boundary.ts`: no imports of `averageUnitCost`, `reconcileStock` or `stockValue` under `app/`.
-
-No visible change apart from the On hand fix, which this PR delivers early. PRs 1 and 2 then just choose which fields of `products` each view shows.
-
----
+- **One cost formula.** `skuCost()` is the only place avg cost, box cost, units bought and money spent are worked out. `computeMargins`, `stockRecords` and `buildProducts` all call it.
+- **One stock record per SKU.** `stockRecords()` builds it, and `Report.stock.rows` holds *the same objects* as `products[].stock`. Listed price and value at cost/price live on that record, not in separate groups.
+- **On hand bug fixed.** The inventory view's On hand is `stock.reported`, the largest single-source count, the same figure the pooling and oversell check use. Its tooltip lists each source's split. With one source nothing changes.
+- **One parser for typed costs.** `parseCostDrafts()` in `lib/gateway`. The batch editor's "N units · $X spent · avg $Y" line now reads `product.cost` instead of re-parsing.
+- **UI cleanup.**
+  - `inventoryBySku`, `nameBySku` and `soldBySku` are gone. `DashboardClient` keeps only a `productBySku` index for lookups.
+  - `InventoryTab`, `InventoryCard` and `CostLotsEditor` take product records.
+- **Guard.**
+  - `averageUnitCost`, `reconcileStock` and `stockValue` are no longer exported from `lib/gateway`, so `app/` *can't* call them. The existing ESLint rule already blocks deep imports into the engine. This replaces the planned `check-boundary` addition.
+  - `scripts/test-engine.ts` checks, on a two-source fixture with an alias, that every view gets the same objects and the same cost, name, sold and on-hand figures.
 
 ## PR 1 — Inventory (merge "Inventory & costs" + "Stock value")
 
@@ -98,7 +82,7 @@ One row per SKU, keyed by normalized SKU, as `skus` is today. The current Invent
 |---|---|---|---|---|---|---|---|---|---|
 
 - Every cell reads `products[sku]`, the same record the Sales view and the KPI tiles read. Typing a batch updates Avg cost, Left, Value @ cost, the Stock value tile and every order line's profit in the same render, because all of them are that one record.
-- **On hand** is `stock.onHand`, pooled (PR 0 already fixed this). Keep the `(est.)` suffix, the amber oversell colour, and the per-source tooltip, which now includes `availToSell` / `reserved` for each source.
+- **On hand**: the stock value tab's pooled `stock.onHand` and the inventory tab's `stock.reported` (largest source count) are different figures. Once batches exist, the pooled figure *is* Left. Show `reported` as **On hand** and drop the pooled column, which would only duplicate Left. Keep the `(est.)` suffix and the amber oversell colour on Left / Value instead.
 - **Left** / its amber check read `stock.left` / `stock.discrepancy`. The engine compares against the largest single-source count, because the pooled On hand already *is* the batch-implied number once batches exist.
 - **Value @ price**: unpublished listings stay amber with the "unpublished" note and stay out of the total, as today.
 - Rows the user expands (▸) still open `CostLotsEditor` underneath. Change `colSpan` from `BOX_FIELDS.length + 6` to `+ 9`.

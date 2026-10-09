@@ -48,16 +48,27 @@ export {
   type PortableSettings,
 } from "./engine/portable";
 
+// Calculation helpers (averageUnitCost, stockValue, ...) are deliberately
+// not exported: the dashboard reads figures from Report, never works one
+// out itself - see docs/tab-consolidation-plan.md, "Rule: one source,
+// many views".
 export {
   SHIPPING_PCT_ALERT,
   SHIPPING_PCT_WARN,
-  averageUnitCost,
-  reconcileStock,
   type MarginRow,
+  type SkuCost,
   type SkuInputs,
-  type SkuStock,
+  type SkuStockRecord,
   type SkuSummary,
 } from "./engine/margins";
+
+export type { ProductRecord } from "./engine/products";
+
+export {
+  parseCostDrafts,
+  type CostDrafts,
+  type CostField,
+} from "./engine/drafts";
 
 export type { PricePoint, PriceSeries } from "./engine/prices";
 
