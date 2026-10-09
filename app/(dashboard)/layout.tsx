@@ -1,4 +1,4 @@
-import { Card, MenuBar, ThemeToggle } from "@/components/ui";
+import { MenuBar, Page, ThemeToggle } from "@/components/ui";
 import { UserMenu } from "@/lib/auth";
 import { ReceiptsButton } from "./receipts/ReceiptsButton";
 import { ReceiptsProvider } from "./receipts/ReceiptsProvider";
@@ -29,7 +29,7 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
         {/* The content always sits on a solid card, never on the page
             background (the retro design's dither shows in the gutters). */}
         <main className="mx-auto w-full max-w-[1600px] flex-1 p-3 sm:p-6">
-          <Card className="px-4 py-6 sm:px-6">{children}</Card>
+          <Page>{children}</Page>
         </main>
       </div>
     </ReceiptsProvider>
