@@ -1,10 +1,38 @@
-import { Table } from "@/components/ui";
-import { SHIPPING_PCT_ALERT, SHIPPING_PCT_WARN, type SkuSummary } from "@/lib/gateway";
+import { Fragment, type ReactNode } from "react";
+import { Table, TextButton } from "@/components/ui";
+import {
+  SHIPPING_PCT_ALERT,
+  SHIPPING_PCT_WARN,
+  type MarginRow,
+  type SkuSummary,
+} from "@/lib/gateway";
 import { money } from "../utils/format";
 import { shipPctClass } from "../utils/shipping";
 import { Fig } from "./shared/Fig";
+import { OrderLinesTable } from "./OrderLinesTable";
 
-export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
+const COLUMNS = 12;
+
+/**
+ * One row per product. A row expands to that product's own order lines -
+ * `linesBySku` holds the report's MarginRow objects, the same ones the
+ * rollup was summed from.
+ */
+export function SkuSummaryTable({
+  summaries,
+  linesBySku,
+  expanded,
+  onToggle,
+  footerRows,
+  footerCards,
+}: {
+  summaries: SkuSummary[];
+  linesBySku: Map<string, MarginRow[]>;
+  expanded: Set<string>;
+  onToggle: (sku: string) => void;
+  footerRows?: ReactNode;
+  footerCards?: ReactNode;
+}) {
   const dash = <span className="text-sc-ink-2/70">—</span>;
 
   return (
@@ -29,7 +57,7 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                 {s.possibleDuplicates.length > 0 && (
                   <div
                     className="truncate text-xs text-amber-600"
-                    title={`Might be the same product as: ${s.possibleDuplicates.join(", ")}. Add an alias under Inventory & costs to merge them.`}
+                    title={`Might be the same product as: ${s.possibleDuplicates.join(", ")}. Add an alias under Inventory to merge them.`}
                   >
                     possible duplicate of {s.possibleDuplicates.join(", ")}
                   </div>
@@ -98,12 +126,31 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                 estimated.
               </p>
             )}
+
+            <TextButton
+              onClick={() => onToggle(s.sku)}
+              aria-expanded={expanded.has(s.sku)}
+              className="mt-3 text-sm"
+            >
+              {expanded.has(s.sku) ? "Hide" : "Show"} {s.lines} line
+              {s.lines === 1 ? "" : "s"} {expanded.has(s.sku) ? "▾" : "▸"}
+            </TextButton>
+            {expanded.has(s.sku) && (
+              <div className="mt-2">
+                <OrderLinesTable
+                  lines={linesBySku.get(s.sku) ?? []}
+                  compact
+                  layout="cards"
+                />
+              </div>
+            )}
           </li>
         );
       })}
       {summaries.length === 0 && (
         <li className="text-sm text-sc-ink-2">No SKUs found.</li>
       )}
+      {footerCards}
     </ul>
 
     <div className="hidden overflow-x-auto md:block">
@@ -138,11 +185,11 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
               ? undefined
               : "No settled history for this SKU yet, so its fees can't be estimated";
 
+            const isOpen = expanded.has(s.sku);
+
             return (
-              <tr
-                key={s.sku}
-                className="border-b border-sc-row"
-              >
+              <Fragment key={s.sku}>
+              <tr className="border-b border-sc-row">
                 <td
                   className="pr-3"
                   title={
@@ -151,7 +198,15 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                       : undefined
                   }
                 >
-                  {s.itemName || s.sku}
+                  <TextButton
+                    onClick={() => onToggle(s.sku)}
+                    aria-expanded={isOpen}
+                    className="text-left"
+                    title={`${isOpen ? "Hide" : "Show"} this product's ${s.lines} order line${s.lines === 1 ? "" : "s"}`}
+                  >
+                    <span className="text-sc-ink-2/70">{isOpen ? "▾ " : "▸ "}</span>
+                    {s.itemName || s.sku}
+                  </TextButton>
                   {s.possibleDuplicates.length > 0 && (
                     <span
                       className="ml-1 text-amber-600"
@@ -249,16 +304,29 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                   )}
                 </td>
               </tr>
+              {isOpen && (
+                <tr className="border-b border-sc-row bg-sc-head">
+                  <td colSpan={COLUMNS} className="px-3 py-3">
+                    <OrderLinesTable
+                      lines={linesBySku.get(s.sku) ?? []}
+                      compact
+                      layout="table"
+                    />
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             );
           })}
           {summaries.length === 0 && (
             <tr>
-              <td colSpan={12} className="py-3 text-sc-ink-2">
+              <td colSpan={COLUMNS} className="py-3 text-sc-ink-2">
                 No SKUs found.
               </td>
             </tr>
           )}
         </tbody>
+        {footerRows && summaries.length > 0 && <tfoot>{footerRows}</tfoot>}
       </Table>
     </div>
     </>

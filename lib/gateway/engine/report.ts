@@ -150,5 +150,8 @@ export function buildReport(
     settledCount: settled.length,
     estimatedCount: estimated.length,
     noEstimateCount: margins.filter((m) => m.noEstimate).length,
+    settledUncosted: settled.length - costedSettled.length,
+    estimatedUncosted: estimated.length - costedEstimated.length,
+    noSkuCount: margins.filter((m) => !m.sku).length,
   };
 }

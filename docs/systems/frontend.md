@@ -30,14 +30,14 @@ app/(dashboard)/dashboard/
   utils/
     format.ts                 money(), downloadCsv()
     shipping.ts                shipPctClass() — amber/red threshold styling
+    stock.ts                   on-hand / stock value tooltip text
   components/
     KpiTile, PanelHeader, Fig, ImportPreviewCard  (components/shared/)
     CostLotsEditor, InventoryCard, OrderLineCard,
-    SkuSummaryTable, StockValueTable,
+    OrderLinesTable, SkuSummaryTable, StockTotals,
     MarketplaceFeesTable, TotalsRow/TotalsCard      (per-domain table/card components)
     tabs/
-      SkuTab, OrdersTab, PriceTab,
-      InventoryTab, StockTab, FeesTab                (one component per dashboard tab)
+      SalesTab, InventoryTab, FeesTab                (one component per dashboard tab)
 ```
 
 This structure is the result of a refactor ("Modularize the dashboard: extract components, hooks, and utils from DashboardClient" — see repo history) that pulled tab bodies and reusable table/card pieces out of what was previously one large file; `DashboardClient.tsx` now owns state and wiring, `components/tabs/*` own each tab's layout, and `components/*`/`components/shared/*` own the reusable display pieces.
@@ -50,17 +50,15 @@ flowchart TD
     DC --> Install["InstallPrompt"]
     DC --> KpiTiles["KpiTile × 5\n(Revenue, Units, Net, Profit, Stock value)"]
     DC --> TabBar["role=tablist\n(useTabNavigation)"]
-    DC --> SkuTabC["SkuTab"] --> SkuTable["SkuSummaryTable"]
-    DC --> OrdersTabC["OrdersTab"] --> OrderCards["OrderLineCard (phone)\n+ table (md+)"] & Totals["TotalsCard / TotalsRow"]
-    DC --> PriceTabC["PriceTab"] --> PriceChart["PriceChart (SVG)"]
-    DC --> InvTabC["InventoryTab"] --> InvCards["InventoryCard (phone)\n+ table (md+)"] & CostEditor["CostLotsEditor"] & ImportCard["ImportPreviewCard"]
-    DC --> StockTabC["StockTab"] --> StockTable["StockValueTable"]
+    DC --> SalesTabC["SalesTab\n(By product · All lines · Price chart)"] --> SkuTable["SkuSummaryTable"] & LinesTable["OrderLinesTable"] & PriceChart["PriceChart (SVG)"] & Totals["TotalsCard / TotalsRow"]
+    SkuTable --> LinesTable
+    LinesTable --> OrderCards["OrderLineCard (phone)\n+ table (md+)"]
+    DC --> InvTabC["InventoryTab"] --> StockTotalsC["StockTotals"] & InvCards["InventoryCard (phone)\n+ table (md+)"] & CostEditor["CostLotsEditor"] & ImportCard["ImportPreviewCard"]
     DC --> FeesTabC["FeesTab"] --> FeesTable["MarketplaceFeesTable"]
 
     SkuTable --> Fig1["Fig"]
     OrderCards --> Fig2["Fig"]
     InvCards --> Fig3["Fig"]
-    StockTable --> Fig4["Fig"]
     InvCards --> CostEditor
 ```
 
@@ -97,9 +95,9 @@ stateDiagram-v2
 | `importPreview` | `PortableImportResult \| null` | Parsed-but-not-yet-applied import file (xlsx, zip or csv) |
 | `pendingPeriods` | `Record<sourceId, string[]> \| null` | Period ids from an imported file, applied (where still offered) when the period list next loads |
 
-**Why raw strings, not parsed numbers:** inputs are kept as strings (`inputs`, `lotDrafts`) so a half-typed value like `"1."` doesn't fight the controlled input's value on every keystroke. A `useMemo` (`parsedInputs`) calls `parseCostDrafts` (from `lib/gateway`) to convert everything to the real `CostInputs` shape — parsing each field with `parseFloat`, dropping `NaN`s — and only *that* derived value is passed to `buildReport`. Nothing else in the dashboard parses typed costs: the batch editor's "N units · $X spent · avg $Y" line reads `ProductRecord.cost` from the report like every other view.
+**Why raw strings, not parsed numbers:** inputs are kept as strings (`inputs`, `lotDrafts`) so a half-typed value like `"1."` doesn't fight the controlled input's value on every keystroke. A `useMemo` (`parsedInputs`) calls `parseCostDrafts` (from `lib/gateway`) to convert everything to the real `CostInputs` shape — parsing each field with `parseFloat`, dropping `NaN`s — and only *that* derived value is passed to `buildReport`. This keeps `buildReport` itself simple (it only ever sees valid numbers or `undefined`) while the UI stays forgiving of in-progress typing. Nothing else in the dashboard parses typed costs: the batch editor's "N units · $X spent · avg $Y" line reads `ProductRecord.cost` from the report like every other view.
 
-**Views read figures, never calculate them.** Every per-product number (cost, on hand, sold, left, name, stock value) comes from `Report.products` (see [Engine — One source, many views](./engine.md#one-source-many-views-reportproducts)). `DashboardClient` only builds a `productBySku` index for lookups; components never call engine math. That is why typing a batch updates the Inventory row, the batch editor, Stock value, the KPI tiles and every order line's profit in the same render. This keeps `buildReport` itself simple (it only ever sees valid numbers or `undefined`) while the UI stays forgiving of in-progress typing.
+**Views read figures, never calculate them.** Every per-product number (cost, on hand, sold, left, name, stock value) comes from `Report.products` (see [Engine — One source, many views](./engine.md#one-source-many-views-reportproducts)). Components never call engine math. That is why typing a batch updates the Inventory row and its stock value, the batch editor, the KPI tiles and every order line's profit in the same render.
 
 ## Data flow: typing a cost to seeing a new profit figure
 
@@ -126,16 +124,21 @@ Because `snapshot` doesn't change, this entire chain runs with **zero network ca
 
 | Tab | Component | Backed by (`Report` field) | Notes |
 |---|---|---|---|
-| **By SKU** | `SkuTab` → `SkuSummaryTable` | `bySku: SkuSummary[]` | Per-product rollup; flags `possibleDuplicates`; CSV export |
-| **Order lines** | `OrdersTab` → `OrderLineCard` (phone) / table (desktop) | `orderLines: MarginRow[]` | One row per settled or estimated line; settled/estimated totals shown separately, never blended; CSV export |
-| **Price over time** | `PriceTab` → `PriceChart` | `priceSeries: PriceSeries[]` | Hand-built SVG chart — see [below](#price-chart) |
-| **Inventory & costs** | `InventoryTab` → `InventoryCard` (phone) / table (desktop) | `products: ProductRecord[]` | The only tab with write operations: cost entry, box cost, CSV import/export |
-| **Stock value** | `StockTab` → `StockValueTable` | `stock` (from `stockValue()`, see [Engine](./engine.md#stockvalue-pooled-never-summed-across-sources)) | Merchant-fulfilled only; oversell risk flagged |
-| **Marketplace fees** | `FeesTab` → `MarketplaceFeesTable` | `marketplaceFees: AccountCharge[]` | Charges tied to no single order line |
+| **Sales** | `SalesTab` → `SkuSummaryTable` / `OrderLinesTable` / `PriceChart` | `bySku`, `products[].orderLines`, `orderLines`, `priceSeries`, the settled/estimated totals and counts | Three views - see [Sales tab](#sales-tab). Settled/estimated totals shown separately, never blended; CSV menu |
+| **Inventory** | `InventoryTab` → `StockTotals` + `InventoryCard` (phone) / table (desktop) | `products: ProductRecord[]`, `stock.totals` (see [Engine](./engine.md#stockvalue-pooled-never-summed-across-sources)) | The only tab with write operations: cost entry, box cost, CSV import/export. Also stock value: merchant-fulfilled only, oversell risk flagged |
+| **Fees** | `FeesTab` → `MarketplaceFeesTable` | `marketplaceFees: AccountCharge[]` | Charges tied to no single order line |
 
 Every tab follows the same **mobile-first pattern**: a `<ul>` of cards rendered below the `md` breakpoint (768px), a `<table>` rendered at `md` and above, both driven from the same data so there's no separate "mobile logic."
 
-### Inventory & costs tab
+### Inventory tab
+
+Costs, stock and stock value for each product, in one row (this replaced the separate "Inventory & costs" and "Stock value" tabs - see [`docs/tab-consolidation-plan.md`](../tab-consolidation-plan.md)):
+
+- **On hand** is the source's count (`stock.reported`, the largest single-source count, with each source's split in the tooltip); **Left** is purchased − sold, amber when the two disagree.
+- **Listed price / Value @ cost / Value @ price** show only for rows with `stock.inStock` - exactly the rows the `StockTotals` strip above the table adds up. The value cells' tooltip says which quantity they use: Left once batches exist, else the source count (an estimate). The desktop table can hide these three columns ("Show value columns", remembered in `localStorage` under `byraf-inventory-value-cols`); the phone cards always show them.
+- Products a source reports in stock come first. The order keys on the source's count, not your batches, so a row doesn't jump while you type into it.
+- The Stock value KPI tile's "See by product" link opens this tab.
+
 
 The one tab that mutates state rather than just displaying it. Two input paths converge on the same state:
 
@@ -143,6 +146,16 @@ The one tab that mutates state rather than just displaying it. Two input paths c
 2. **File import** — `handleImportFile` reads the file into bytes, calls `parseImportFile` (from `lib/gateway`) with the current inputs, and stores the result in `importPreview` *without touching any other state*. `ImportPreviewCard` shows stats, a diff against the current entries, and warnings/errors; **Merge** or **Replace** (`confirmImport`) then applies it — see [Engine — Portable save file](./engine.md#portable-save-file-engineportable).
 
 **Export / Import controls (`SaveLoadControls`)** live in the data screen's header (Export menu + Import file) and, import-only, on the connect screen so a saved file can be loaded before connecting. `handleExport` builds the file (workbook, CSV bundle, or the costs-only CSV) and downloads it client-side. The costs-only CSV (`costsToCsv`) still lists every loaded SKU with blank batch columns when nothing is entered, so it doubles as a fill-in template. API credentials (`connections`) are never passed to the exporter.
+
+### Sales tab
+
+By SKU, Order lines and Price over time as three views of one tab (see [`docs/tab-consolidation-plan.md`](../tab-consolidation-plan.md)), switched by `aria-pressed` buttons rather than nested ARIA tabs. The last view used is remembered in `localStorage` (`byraf-sales-view`).
+
+- **By product** (default): `SkuSummaryTable`. A row (or, on a phone, "Show N lines") expands to that product's `products[sku].orderLines`, drawn by `OrderLinesTable` with `compact` (no Item column; phone cards use a left rule instead of a border). These are the same `MarginRow` objects the rollup was summed from, and `scripts/test-engine.ts` checks they sum to it. Lines with no SKU belong to no product; a note gives `noSkuCount` and points to All lines.
+- **All lines**: `OrderLinesTable` flat - the old Order lines table.
+- **Price chart**: `PriceChart` with `prefer` = the expanded products, which are charted first (still capped at 6).
+- Both tables end in the settled/estimated `TotalsRow`s; `variant` ("rollup" / "lines") lines each total up with its column, and the per-total no-cost counts come from the report (`settledUncosted`, `estimatedUncosted`).
+- **Download CSV ▾**: `skuSummaryToCsv` (`by-sku`) or `orderLinesToCsv` (`order-lines`), unchanged.
 
 ### Price chart
 
@@ -164,7 +177,7 @@ Shown on the **connect screen**, before any credentials are entered, so it's vis
 
 - **`beforeinstallprompt` is captured at module load** (not inside the component), because the event fires once, early in page load — long before the wizard reaches this screen.
 - **Platform detection** distinguishes iOS (no install API; Apple only allows Share → Add to Home Screen — the button shows numbered steps instead) from Android/Chromium (native `beforeinstallprompt` flow — the button really installs). iPadOS reports itself as `Macintosh` in its user agent, so touch-point count disambiguates it from a real Mac.
-- **Dismissal** is remembered via `localStorage` (`byraf-install-dismissed`). With the `theme` cookie (see [Design system and themes](#design-system-and-themes-componentsui)) it is one of only two UI preferences this app keeps in the browser, consistent with the "nothing is stored" security model (see [Configuration & Security](./configuration-and-security.md)).
+- **Dismissal** is remembered via `localStorage` (`byraf-install-dismissed`). With the `theme` cookie (see [Design system and themes](#design-system-and-themes-componentsui)) it is one of only four UI preferences this app keeps in the browser (the others are the Inventory value-column toggle and the last Sales view), consistent with the "nothing is stored" security model (see [Configuration & Security](./configuration-and-security.md)).
 - Uses `useSyncExternalStore` with a `serverSnapshot` of `"hidden"`, so server-rendered HTML always matches the first client render (avoiding a hydration mismatch) and the real platform-detected state appears immediately after hydration.
 
 ## Design system and themes (`components/ui/`)

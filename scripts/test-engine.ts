@@ -505,6 +505,9 @@ check("products: every view reads the same objects, never a copy", () => {
   for (const p of report.products) {
     const row = stockRows.get(p.sku);
     if (row) assert.equal(row, p.stock, `${p.sku}: stock row is the product's own record`);
+    // The inventory view shows a value only where inStock is set; that must
+    // be exactly the rows the stock totals add up.
+    assert.equal(p.stock.inStock, row !== undefined, `${p.sku}: inStock matches the stock totals`);
     if (p.sales) assert.ok(report.bySku.includes(p.sales), `${p.sku}: sales is the bySku entry`);
     for (const line of p.orderLines) {
       assert.ok(report.orderLines.includes(line), `${p.sku}: order line is the report's own row`);
@@ -554,6 +557,31 @@ check("products: name, sold and on hand agree across views", () => {
   // Sold, but no source reports it: a record with no count, kept out of stock value.
   assert.equal(c.stock.reported, null);
   assert.ok(!report.stock.rows.includes(c.stock));
+});
+
+check("products: a product's own lines sum to its rollup row (Sales drill-down)", () => {
+  for (const p of report.products) {
+    if (!p.sales) {
+      assert.equal(p.orderLines.length, 0, `${p.sku}: lines without a rollup`);
+      continue;
+    }
+    const units = p.orderLines.reduce((n, l) => n + l.qty, 0);
+    assert.equal(units, p.sales.units, `${p.sku}: units`);
+    assert.equal(p.orderLines.length, p.sales.lines, `${p.sku}: line count`);
+    // Money columns are summed over estimable lines only - same rule as the rollup.
+    const counted = sumMargins(p.orderLines.filter((l) => !l.noEstimate));
+    for (const k of ["revenue", "commission", "shipping", "netAmount", "costTotal", "profit"] as const) {
+      assert.equal(cents(counted[k]), cents(p.sales.totals[k]), `${p.sku}: ${k}`);
+    }
+  }
+});
+
+check("report counts: uncosted per total adds up to the KPI, no-SKU lines are accounted for", () => {
+  assert.equal(report.settledUncosted + report.estimatedUncosted, report.kpis.uncosted);
+  assert.equal(
+    report.noSkuCount + report.products.reduce((n, p) => n + p.orderLines.length, 0),
+    report.orderLines.length
+  );
 });
 
 check("parseCostDrafts: typed text becomes the same inputs everywhere", () => {

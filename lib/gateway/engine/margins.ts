@@ -248,6 +248,12 @@ export interface SkuStockRecord extends StockValueRow {
    * listed), so this never blocks entry.
    */
   discrepancy: number | null;
+  /**
+   * Counted in the stock value totals: a source reports the SKU and there
+   * is stock on hand. A view showing a value next to a row uses this, so
+   * the rows it values are exactly the ones the totals cover.
+   */
+  inStock: boolean;
 }
 
 /**
@@ -314,6 +320,10 @@ export function stockRecords(
       sold: soldUnits,
       left,
       discrepancy: left === null || reported === null ? null : left - reported,
+      // Only SKUs a source reports - a SKU missing from every inventory
+      // feed has no count to value.
+      inStock:
+        bySource.length > 0 && (onHand > 0 || bySource.some((b) => b.onHand > 0)),
     });
   }
   return out;
@@ -324,10 +334,7 @@ export function summarizeStock(
   records: Iterable<SkuStockRecord>
 ): { rows: SkuStockRecord[]; totals: StockValueTotals } {
   const rows = [...records]
-    // Only SKUs a source reports - a SKU missing from every inventory
-    // feed has no count to value.
-    .filter((r) => r.bySource.length > 0)
-    .filter((r) => r.onHand > 0 || r.bySource.some((b) => b.onHand > 0))
+    .filter((r) => r.inStock)
     // Biggest money first; SKUs with no figure sink to the bottom.
     .sort(
       (a, b) =>

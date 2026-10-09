@@ -59,7 +59,7 @@ The full user-facing statement of this lives in the README's "Privacy and securi
 
 ### Nothing is stored
 
-No database is used by the running app. Credentials and all fetched data live only in the browser tab (`DashboardClient` React state) and the single server request that needed them — a page refresh loses everything, including anything typed. The browser keeps exactly two UI preferences and nothing else: the dismissed install banner (`localStorage`) and the chosen design (a `theme` cookie holding `retro` or `modern`, `SameSite=Lax`, one year, readable by the page so it can be switched; it carries no seller data and no identifier). See [Data Model](./data-model.md) for the provisioned-but-dormant Postgres schema this implies exists but isn't touched.
+No database is used by the running app. Credentials and all fetched data live only in the browser tab (`DashboardClient` React state) and the single server request that needed them — a page refresh loses everything, including anything typed. The browser keeps exactly four UI preferences and nothing else: the dismissed install banner (`localStorage`), whether the Inventory table shows its value columns (`localStorage`, `byraf-inventory-value-cols`, `"1"`/`"0"`), the last Sales view (`localStorage`, `byraf-sales-view`, `rollup`/`lines`/`chart`) and the chosen design (a `theme` cookie holding `retro` or `modern`, `SameSite=Lax`, one year, readable by the page so it can be switched; it carries no seller data and no identifier). See [Data Model](./data-model.md) for the provisioned-but-dormant Postgres schema this implies exists but isn't touched.
 
 ### Sign-in is optional; otherwise the API key is the access control
 

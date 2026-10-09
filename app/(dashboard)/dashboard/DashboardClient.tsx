@@ -29,11 +29,8 @@ import { KpiTile } from "./components/shared/KpiTile";
 import { ImportPreviewCard } from "./components/shared/ImportPreviewCard";
 import { SaveLoadControls, type ExportKind } from "./components/shared/SaveLoadControls";
 import { InventoryTab } from "./components/tabs/InventoryTab";
-import { StockTab } from "./components/tabs/StockTab";
 import { FeesTab } from "./components/tabs/FeesTab";
-import { SkuTab } from "./components/tabs/SkuTab";
-import { PriceTab } from "./components/tabs/PriceTab";
-import { OrdersTab } from "./components/tabs/OrdersTab";
+import { SalesTab } from "./components/tabs/SalesTab";
 import { useTabNavigation } from "./hooks/useTabNavigation";
 
 import { BOX_FIELDS, type LotDraft, type SkuField, type Step, type Tab } from "./types";
@@ -243,13 +240,12 @@ export default function DashboardClient({
     return buildReport(snapshot, parsedInputs, { sourceFilter });
   }, [snapshot, parsedInputs, sourceFilter]);
 
-  // Every per-product figure lives on these records; this is only an
-  // index for looking one up by SKU, never a second copy of a number.
-  const productBySku = useMemo(
-    () => new Map((liveReport?.products ?? []).map((p) => [p.sku, p])),
+  // Every per-product figure lives on Report.products; views read those
+  // records rather than keeping their own copy of a number.
+  const skus = useMemo(
+    () => (liveReport?.products ?? []).map((p) => p.sku),
     [liveReport]
   );
-  const skus = useMemo(() => [...productBySku.keys()], [productBySku]);
 
   async function handleImportFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -493,11 +489,8 @@ export default function DashboardClient({
 
   const margins = r.orderLines;
   const skuSummaries = r.bySku;
-  const priceSeries = r.priceSeries;
   const stockVal = r.stock;
   const kpi = r.kpis;
-  const settledTotals = r.settledTotals;
-  const estimatedTotals = r.estimatedTotals;
   const settledCount = r.settledCount;
   const estimatedCount = r.estimatedCount;
   const noEstimateCount = r.noEstimateCount;
@@ -625,6 +618,9 @@ export default function DashboardClient({
           {kpi.stockValueAtPrice !== null && (
             <span className="block">{money(kpi.stockValueAtPrice)} at listed price</span>
           )}
+          <TextButton onClick={() => setTab("inventory")} className="block">
+            See by product
+          </TextButton>
         </KpiTile>
       </div>
 
@@ -636,12 +632,12 @@ export default function DashboardClient({
         >
           {(
             [
-              ["sku", `By SKU (${skuSummaries.length})`],
-              ["orders", `Order lines (${margins.length})`],
-              ["price", "Price over time"],
-              ["inventory", `Inventory & costs (${skus.length})`],
-              ["stock", `Stock value (${stockVal.totals.stockedSkus})`],
-              ["fees", `Marketplace fees (${r.marketplaceFees.length})`],
+              [
+                "sales",
+                `Sales (${skuSummaries.length} product${skuSummaries.length === 1 ? "" : "s"} · ${margins.length} line${margins.length === 1 ? "" : "s"})`,
+              ],
+              ["inventory", `Inventory (${skus.length})`],
+              ["fees", `Fees (${r.marketplaceFees.length})`],
             ] as [Tab, string][]
           ).map(([id, label]) => (
             <TabButton
@@ -667,6 +663,7 @@ export default function DashboardClient({
       {tab === "inventory" && (
         <InventoryTab
           products={r.products}
+          stockTotals={stockVal.totals}
           inputs={inputs}
           lotDrafts={lotDrafts}
           expanded={expanded}
@@ -680,24 +677,9 @@ export default function DashboardClient({
         />
       )}
 
-      {tab === "stock" && <StockTab stock={stockVal} productBySku={productBySku} />}
-
       {tab === "fees" && <FeesTab fees={r.marketplaceFees} />}
 
-      {tab === "sku" && <SkuTab skuSummaries={skuSummaries} />}
-
-      {tab === "price" && <PriceTab priceSeries={priceSeries} />}
-
-      {tab === "orders" && (
-        <OrdersTab
-          margins={margins}
-          settledTotals={settledTotals}
-          estimatedTotals={estimatedTotals}
-          settledCount={settledCount}
-          estimatedCount={estimatedCount}
-          noEstimateCount={noEstimateCount}
-        />
-      )}
+      {tab === "sales" && <SalesTab report={r} />}
         </div>
       </Card>
     </div>

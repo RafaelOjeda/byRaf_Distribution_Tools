@@ -18,3 +18,10 @@ export function reportedPhrase(stock: SkuStockRecord): string {
     ? `the highest source count is ${stock.reported}`
     : `the source says ${stock.reported}`;
 }
+
+/** Which quantity a row's stock value is based on - shown as the value cells' tooltip. */
+export function valuedAtTitle(stock: SkuStockRecord): string {
+  return stock.onHandIsEstimate
+    ? `Valued at ${stock.onHand} units: no purchase batches entered, so this uses the largest source count (an estimate).`
+    : `Valued at ${stock.onHand} units: what your purchase batches leave after sales ("Left").`;
+}

@@ -2,7 +2,7 @@ import { Button, Input } from "@/components/ui";
 import type { ProductRecord } from "@/lib/gateway";
 import { BOX_FIELDS, type LotDraft, type SkuField } from "../types";
 import { money } from "../utils/format";
-import { reportedPhrase, reportedTitle } from "../utils/stock";
+import { reportedPhrase, reportedTitle, valuedAtTitle } from "../utils/stock";
 import { Fig } from "./shared/Fig";
 import { CostLotsEditor } from "./CostLotsEditor";
 
@@ -70,11 +70,42 @@ export function InventoryCard({
           )}
         </Fig>
       </dl>
+      {/* A tooltip doesn't show on touch, so spell out each source's count. */}
+      {stock.bySource.length > 1 && (
+        <p className="mt-1 text-xs text-sc-ink-2">
+          {stock.bySource.map((b) => `${b.sourceLabel} ${b.onHand}`).join(" · ")}
+        </p>
+      )}
       {stock.discrepancy ? (
         <p className="mt-1 text-xs text-amber-600">
           Batches imply {stock.left} left; {reportedPhrase(stock)}.
         </p>
       ) : null}
+
+      {/* Values only for what the stock totals count, so they add up. */}
+      <dl className="mt-3 grid grid-cols-3 gap-2">
+        <Fig label="Listed price">
+          {stock.listedPrice === null ? muted : money(stock.listedPrice)}
+        </Fig>
+        <Fig label="Value @ cost" title={stock.inStock ? valuedAtTitle(stock) : undefined}>
+          {!stock.inStock || stock.valueAtCost === null ? muted : money(stock.valueAtCost)}
+        </Fig>
+        <Fig label="Value @ price" title={stock.inStock ? valuedAtTitle(stock) : undefined}>
+          {!stock.inStock || stock.valueAtPrice === null ? (
+            muted
+          ) : (
+            <span className={stock.isPublished ? "" : "text-amber-600"}>
+              {money(stock.valueAtPrice)}
+            </span>
+          )}
+        </Fig>
+      </dl>
+      {stock.inStock && stock.valueAtPrice !== null && !stock.isPublished && (
+        <p className="mt-1 text-xs text-amber-600">
+          Unpublished ({stock.publishedStatus}) — can&apos;t sell right now, so
+          it&apos;s left out of the at-price total.
+        </p>
+      )}
 
       <div className="mt-3 grid grid-cols-1 gap-2">
         {BOX_FIELDS.map((f) => (

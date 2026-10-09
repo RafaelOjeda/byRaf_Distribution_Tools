@@ -47,6 +47,7 @@ export function TotalsRow({
   uncosted,
   first,
   italic,
+  variant = "lines",
 }: {
   label: string;
   totals: Report["settledTotals"];
@@ -55,6 +56,13 @@ export function TotalsRow({
   uncosted: number;
   first?: boolean;
   italic?: boolean;
+  /**
+   * Which table this sits under, so each total lines up with its column:
+   * "lines" (Status, Source, Item, Fulfillment, Qty, then money incl.
+   * Other) or "rollup" (Item, Units, Lines, Avg price, then money incl.
+   * Ship %).
+   */
+  variant?: "lines" | "rollup";
 }) {
   const unknown = (
     <span
@@ -68,7 +76,7 @@ export function TotalsRow({
     <tr
       className={`font-medium ${first ? "border-t-2 border-sc-line" : ""} ${italic ? "italic" : ""}`}
     >
-      <td className="py-2 pr-3" colSpan={6}>
+      <td className="py-2 pr-3" colSpan={variant === "rollup" ? 4 : 5}>
         {label}
       </td>
       <td className="py-2 pr-3 text-right">{money(totals.revenue)}</td>
@@ -78,9 +86,13 @@ export function TotalsRow({
       <td className="py-2 pr-3 text-right text-red-600">
         {money(totals.shipping)}
       </td>
-      <td className="py-2 pr-3 text-right">
-        {money(totals.tax + totals.otherFees)}
-      </td>
+      {variant === "lines" ? (
+        <td className="py-2 pr-3 text-right">
+          {money(totals.tax + totals.otherFees)}
+        </td>
+      ) : (
+        <td className="py-2 pr-3" aria-hidden="true" />
+      )}
       <td className="py-2 pr-3 text-right">{money(totals.netAmount)}</td>
       <td
         className="py-2 pr-3 text-right"

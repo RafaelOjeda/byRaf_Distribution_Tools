@@ -1,88 +1,57 @@
-import { Button, Table } from "@/components/ui";
-import { orderLinesToCsv, type MarginRow, type Report } from "@/lib/gateway";
-import { downloadCsv, money } from "../../utils/format";
-import { PanelHeader } from "../shared/PanelHeader";
-import { OrderLineCard } from "../OrderLineCard";
-import { TotalsCard, TotalsRow } from "../TotalsRow";
+import type { ReactNode } from "react";
+import { Table } from "@/components/ui";
+import type { MarginRow } from "@/lib/gateway";
+import { money } from "../utils/format";
+import { OrderLineCard } from "./OrderLineCard";
 
-export function OrdersTab({
-  margins,
-  settledTotals,
-  estimatedTotals,
-  settledCount,
-  estimatedCount,
-  noEstimateCount,
+/**
+ * Order lines as phone cards and a desktop table, from the report's own
+ * rows. Used flat (Sales → All lines) and, with `compact`, inside an
+ * expanded product row - the same MarginRow objects either way, so a
+ * product's lines can't disagree with its rollup.
+ */
+export function OrderLinesTable({
+  lines,
+  compact = false,
+  layout = "both",
+  footerRows,
+  footerCards,
 }: {
-  margins: MarginRow[];
-  settledTotals: Report["settledTotals"];
-  estimatedTotals: Report["estimatedTotals"];
-  settledCount: number;
-  estimatedCount: number;
-  noEstimateCount: number;
+  lines: MarginRow[];
+  /** Inside a product row: no Item column, cards drawn without their own border. */
+  compact?: boolean;
+  /** Which half to render; a nested table only needs the one its parent is showing. */
+  layout?: "both" | "cards" | "table";
+  footerRows?: ReactNode;
+  footerCards?: ReactNode;
 }) {
+  const columns = compact ? 12 : 13;
   return (
     <>
-      <PanelHeader
-        title="Order lines"
-        action={
-          <Button
-            onClick={() => downloadCsv("order-lines", orderLinesToCsv(margins))}
-            disabled={margins.length === 0}
-            title="Downloads this table as a CSV, one row per order line, with a Status column (Settled / Estimated / Not estimable)."
-          >
-            Download CSV
-          </Button>
-        }
-      />
-      <p className="text-sm text-sc-ink-2">
-        Revenue − commission − shipping − other − your cost = profit. Fee
-        columns are shown as the source reports them (negative = money
-        out). <span className="italic">Est.</span> rows are orders not
-        yet settled: revenue is exact, but commission and shipping are
-        projected from that SKU&apos;s settled history and switch to
-        exact figures once the order settles.
-      </p>
+      {layout !== "table" && (
+        <ul className={`flex flex-col gap-3 ${layout === "both" ? "md:hidden" : ""}`}>
+          {lines.map((m) => (
+            <OrderLineCard
+              key={`${m.status}-${m.purchaseOrderNo}-${m.purchaseOrderLine}`}
+              m={m}
+              nested={compact}
+            />
+          ))}
+          {lines.length === 0 && (
+            <li className="text-sm text-sc-ink-2">No order lines found.</li>
+          )}
+          {footerCards}
+        </ul>
+      )}
 
-      <ul className="flex flex-col gap-3 md:hidden">
-        {margins.map((m) => (
-          <OrderLineCard
-            key={`${m.status}-${m.purchaseOrderNo}-${m.purchaseOrderLine}`}
-            m={m}
-          />
-        ))}
-        {margins.length === 0 && (
-          <li className="text-sm text-sc-ink-2">No order lines found.</li>
-        )}
-        {settledCount > 0 && (
-          <TotalsCard
-            label={`Settled · ${settledCount} line${settledCount === 1 ? "" : "s"}`}
-            totals={settledTotals}
-            uncosted={
-              margins.filter((m) => m.status === "settled" && !m.hasCost).length
-            }
-          />
-        )}
-        {estimatedCount > 0 && (
-          <TotalsCard
-            label={`Estimated · ${estimatedCount} line${estimatedCount === 1 ? "" : "s"}${noEstimateCount > 0 ? ` (+${noEstimateCount} not estimable, excluded)` : ""}`}
-            totals={estimatedTotals}
-            uncosted={
-              margins.filter(
-                (m) => m.status === "estimated" && !m.noEstimate && !m.hasCost
-              ).length
-            }
-            italic
-          />
-        )}
-      </ul>
-
-      <div className="hidden overflow-x-auto md:block">
+      {layout !== "cards" && (
+      <div className={`overflow-x-auto ${layout === "both" ? "hidden md:block" : ""}`}>
         <Table className="w-full text-sm whitespace-nowrap">
           <thead>
             <tr className="border-b border-sc-line text-left">
               <th className="pr-3">Status</th>
               <th className="pr-3">Source</th>
-              <th className="pr-3">Item</th>
+              {!compact && <th className="pr-3">Item</th>}
               <th className="pr-3">Fulfillment</th>
               <th className="pr-3 text-right">Qty</th>
               <th className="pr-3 text-right">Revenue</th>
@@ -96,7 +65,7 @@ export function OrdersTab({
             </tr>
           </thead>
           <tbody>
-            {margins.map((m) => {
+            {lines.map((m) => {
               const est = m.status === "estimated";
               const noEst = (
                 <span
@@ -120,12 +89,14 @@ export function OrdersTab({
                     {est ? `Est. · ${m.orderDate?.slice(5)}` : "Settled"}
                   </td>
                   <td className="pr-3">{m.sourceLabel ?? "—"}</td>
-                  <td
-                    className="max-w-[11rem] truncate pr-3"
-                    title={m.itemName}
-                  >
-                    {m.itemName}
-                  </td>
+                  {!compact && (
+                    <td
+                      className="max-w-[11rem] truncate pr-3"
+                      title={m.itemName}
+                    >
+                      {m.itemName}
+                    </td>
+                  )}
                   <td className="pr-3">{m.fulfillmentType}</td>
                   <td className="pr-3 text-right">{m.qty}</td>
                   <td className="pr-3 text-right">{money(m.revenue)}</td>
@@ -196,48 +167,18 @@ export function OrdersTab({
                 </tr>
               );
             })}
-            {margins.length === 0 && (
+            {lines.length === 0 && (
               <tr>
-                <td
-                  colSpan={13}
-                  className="py-3 text-sc-ink-2"
-                >
+                <td colSpan={columns} className="py-3 text-sc-ink-2">
                   No order lines found.
                 </td>
               </tr>
             )}
           </tbody>
-          {margins.length > 0 && (
-            <tfoot>
-              {settledCount > 0 && (
-                <TotalsRow
-                  label={`Settled · ${settledCount} line${settledCount === 1 ? "" : "s"}`}
-                  totals={settledTotals}
-                  uncosted={
-                    margins.filter((m) => m.status === "settled" && !m.hasCost)
-                      .length
-                  }
-                  first
-                />
-              )}
-              {estimatedCount > 0 && (
-                <TotalsRow
-                  label={`Estimated · ${estimatedCount} line${estimatedCount === 1 ? "" : "s"}${noEstimateCount > 0 ? ` (+${noEstimateCount} with no estimate, excluded)` : ""}`}
-                  totals={estimatedTotals}
-                  uncosted={
-                    margins.filter(
-                      (m) =>
-                        m.status === "estimated" && !m.noEstimate && !m.hasCost
-                    ).length
-                  }
-                  first={settledCount === 0}
-                  italic
-                />
-              )}
-            </tfoot>
-          )}
+          {footerRows && lines.length > 0 && <tfoot>{footerRows}</tfoot>}
         </Table>
       </div>
+      )}
     </>
   );
 }

@@ -12,17 +12,16 @@ Walmart Marketplace shows a seller their sale price and their fees, but has no p
 
 1. **Paste your Walmart API credentials** (Client ID and Secret, from Seller Center). Nothing is saved.
 2. **Pick which settlement reports to load.** These are the same periodic reports Walmart shows under Payments in Seller Center.
-3. The page pulls everything live into a dashboard styled after Seller Central (the design language only; no Amazon branding). A row of summary tiles sits at the top: revenue, units sold, net after fees, profit and stock value. Below them, tabs switch between five views:
+3. The page pulls everything live into a dashboard styled after Seller Central (the design language only; no Amazon branding). A row of summary tiles sits at the top: revenue, units sold, net after fees, profit and stock value. Below them, three tabs:
 
 | Tab | What it shows |
 |---|---|
-| **By SKU** | One row per product: units, average price, revenue, commission, shipping, shipping % of revenue (amber above 15%, red above 25%), net, cost, profit, margin. |
-| **Order lines** | One row per order line with revenue, commission, shipping, other fees, net, cost, profit and margin, plus settled and estimated totals. |
-| **Price over time** | A line chart of average selling price per unit by order date, one line per product, with a tooltip, keyboard support and a table view. |
-| **Inventory & costs** | Every SKU you stock, with on-hand count. Enter purchase batches (quantity × price each) and box cost by hand, or **import a file** (see below). Average cost is quantity-weighted across batches. "Left" (bought − sold) turns amber when it disagrees with Walmart's count. |
-| **Stock value** | Units on hand at your average cost and at the listed price, with totals that say how many SKUs they cover. |
+| **Sales** | Three views, with settled and estimated totals kept apart. **By product**: one row per product with units, average price, revenue, commission, shipping, shipping % of revenue (amber above 15%, red above 25%), net, cost, profit and margin; open a product to see its own order lines. **All lines**: every order line with revenue, commission, shipping, other fees, net, cost, profit and margin. **Price chart**: average selling price per unit by order date, one line per product (products you opened come first), with a tooltip, keyboard support and a table view. The view you last used is remembered. |
+| **Inventory** | Every SKU you stock or sold, with on-hand count, and what that stock is worth. Enter purchase batches (quantity × price each) and box cost by hand, or **import a file** (see below). Average cost is quantity-weighted across batches. "Left" (bought − sold) turns amber when it disagrees with Walmart's count. Stock at cost and at the listed price is totalled above the table, with counts of how many SKUs each total covers; the per-product value columns can be hidden to narrow the table. |
 
-By SKU and Order lines each have a **Download CSV** button.
+| **Fees** | Charges that belong to no single order (storage, subscriptions, ads, adjustments), so they're never in the Sales totals. |
+
+Sales has a **Download CSV** menu: by product, or every order line.
 
 **Saving and loading your entries.** Nothing is stored on a server, so the header has **Export** and **Import file**. Export gives a workbook (`.xlsx`, one sheet per table: easiest to edit in Excel), a CSV bundle (`.zip`, one CSV per table: easiest to script), or just the costs as one CSV. Import accepts any of those, plus the original single cost CSV, shows what would be added or changed, and lets you **Merge** (keep SKUs the file doesn't mention) or **Replace**. The file holds purchase batches, box costs and sizes, alias SKUs, and your selected periods and source filter; when data is loaded it also carries read-only By SKU and Order lines sheets that import ignores. **API keys are never written to the file.** The format is described in [`docs/import-export-plan.md`](docs/import-export-plan.md). The app is light-mode only.
 

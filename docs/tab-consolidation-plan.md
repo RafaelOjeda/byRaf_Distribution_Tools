@@ -64,7 +64,7 @@ What it changed:
   - `averageUnitCost`, `reconcileStock` and `stockValue` are no longer exported from `lib/gateway`, so `app/` *can't* call them. The existing ESLint rule already blocks deep imports into the engine. This replaces the planned `check-boundary` addition.
   - `scripts/test-engine.ts` checks, on a two-source fixture with an alias, that every view gets the same objects and the same cost, name, sold and on-hand figures.
 
-## PR 1 — Inventory (merge "Inventory & costs" + "Stock value")
+## PR 1 — Inventory (merge "Inventory & costs" + "Stock value") ✅ done
 
 ### Why
 
@@ -86,7 +86,8 @@ One row per SKU, keyed by normalized SKU, as `skus` is today. The current Invent
 - **Left** / its amber check read `stock.left` / `stock.discrepancy`. The engine compares against the largest single-source count, because the pooled On hand already *is* the batch-implied number once batches exist.
 - **Value @ price**: unpublished listings stay amber with the "unpublished" note and stay out of the total, as today.
 - Rows the user expands (▸) still open `CostLotsEditor` underneath. Change `colSpan` from `BOX_FIELDS.length + 6` to `+ 9`.
-- Sort and order stay the same, with one change: SKUs that are in stock come first. That is the main reason to open the tab, and it keeps sold-out SKUs from pushing stocked ones down.
+- Sort and order stay the same, with one change: SKUs a source reports in stock come first. That is the main reason to open the tab, and it keeps sold-out SKUs from pushing stocked ones down. (Built keyed on the source's count, not your batches, so a row doesn't jump while you type into it.)
+- Value cells show only where `stock.inStock` is set: the engine's one rule for which rows the totals count, so the column always adds up to the total.
 
 ### Summary strip
 
@@ -115,8 +116,8 @@ Optionally, drop **Sold** from the inventory row: By SKU already has Units, and 
 - `types.ts`: `Tab` drops `"stock"`.
 - `hooks/useTabNavigation.ts`: `TAB_ORDER` drops `"stock"`.
 - `DashboardClient.tsx`:
-  - Remove the tab entry and its render branch.
-  - Pass `stockVal` into `InventoryTab`.
+  - Remove the tab entry and its render branch, and the `productBySku` index (only the Stock value tab used it).
+  - Pass `stockVal.totals` into `InventoryTab`.
   - Make the **Stock value KPI tile** a link to Inventory, as the Profit tile already is: `setTab("inventory")`.
 
 ### Docs
@@ -130,7 +131,7 @@ Optionally, drop **Sold** from the inventory row: By SKU already has Units, and 
 
 - `npm run lint`, `npx tsc --noEmit`, `npm run test:engine`.
 - Use the `run` skill for a manual pass with the Demo connector plus a second source. Check:
-  - On hand shows the pooled value and the per-source tooltip.
+  - On hand shows the largest source count, with the per-source tooltip.
   - Left's amber check still fires on a deliberately wrong batch.
   - The totals match the old Stock value tab.
   - The KPI tile jumps to the tab.
@@ -138,7 +139,7 @@ Optionally, drop **Sold** from the inventory row: By SKU already has Units, and 
 
 ---
 
-## PR 2 — Sales (merge "By SKU" + "Order lines" + "Price over time")
+## PR 2 — Sales (merge "By SKU" + "Order lines" + "Price over time") ✅ done
 
 ### Why
 
@@ -159,14 +160,14 @@ Settled · 41 lines         totals…        (from TotalsRow, as today)
 Estimated · 6 lines        totals…
 ```
 
-Three views behind one segmented control. The default is **Rollup**, so the first thing users see doesn't change.
+Three views behind one segmented control, labelled **By product**, **All lines** and **Price chart** in the UI. The default is **Rollup** (By product), so the first thing users see doesn't change. The last view used is remembered per browser (`byraf-sales-view`), the mitigation from Risks below.
 
 1. **Rollup** (default): the `SkuSummaryTable` columns. Each row expands to its order lines in a nested row, shown with the Order-lines columns, minus Item (it's the parent row) and Status shown compactly.
 2. **All lines**: today's flat Order lines table, unchanged. People do scan chronologically, and settled vs. estimated reads best flat.
 3. **Chart**: today's `PriceChart`, unchanged. It already has a table view and a 6-series cap.
    - Small upgrade: if any SKUs are expanded in Rollup, chart *those* first (still capped at 6), so "expand two products, flip to Chart" compares them directly.
 
-The settled/estimated `TotalsRow` footer moves to the bottom of both table views. The column sets differ, so `TotalsRow` gets a `variant: "rollup" | "lines"` that picks which cells line up. Its figures don't change, and "never blended" still holds: two rows, settled and estimated.
+The settled/estimated `TotalsRow` footer moves to the bottom of both table views. The column sets differ, so `TotalsRow` gets a `variant: "rollup" | "lines"` that picks which cells line up. (Built: this also fixed an existing bug - the old Order lines footer's label spanned 6 columns of a table with 5 before Revenue, so every total sat one column right of its heading.) The per-total no-cost counts and the no-SKU line count moved into the report (`settledUncosted`, `estimatedUncosted`, `noSkuCount`) instead of being counted in the tab. Its figures don't change, and "never blended" still holds: two rows, settled and estimated.
 
 ### Data
 

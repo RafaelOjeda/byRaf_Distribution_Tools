@@ -11,4 +11,4 @@ export type LotDraft = { qty: string; unitCost: string };
 
 export type Step = "connect" | "periods" | "data";
 
-export type Tab = "sku" | "orders" | "price" | "inventory" | "stock" | "fees";
+export type Tab = "sales" | "inventory" | "fees";
