@@ -1,20 +1,27 @@
+"use client";
+
+import clsx from "clsx";
 import type { ReactNode } from "react";
-import { Card } from "@/components/ui";
+import { useStyles } from "@/components/ui";
 
 export function KpiTile({
   label,
   value,
+  hero = false,
   children,
 }: {
   label: string;
   value: string;
+  /** The tile that leads the row (Profit); the design decides how much bigger it gets. */
+  hero?: boolean;
   children?: ReactNode;
 }) {
+  const { kpi } = useStyles();
   return (
-    <Card className="flex w-[68%] shrink-0 snap-start flex-col gap-1 p-4 sm:w-auto">
-      <div className="text-xs font-bold text-sc-ink-2">{label}</div>
-      <div className="text-2xl leading-8">{value}</div>
-      <div className="text-xs leading-4 text-sc-ink-2">{children}</div>
-    </Card>
+    <div className={clsx(kpi.tile, hero && kpi.hero)}>
+      <div className={kpi.label}>{label}</div>
+      <div className={hero ? kpi.heroValue : kpi.value}>{value}</div>
+      <div className={kpi.note}>{children}</div>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Card, Input, TabButton, TabList, TextButton } from "@/components/ui";
+import { Button, Card, Input, TabButton, TabList, TextButton, useStyles } from "@/components/ui";
 import {
   type ChangeEvent,
   type FormEvent,
@@ -41,6 +41,7 @@ export default function DashboardClient({
   sources: SourceDescriptor[];
 }) {
   const [step, setStep] = useState<Step>("connect");
+  const { kpi: kpiStyle } = useStyles();
   const { tab, setTab, onTabKey } = useTabNavigation(step);
   // connections[sourceId][fieldKey] = pasted value.
   const [connections, setConnections] = useState<Record<string, Record<string, string>>>(
@@ -566,12 +567,7 @@ export default function DashboardClient({
         </div>
       )}
 
-      {/* Phone: one swipeable row, so the data isn't pushed a screen and a
-            half down by five stacked tiles. Grid from sm up. */}
-      <div
-        className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-5"
-        aria-label="Summary"
-      >
+      <div className={kpiStyle.grid} aria-label="Summary">
         <KpiTile label="Revenue" value={money(kpi.revenue)}>
           {money(kpi.revenueSettled)} settled ·{" "}
           {money(kpi.revenue - kpi.revenueSettled)} not yet settled
@@ -589,6 +585,7 @@ export default function DashboardClient({
           {noEstimateCount > 0 && ` · ${noEstimateCount} not estimable`}
         </KpiTile>
         <KpiTile
+          hero
           label="Profit"
           value={kpi.costedSettled > 0 ? money(kpi.profitSettled) : "—"}
         >

@@ -12,6 +12,19 @@ export interface ThemeStyles {
   /** Shape of the top bar (its colours come from the shared sc-* tokens). */
   menuBar: string;
   card: string;
+  /** The wrapper around a page's content: the retro window, or nothing on modern. */
+  page: string;
+  /** The summary tiles at the top of the dashboard. */
+  kpi: {
+    grid: string;
+    tile: string;
+    /** Extra classes for the one tile that leads the row. */
+    hero: string;
+    label: string;
+    value: string;
+    heroValue: string;
+    note: string;
+  };
   button: {
     base: string;
     variant: Record<ButtonVariant, string>;
