@@ -505,6 +505,9 @@ check("products: every view reads the same objects, never a copy", () => {
   for (const p of report.products) {
     const row = stockRows.get(p.sku);
     if (row) assert.equal(row, p.stock, `${p.sku}: stock row is the product's own record`);
+    // The inventory view shows a value only where inStock is set; that must
+    // be exactly the rows the stock totals add up.
+    assert.equal(p.stock.inStock, row !== undefined, `${p.sku}: inStock matches the stock totals`);
     if (p.sales) assert.ok(report.bySku.includes(p.sales), `${p.sku}: sales is the bySku entry`);
     for (const line of p.orderLines) {
       assert.ok(report.orderLines.includes(line), `${p.sku}: order line is the report's own row`);

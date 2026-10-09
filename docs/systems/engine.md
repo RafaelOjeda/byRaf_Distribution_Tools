@@ -134,7 +134,7 @@ left        = purchased − sold          // null with no batches entered
 discrepancy = left === null || reported === null ? null : left − reported
 ```
 
-`reported` is the largest single-source count, the same figure the pooling fallback and `oversellRisk` use, so it doesn't depend on which source loaded last. Used by the Inventory & Costs tab's "Left" column (amber when nonzero) — a hint that a batch is missing or mistyped, never a hard constraint. See [Frontend — Inventory & costs tab](./frontend.md#inventory--costs-tab).
+`reported` is the largest single-source count, the same figure the pooling fallback and `oversellRisk` use, so it doesn't depend on which source loaded last. Used by the Inventory tab's "Left" column (amber when nonzero) — a hint that a batch is missing or mistyped, never a hard constraint. See [Frontend — Inventory tab](./frontend.md#inventory-tab).
 
 ### One source, many views (`Report.products`)
 
@@ -203,7 +203,7 @@ flowchart TD
     Accumulate --> Result
 ```
 
-Import is **preview-then-confirm**: `parseCostImportCsv` never mutates any application state by itself — `DashboardClient` shows the result in an `ImportPreviewCard` and only applies it (replacing the session's `inputs`/`lotDrafts`/`aliasDrafts`) when the user clicks "Apply import." See [Frontend — Inventory & costs tab](./frontend.md#inventory--costs-tab).
+Import is **preview-then-confirm**: `parseCostImportCsv` never mutates any application state by itself — `DashboardClient` shows the result in an `ImportPreviewCard` and only applies it (replacing the session's `inputs`/`lotDrafts`/`aliasDrafts`) when the user clicks "Apply import." See [Frontend — Inventory tab](./frontend.md#inventory-tab).
 
 ## Portable save file (`engine/portable/`)
 

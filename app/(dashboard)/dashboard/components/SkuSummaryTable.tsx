@@ -29,7 +29,7 @@ export function SkuSummaryTable({ summaries }: { summaries: SkuSummary[] }) {
                 {s.possibleDuplicates.length > 0 && (
                   <div
                     className="truncate text-xs text-amber-600"
-                    title={`Might be the same product as: ${s.possibleDuplicates.join(", ")}. Add an alias under Inventory & costs to merge them.`}
+                    title={`Might be the same product as: ${s.possibleDuplicates.join(", ")}. Add an alias under Inventory to merge them.`}
                   >
                     possible duplicate of {s.possibleDuplicates.join(", ")}
                   </div>

@@ -12,15 +12,14 @@ Walmart Marketplace shows a seller their sale price and their fees, but has no p
 
 1. **Paste your Walmart API credentials** (Client ID and Secret, from Seller Center). Nothing is saved.
 2. **Pick which settlement reports to load.** These are the same periodic reports Walmart shows under Payments in Seller Center.
-3. The page pulls everything live into a dashboard styled after Seller Central (the design language only; no Amazon branding). A row of summary tiles sits at the top: revenue, units sold, net after fees, profit and stock value. Below them, tabs switch between five views:
+3. The page pulls everything live into a dashboard styled after Seller Central (the design language only; no Amazon branding). A row of summary tiles sits at the top: revenue, units sold, net after fees, profit and stock value. Below them, tabs switch between five views (Marketplace fees is the fifth, for charges that belong to no single order):
 
 | Tab | What it shows |
 |---|---|
 | **By SKU** | One row per product: units, average price, revenue, commission, shipping, shipping % of revenue (amber above 15%, red above 25%), net, cost, profit, margin. |
 | **Order lines** | One row per order line with revenue, commission, shipping, other fees, net, cost, profit and margin, plus settled and estimated totals. |
 | **Price over time** | A line chart of average selling price per unit by order date, one line per product, with a tooltip, keyboard support and a table view. |
-| **Inventory & costs** | Every SKU you stock, with on-hand count. Enter purchase batches (quantity × price each) and box cost by hand, or **import a file** (see below). Average cost is quantity-weighted across batches. "Left" (bought − sold) turns amber when it disagrees with Walmart's count. |
-| **Stock value** | Units on hand at your average cost and at the listed price, with totals that say how many SKUs they cover. |
+| **Inventory** | Every SKU you stock or sold, with on-hand count, and what that stock is worth. Enter purchase batches (quantity × price each) and box cost by hand, or **import a file** (see below). Average cost is quantity-weighted across batches. "Left" (bought − sold) turns amber when it disagrees with Walmart's count. Stock at cost and at the listed price is totalled above the table, with counts of how many SKUs each total covers; the per-product value columns can be hidden to narrow the table. |
 
 By SKU and Order lines each have a **Download CSV** button.
 

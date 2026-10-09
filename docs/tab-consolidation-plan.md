@@ -64,7 +64,7 @@ What it changed:
   - `averageUnitCost`, `reconcileStock` and `stockValue` are no longer exported from `lib/gateway`, so `app/` *can't* call them. The existing ESLint rule already blocks deep imports into the engine. This replaces the planned `check-boundary` addition.
   - `scripts/test-engine.ts` checks, on a two-source fixture with an alias, that every view gets the same objects and the same cost, name, sold and on-hand figures.
 
-## PR 1 — Inventory (merge "Inventory & costs" + "Stock value")
+## PR 1 — Inventory (merge "Inventory & costs" + "Stock value") ✅ done
 
 ### Why
 
@@ -86,7 +86,8 @@ One row per SKU, keyed by normalized SKU, as `skus` is today. The current Invent
 - **Left** / its amber check read `stock.left` / `stock.discrepancy`. The engine compares against the largest single-source count, because the pooled On hand already *is* the batch-implied number once batches exist.
 - **Value @ price**: unpublished listings stay amber with the "unpublished" note and stay out of the total, as today.
 - Rows the user expands (▸) still open `CostLotsEditor` underneath. Change `colSpan` from `BOX_FIELDS.length + 6` to `+ 9`.
-- Sort and order stay the same, with one change: SKUs that are in stock come first. That is the main reason to open the tab, and it keeps sold-out SKUs from pushing stocked ones down.
+- Sort and order stay the same, with one change: SKUs a source reports in stock come first. That is the main reason to open the tab, and it keeps sold-out SKUs from pushing stocked ones down. (Built keyed on the source's count, not your batches, so a row doesn't jump while you type into it.)
+- Value cells show only where `stock.inStock` is set: the engine's one rule for which rows the totals count, so the column always adds up to the total.
 
 ### Summary strip
 
@@ -115,8 +116,8 @@ Optionally, drop **Sold** from the inventory row: By SKU already has Units, and 
 - `types.ts`: `Tab` drops `"stock"`.
 - `hooks/useTabNavigation.ts`: `TAB_ORDER` drops `"stock"`.
 - `DashboardClient.tsx`:
-  - Remove the tab entry and its render branch.
-  - Pass `stockVal` into `InventoryTab`.
+  - Remove the tab entry and its render branch, and the `productBySku` index (only the Stock value tab used it).
+  - Pass `stockVal.totals` into `InventoryTab`.
   - Make the **Stock value KPI tile** a link to Inventory, as the Profit tile already is: `setTab("inventory")`.
 
 ### Docs
@@ -130,7 +131,7 @@ Optionally, drop **Sold** from the inventory row: By SKU already has Units, and 
 
 - `npm run lint`, `npx tsc --noEmit`, `npm run test:engine`.
 - Use the `run` skill for a manual pass with the Demo connector plus a second source. Check:
-  - On hand shows the pooled value and the per-source tooltip.
+  - On hand shows the largest source count, with the per-source tooltip.
   - Left's amber check still fires on a deliberately wrong batch.
   - The totals match the old Stock value tab.
   - The KPI tile jumps to the tab.

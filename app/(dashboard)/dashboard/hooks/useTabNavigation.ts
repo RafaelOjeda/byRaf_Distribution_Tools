@@ -1,7 +1,7 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
 import type { Step, Tab } from "../types";
 
-const TAB_ORDER: Tab[] = ["sku", "orders", "price", "inventory", "stock", "fees"];
+const TAB_ORDER: Tab[] = ["sku", "orders", "price", "inventory", "fees"];
 
 export function useTabNavigation(step: Step) {
   const [tab, setTab] = useState<Tab>("sku");
