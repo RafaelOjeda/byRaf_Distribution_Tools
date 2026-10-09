@@ -2,12 +2,12 @@ import type { MarginRow } from "@/lib/gateway";
 import { money } from "../utils/format";
 import { Fig } from "./shared/Fig";
 
-export function OrderLineCard({ m }: { m: MarginRow }) {
+export function OrderLineCard({ m, nested = false }: { m: MarginRow; nested?: boolean }) {
   const est = m.status === "estimated";
   const noEst = <span className="text-amber-600">no estimate</span>;
   return (
     <li
-      className={`rounded-lg border border-sc-line p-3 ${est ? "bg-sc-head/60" : ""}`}
+      className={`${nested ? "border-l-2 border-sc-line py-1 pl-3" : "rounded-lg border border-sc-line p-3"} ${est ? "bg-sc-head/60" : ""}`}
       title={est ? m.estimateNote : undefined}
     >
       <div className="flex items-start justify-between gap-3">

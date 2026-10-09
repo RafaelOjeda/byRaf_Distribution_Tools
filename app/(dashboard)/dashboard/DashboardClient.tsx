@@ -30,9 +30,7 @@ import { ImportPreviewCard } from "./components/shared/ImportPreviewCard";
 import { SaveLoadControls, type ExportKind } from "./components/shared/SaveLoadControls";
 import { InventoryTab } from "./components/tabs/InventoryTab";
 import { FeesTab } from "./components/tabs/FeesTab";
-import { SkuTab } from "./components/tabs/SkuTab";
-import { PriceTab } from "./components/tabs/PriceTab";
-import { OrdersTab } from "./components/tabs/OrdersTab";
+import { SalesTab } from "./components/tabs/SalesTab";
 import { useTabNavigation } from "./hooks/useTabNavigation";
 
 import { BOX_FIELDS, type LotDraft, type SkuField, type Step, type Tab } from "./types";
@@ -491,11 +489,8 @@ export default function DashboardClient({
 
   const margins = r.orderLines;
   const skuSummaries = r.bySku;
-  const priceSeries = r.priceSeries;
   const stockVal = r.stock;
   const kpi = r.kpis;
-  const settledTotals = r.settledTotals;
-  const estimatedTotals = r.estimatedTotals;
   const settledCount = r.settledCount;
   const estimatedCount = r.estimatedCount;
   const noEstimateCount = r.noEstimateCount;
@@ -637,11 +632,12 @@ export default function DashboardClient({
         >
           {(
             [
-              ["sku", `By SKU (${skuSummaries.length})`],
-              ["orders", `Order lines (${margins.length})`],
-              ["price", "Price over time"],
+              [
+                "sales",
+                `Sales (${skuSummaries.length} product${skuSummaries.length === 1 ? "" : "s"} · ${margins.length} line${margins.length === 1 ? "" : "s"})`,
+              ],
               ["inventory", `Inventory (${skus.length})`],
-              ["fees", `Marketplace fees (${r.marketplaceFees.length})`],
+              ["fees", `Fees (${r.marketplaceFees.length})`],
             ] as [Tab, string][]
           ).map(([id, label]) => (
             <TabButton
@@ -683,20 +679,7 @@ export default function DashboardClient({
 
       {tab === "fees" && <FeesTab fees={r.marketplaceFees} />}
 
-      {tab === "sku" && <SkuTab skuSummaries={skuSummaries} />}
-
-      {tab === "price" && <PriceTab priceSeries={priceSeries} />}
-
-      {tab === "orders" && (
-        <OrdersTab
-          margins={margins}
-          settledTotals={settledTotals}
-          estimatedTotals={estimatedTotals}
-          settledCount={settledCount}
-          estimatedCount={estimatedCount}
-          noEstimateCount={noEstimateCount}
-        />
-      )}
+      {tab === "sales" && <SalesTab report={r} />}
         </div>
       </Card>
     </div>

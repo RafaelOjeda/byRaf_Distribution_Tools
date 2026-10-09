@@ -1,10 +1,10 @@
 import { useEffect, useState, type KeyboardEvent } from "react";
 import type { Step, Tab } from "../types";
 
-const TAB_ORDER: Tab[] = ["sku", "orders", "price", "inventory", "fees"];
+const TAB_ORDER: Tab[] = ["sales", "inventory", "fees"];
 
 export function useTabNavigation(step: Step) {
-  const [tab, setTab] = useState<Tab>("sku");
+  const [tab, setTab] = useState<Tab>("sales");
 
   // On a phone the tab bar scrolls sideways, so a tab selected from
   // elsewhere (e.g. the Profit tile's link) can be off-screen.

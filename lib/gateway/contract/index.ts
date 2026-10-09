@@ -155,6 +155,11 @@ export interface Report {
   settledCount: number;
   estimatedCount: number;
   noEstimateCount: number;
+  /** Lines in each total with no cost entered - any at all makes that total's profit unknown. */
+  settledUncosted: number;
+  estimatedUncosted: number;
+  /** Order lines with no SKU: in `orderLines` and the totals, but in no product's rollup. */
+  noSkuCount: number;
 }
 
 /**

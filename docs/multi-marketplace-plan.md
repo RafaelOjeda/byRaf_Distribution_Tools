@@ -193,7 +193,7 @@ docs/adding-a-marketplace.md connector checklist
 
 - **Connect:** one card per `SourceDescriptor`, each with its own fields. Connect one or several.
 - **Periods:** a picker per connected source, because settlement cycles don't line up across marketplaces.
-- **Dashboard:** source filter chips (All · each connected source) above the existing tiles and tabs. Tables gain a source column. By SKU rows expand into a per-source breakdown. The filter is part of `ReportView`, so filtering is also computed by the gateway.
+- **Dashboard:** source filter chips (All · each connected source) above the existing tiles and tabs. Tables gain a source column. By SKU rows expand into a per-source breakdown. (Since the tab consolidation, a product row in Sales → By product expands into its own order lines, each showing its source - see docs/tab-consolidation-plan.md.) The filter is part of `ReportView`, so filtering is also computed by the gateway.
 - **Partial failure is visible.** If one source fails, the others still show. The report's `sources` and `notes` say which failed and what the totals cover.
 
 ## Phases

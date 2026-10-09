@@ -9,7 +9,7 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
-import type { PriceSeries } from "@/lib/gateway";
+import { normalizeSku, type PriceSeries } from "@/lib/gateway";
 
 /** Most series drawn at once; any others stay reachable in the table view. */
 const MAX_SERIES = 6;
@@ -68,8 +68,23 @@ function niceStep(max: number): number {
   return 10_000;
 }
 
-export default function PriceChart({ series }: { series: PriceSeries[] }) {
-  const charted = useMemo(() => series.slice(0, MAX_SERIES), [series]);
+export default function PriceChart({
+  series,
+  prefer = [],
+}: {
+  series: PriceSeries[];
+  /** SKUs (normalized) to chart ahead of the rest - the products expanded in the Sales rollup. */
+  prefer?: string[];
+}) {
+  const preferred = useMemo(
+    () => series.filter((s) => prefer.includes(normalizeSku(s.sku))),
+    [series, prefer]
+  );
+  const charted = useMemo(
+    () =>
+      [...preferred, ...series.filter((s) => !preferred.includes(s))].slice(0, MAX_SERIES),
+    [series, preferred]
+  );
   const [table, setTable] = useState(false);
   const [hover, setHover] = useState<number | null>(null); // index into dates
   const svgRef = useRef<SVGSVGElement>(null);
@@ -197,7 +212,9 @@ export default function PriceChart({ series }: { series: PriceSeries[] }) {
           <div className="text-xs" style={{ color: "var(--pc-ink-2)" }}>
             One point per day with sales; lines join consecutive sale days.
             {series.length > MAX_SERIES &&
-              ` Showing the top ${MAX_SERIES} of ${series.length} products by units sold — all are in the table.`}
+              (preferred.length > 0
+                ? ` Showing the ${Math.min(preferred.length, MAX_SERIES)} product${preferred.length === 1 ? "" : "s"} you expanded first, then the best sellers - ${MAX_SERIES} of ${series.length}; all are in the table.`
+                : ` Showing the top ${MAX_SERIES} of ${series.length} products by units sold — all are in the table.`)}
           </div>
         </div>
         <TextButton
