@@ -25,6 +25,7 @@ This is the central map of the repository: what it is, how it's put together, an
 | Understand the retro/modern design toggle, or add a design or UI component | [Frontend — Design system and themes](./systems/frontend.md#design-system-and-themes-componentsui) |
 | Find the Receipts folder (PDF upload, stateless) | [Frontend — Receipts folder](./systems/frontend.md#receipts-folder-appdashboardreceipts) |
 | Understand saving/loading inputs as XLSX or CSV (design record) | [`import-export-plan.md`](./import-export-plan.md) · [Engine — Portable save file](./systems/engine.md#portable-save-file-engineportable) |
+| See what's unfinished in fee prediction (rate tables to verify, accuracy report, ...) | [`fee-prediction-open-items.md`](./fee-prediction-open-items.md) |
 | Read the user-facing product description | [`README.md`](../README.md) |
 | Read the original design/decision history | [`walmart-margin-tracker-plan.md`](../walmart-margin-tracker-plan.md) (root), [`multi-marketplace-plan.md`](./multi-marketplace-plan.md), [`walmart-api-notes.md`](./walmart-api-notes.md) |
 
