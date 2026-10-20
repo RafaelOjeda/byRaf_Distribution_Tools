@@ -90,14 +90,16 @@ export const EMPTY_SETTINGS: PortableSettings = {
 };
 
 export const COSTS_HEADERS = ["SKU", "Batch Qty", "Batch Unit Cost"];
-export const BOXES_HEADERS = ["SKU", "Box Cost"];
+export const BOXES_HEADERS = ["SKU", "Box Cost", "Weight Lb", "Fee Category"];
 export const ALIASES_HEADERS = ["SKU", "Alias SKU"];
 export const SETTINGS_HEADERS = ["Key", "Source", "Value"];
 export const META_HEADERS = ["Key", "Value"];
 
 const BOX_FIELDS = [
   { key: "boxCost", label: "Box Cost" },
+  { key: "weightLb", label: "Weight Lb" },
 ] as const;
+const CATEGORY_LABEL = "Fee Category";
 
 // ---------------------------------------------------------------------
 // Export: data -> tables
@@ -134,8 +136,12 @@ export function dataToTables(
     for (const lot of inp.lots ?? []) {
       costs.push([sku, lot.qty, lot.unitCost]);
     }
-    if (BOX_FIELDS.some((f) => inp[f.key] !== undefined)) {
-      boxes.push([sku, ...BOX_FIELDS.map((f) => inp[f.key] ?? null)]);
+    if (BOX_FIELDS.some((f) => inp[f.key] !== undefined) || inp.feeCategory) {
+      boxes.push([
+        sku,
+        ...BOX_FIELDS.map((f) => inp[f.key] ?? null),
+        inp.feeCategory ?? null,
+      ]);
     }
     for (const alias of inp.aliasSkus ?? []) aliases.push([sku, alias]);
   }
@@ -329,6 +335,9 @@ function readBoxes(t: RawTable, c: Collector) {
         return { ...f, value: v };
       });
       const entry = (c.inputs[sku] ??= {});
+      const catCol = idx(CATEGORY_LABEL);
+      const category = catCol === -1 ? "" : stripApostrophe(cells[catCol] ?? "").trim();
+      if (category) entry.feeCategory = category;
       for (const { key, label, value } of values) {
         if (value === undefined) continue;
         const prev = entry[key];
@@ -472,10 +481,16 @@ function fingerprint(inp: SkuInputs | undefined): string | null {
   const lots = (inp.lots ?? []).map((l) => [l.qty, l.unitCost]);
   const box = BOX_FIELDS.map((f) => inp[f.key] ?? null);
   const aliases = [...(inp.aliasSkus ?? [])].sort();
-  if (lots.length === 0 && aliases.length === 0 && box.every((b) => b === null)) {
+  const category = inp.feeCategory ?? null;
+  if (
+    lots.length === 0 &&
+    aliases.length === 0 &&
+    category === null &&
+    box.every((b) => b === null)
+  ) {
     return null;
   }
-  return JSON.stringify([lots, box, aliases]);
+  return JSON.stringify([lots, box, aliases, category]);
 }
 
 export function diffInputs(
@@ -514,6 +529,7 @@ export function applyImport(
     for (const f of BOX_FIELDS) {
       if (inp[f.key] !== undefined) entry[f.key] = inp[f.key];
     }
+    if (inp.feeCategory) entry.feeCategory = inp.feeCategory;
   }
   return out;
 }

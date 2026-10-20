@@ -1,9 +1,9 @@
 import type { CostInputs, SkuCostInputs } from "../contract";
 
-/** The per-SKU number fields typed in directly (everything but batches and aliases). */
+/** The per-SKU fields typed in directly (everything but batches and aliases). feeCategory is text, the rest numbers. */
 export type CostField = Exclude<keyof SkuCostInputs, "lots" | "aliasSkus">;
 
-const COST_FIELDS: CostField[] = ["boxCost"];
+const NUMBER_FIELDS = ["boxCost", "weightLb"] as const;
 
 /** Costs exactly as typed into the dashboard, before parsing. Keyed by normalizeSku. */
 export interface CostDrafts {
@@ -23,10 +23,12 @@ export function parseCostDrafts(drafts: CostDrafts): CostInputs {
   const out: CostInputs = {};
   for (const [sku, fields] of Object.entries(drafts.fields)) {
     const parsed: SkuCostInputs = {};
-    for (const key of COST_FIELDS) {
+    for (const key of NUMBER_FIELDS) {
       const n = parseFloat(fields[key] ?? "");
       if (!Number.isNaN(n)) parsed[key] = n;
     }
+    const category = fields.feeCategory?.trim();
+    if (category) parsed.feeCategory = category;
     out[sku] = parsed;
   }
   for (const [sku, lots] of Object.entries(drafts.lots)) {

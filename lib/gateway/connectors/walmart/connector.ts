@@ -3,6 +3,7 @@ import type { SourceDescriptor } from "../../contract";
 import { buildSkuHistory, settlementKey } from "../../engine/margins";
 import { MarketplaceConnector, type AccountCharge } from "../base";
 import { fetchWalmartToken } from "./auth";
+import { WALMART_FEE_MODEL } from "./fees";
 import { fetchInventory } from "./inventory";
 import { fetchCatalogPrices } from "./items";
 import { fetchOrdersSince } from "./orders";
@@ -44,6 +45,8 @@ export class WalmartConnector extends MarketplaceConnector {
       listings: true,
     },
   };
+
+  override readonly feeModel = WALMART_FEE_MODEL;
 
   protected async authenticate(creds: Record<string, string>): Promise<string> {
     const clientId = creds.clientId?.trim();
@@ -123,6 +126,7 @@ export class WalmartConnector extends MarketplaceConnector {
       sku: i.sku,
       price: i.price,
       publishedStatus: i.publishedStatus,
+      categoryHint: i.categoryHint,
     }));
   }
 }

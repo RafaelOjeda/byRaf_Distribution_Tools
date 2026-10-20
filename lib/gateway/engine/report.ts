@@ -15,6 +15,7 @@ import {
   sumMargins,
 } from "./margins";
 import type { SkuInputs } from "./margins";
+import { applyFeePredictions } from "./fee-fallback";
 import { buildAliasIndex, resolveSku } from "./identity";
 import { priceSeriesBySku } from "./prices";
 import { buildProducts } from "./products";
@@ -26,6 +27,8 @@ function toSkuInputs(costs: CostInputs): Record<string, SkuInputs> {
     out[sku] = {
       lots: c.lots,
       boxCost: c.boxCost,
+      weightLb: c.weightLb,
+      feeCategory: c.feeCategory,
       aliasSkus: c.aliasSkus,
     };
   }
@@ -80,9 +83,13 @@ export function buildReport(
     l.sku ? { ...l, sku: resolveSku(l.sku, aliasIndex) } : l;
 
   const rawLines = included.flatMap((s) => s.lines).map(resolveLine);
-  const lines = assignSaleDates(rawLines, orderDates);
-
   const skuInputs = toSkuInputs(costs);
+  const lines = applyFeePredictions(
+    assignSaleDates(rawLines, orderDates),
+    included,
+    skuInputs,
+    (sku) => resolveSku(sku, aliasIndex)
+  );
   const margins = computeMargins(lines, skuInputs);
   const bySku = summarizeBySku(margins);
   const priceSeries = priceSeriesBySku(lines);

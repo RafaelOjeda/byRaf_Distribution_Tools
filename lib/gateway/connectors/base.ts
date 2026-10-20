@@ -1,5 +1,6 @@
 import "server-only";
 import type { AccountCharge, SourceDescriptor, StockItem } from "../contract";
+import type { FeeModel } from "../engine/fee-model";
 import type { OrderLineSummary } from "../engine/types";
 
 export type { AccountCharge };
@@ -11,7 +12,13 @@ export interface SourceSnapshot {
   /** settlementKey(orderId, sku) -> ISO order date, for the full order-list window. */
   orderDates: Record<string, string>;
   inventory: StockItem[];
-  catalog: { sku: string; price: number | null; publishedStatus: string }[];
+  catalog: {
+    sku: string;
+    price: number | null;
+    publishedStatus: string;
+    categoryHint?: string;
+  }[];
+  feeModel?: FeeModel;
   /** Set when a part of this source's fetch failed; the parts that succeeded still populate the fields above. */
   errors: string[];
 }
@@ -24,6 +31,12 @@ export interface SourceSnapshot {
  */
 export abstract class MarketplaceConnector {
   abstract readonly descriptor: SourceDescriptor;
+
+  /**
+   * This marketplace's published fee schedules, used to predict fees for
+   * a SKU with no settled history. Null for a source that has none.
+   */
+  readonly feeModel: FeeModel | null = null;
 
   /** Token exchange / session setup. Per request, never cached across requests. */
   protected abstract authenticate(creds: Record<string, string>): Promise<unknown>;
@@ -53,7 +66,14 @@ export abstract class MarketplaceConnector {
   fetchListings(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars -- overridden by connectors that support listings
     session: unknown
-  ): Promise<{ sku: string; price: number | null; publishedStatus: string }[]> {
+  ): Promise<
+    {
+      sku: string;
+      price: number | null;
+      publishedStatus: string;
+      categoryHint?: string;
+    }[]
+  > {
     return this.unsupported("listings");
   }
 
@@ -121,6 +141,7 @@ export abstract class MarketplaceConnector {
         sourceLabel: this.descriptor.label,
       })),
       catalog,
+      ...(this.feeModel ? { feeModel: this.feeModel } : {}),
       errors,
     };
   }

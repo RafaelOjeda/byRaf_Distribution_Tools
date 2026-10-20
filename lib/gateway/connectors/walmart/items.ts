@@ -6,6 +6,12 @@ export interface CatalogItem {
   price: number | null;
   /** e.g. "PUBLISHED", "UNPUBLISHED", "SYSTEM_PROBLEM". */
   publishedStatus: string;
+  /**
+   * Walmart's own category text (shelf path, else product type), used only
+   * to suggest a fee category. Field names not yet confirmed against live
+   * data: when neither is present this is undefined and the user picks.
+   */
+  categoryHint?: string;
 }
 
 interface ItemsResponse {
@@ -13,6 +19,8 @@ interface ItemsResponse {
     sku: string;
     price?: { amount?: number };
     publishedStatus?: string;
+    shelf?: string;
+    productType?: string;
   }[];
   totalItems?: number;
   nextCursor?: string;
@@ -34,8 +42,9 @@ const MAX_PAGES = 100;
  *   all, whatever the page size. Each response's nextCursor is then sent
  *   back as the nextCursor param, with the same limit.
  *
- * Only sku, price and publish status are kept - the raw payload also
- * carries long descriptions and category trees we don't need.
+ * Only sku, price, publish status and a category hint are kept - the raw
+ * payload also carries long descriptions and full category trees we
+ * don't need.
  * pageSize is a parameter only so tests can force multiple pages.
  */
 export async function fetchCatalogPrices(
@@ -84,6 +93,7 @@ export async function fetchCatalogPrices(
             ? i.price.amount
             : null,
         publishedStatus: i.publishedStatus ?? "UNKNOWN",
+        categoryHint: i.shelf?.trim() || i.productType?.trim() || undefined,
       });
     }
 

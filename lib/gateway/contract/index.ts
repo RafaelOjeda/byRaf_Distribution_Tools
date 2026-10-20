@@ -59,6 +59,10 @@ export interface CostLot {
 export interface SkuCostInputs {
   lots?: CostLot[];
   boxCost?: number;
+  /** Weight of one unit in pounds - what fee prediction buckets shipping history by. */
+  weightLb?: number;
+  /** Fee category id (from a source's fee model) overriding the one suggested from the catalog. */
+  feeCategory?: string;
   /** Other SKUs (on any source) that are the same physical product. Phase 4. */
   aliasSkus?: string[];
 }
@@ -177,7 +181,15 @@ export interface SnapshotSource {
   charges: AccountCharge[];
   orderDates: Record<string, string>;
   inventory: StockItem[];
-  catalog: { sku: string; price: number | null; publishedStatus: string }[];
+  catalog: {
+    sku: string;
+    price: number | null;
+    publishedStatus: string;
+    /** The marketplace's own category text for the item, when it gives one. */
+    categoryHint?: string;
+  }[];
+  /** This source's published fee schedules; absent when the source has none. */
+  feeModel?: import("../engine/fee-model").FeeModel;
 }
 
 export interface SnapshotData {
