@@ -15,6 +15,7 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
               links={[
                 { href: "/dashboard", label: "Dashboard" },
                 { href: "/margins", label: "Margins" },
+                { href: "/calculator", label: "Fee calculator" },
               ]}
             />
             <div className="ml-auto flex items-center gap-3">

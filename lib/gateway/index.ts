@@ -23,6 +23,16 @@ export type {
 
 export { buildReport } from "./engine/report";
 
+export type { FeeModel, ReferralCategory } from "./engine/fee-model";
+export type { FeePrediction, FeeRequest } from "./engine/fee-predict";
+export {
+  estimateListing,
+  prefillFromSku,
+  type ListingEstimate,
+  type ListingRequest,
+  type SkuPrefill,
+} from "./engine/fee-calculator";
+
 export {
   costsToCsv,
   orderLinesToCsv,

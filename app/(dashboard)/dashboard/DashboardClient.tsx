@@ -259,6 +259,7 @@ export default function DashboardClient({
         const v = parsed[key];
         if (v !== undefined) fields[key] = String(v);
       }
+      if (parsed.feeCategory) fields.feeCategory = parsed.feeCategory;
       nextInputs[sku] = fields;
       if (parsed.lots?.length) {
         nextLotDrafts[sku] = parsed.lots.map((l) => ({

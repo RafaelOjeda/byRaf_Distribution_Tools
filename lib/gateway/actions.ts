@@ -10,6 +10,7 @@ import {
   type SnapshotData,
   type SourceDescriptor,
 } from "./contract";
+import type { FeeModel } from "./engine/fee-model";
 
 // Settlement typically runs a couple of weeks behind, so 60 days
 // comfortably covers every order that could still be unsettled.
@@ -22,6 +23,15 @@ function hasCredentials(creds: Record<string, string> | undefined): boolean {
 /** Every marketplace the gateway knows about. The dashboard renders these; it never names one. */
 export async function describeSources(): Promise<SourceDescriptor[]> {
   return CONNECTORS.map((c) => c.descriptor);
+}
+
+/**
+ * Every source's published fee schedules, for the fee calculator. Needs no
+ * credentials and no connection: it is reference data, not account data.
+ */
+export async function describeFeeModels(): Promise<FeeModel[]> {
+  await requireSession();
+  return CONNECTORS.flatMap((c) => (c.feeModel ? [c.feeModel] : []));
 }
 
 /**
@@ -94,6 +104,7 @@ export async function fetchSnapshot(
             orderDates: snap.orderDates,
             inventory: snap.inventory,
             catalog: snap.catalog,
+            feeModel: snap.feeModel,
           };
         }
         return {
@@ -105,6 +116,7 @@ export async function fetchSnapshot(
           orderDates: snap.orderDates,
           inventory: snap.inventory,
           catalog: snap.catalog,
+          feeModel: snap.feeModel,
         };
       } catch (err) {
         return {

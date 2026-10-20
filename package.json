@@ -15,6 +15,7 @@
     "test:receipts": "tsx scripts/test-receipts.ts",
     "test:theme": "tsx scripts/test-theme.ts",
     "test:engine": "tsx scripts/test-engine.ts",
+    "test:fees": "tsx scripts/test-fees.ts",
     "check:boundary": "tsx scripts/check-boundary.ts",
     "test:auth": "tsx scripts/test-auth.ts"
   },

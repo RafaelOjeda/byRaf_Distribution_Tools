@@ -219,6 +219,19 @@ The stateless app's save/load path: the user-entered inputs (purchase batches, b
 
 The format-specific encoders only move cells in and out of a file; every format goes through `tablesToData`, so they cannot disagree. The three libraries are loaded with `await import()` on first use, keeping them out of the dashboard's initial bundle. Rules worth knowing: tables are long/tidy (one fact per row, one alias per row), headers match by name case-insensitively with extra columns ignored, a `Meta.schema_version` newer than the app is rejected, `Report - …` sheets are ignored on import, and SKUs stay text so `00123` survives. The original single cost CSV (with its `"; "`-joined alias cell) still imports unchanged.
 
+## Fee prediction (`fee-predict.ts`, `fee-fallback.ts`, `fee-calculator.ts`)
+
+Predicts the two fees that are unknown until an order settles: the referral fee and shipping.
+
+- **Referral fee** comes from the source's published schedule (`FeeModel.referral`, a table of categories with flat, tiered or marginal rate bands). Walmart's table is `connectors/walmart/fees.ts`. Its `lastVerified` is `null` until someone checks it against the published schedule; while it is null every prediction is marked low-confidence.
+- **Own-label shipping** is learned from settled shipments with a known weight (`buildShippingSamples`), bucketed by weight (up to 1, 1-2, 2-5, 5-10, over 10 lb). A bucket needs at least 3 shipments (`MIN_BUCKET_SAMPLES`). Fewer widens to neighbouring buckets, then to the flat average of all shipments; both are flagged low-confidence.
+- **Marketplace-managed shipping** (WFS) uses a published rate card (`FeeModel.managed`). The Walmart card is empty for now, so those lines report "not estimated".
+- **Precedence for unsettled orders:** the connector's SKU-history estimate (`estimateUnsettled`) always wins. `applyFeePredictions`, run inside `buildReport`, only touches lines the connector left `noEstimate`, using the category and weight typed in the dashboard (category falls back to a match on the catalog's category text). A line stays `noEstimate` unless *both* fees can be predicted, and its `estimateNote` says why.
+- **Calculator** (`/calculator`): `estimateListing` runs the same prediction for a price you're considering and adds profit and margin from your costs. `prefillFromSku` fills the form from what's already known about a SKU.
+- **Inputs** `weightLb` and `feeCategory` live in `SkuCostInputs` and persist through the portable save/load file (Boxes table: "Weight Lb", "Fee Category"). They are not in the single-CSV cost import.
+
+Tests: `npm run test:fees`.
+
 ## Where estimation actually lives
 
 One subtlety worth flagging for anyone modifying this area: **`buildSkuHistory` lives in `engine/margins.ts`** (it's a general per-SKU average of settled commission rate and shipping cost, keyed by normalized SKU — nothing Walmart-specific about the shape), but **`estimateUnsettled`, the function that actually turns a recent unsettled order into an estimated line, lives in `connectors/walmart/normalize.ts`**, because it consumes Walmart's raw `Order`/charge shape. Every connector is expected to implement its own version of this pattern against its own recent-orders shape (see [Connectors — Implementing a connector](./connectors.md#what-a-connector-must-implement)); the engine only supplies the neutral averaging (`buildSkuHistory`) and the settled/recent join key (`settlementKey`).

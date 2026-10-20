@@ -87,6 +87,8 @@ export interface CostLot {
 export interface SkuInputs {
   lots?: CostLot[];
   boxCost?: number;
+  weightLb?: number;
+  feeCategory?: string;
   /** Other SKUs (on any source) that are this same physical product. Resolved before grouping - see engine/identity.ts. */
   aliasSkus?: string[];
 }
